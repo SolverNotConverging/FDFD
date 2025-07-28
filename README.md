@@ -1,106 +1,39 @@
-# FDFD_CEM
+# FDFD\_CEM
 
-This repository contains a beginner-level **Finite-Difference Frequency-Domain (FDFD)** based solver suite for computational electromagnetics. The solvers are organized by application area, such as mode solving, band diagram calculation, scattering, and electrostatics.
+This repository contains a beginner-friendly suite of **Finite-Difference Frequency-Domain (FDFD)** solvers for computational electromagnetics. The solvers are modularly organized by application area—covering mode analysis, band diagram computation, scattering, and electrostatics.
 
 ## 📁 Repository Structure
 
-- `Band_Diagram_Solver`: 2D photonic crystal band diagram solver.
-- `Electrostatic_Solver`: Solves 1D and 2D electrostatic problems using FDFD.
-- `Mode_Solver_1D`: FDFD solver for guided mode analysis in 1D structures.
-- `Mode_Solver_2D`: FDFD mode solver for 2D waveguide configurations.
-- `Mode_Solver_Periodic`: FDFD periodic mode solver for photonic crystals and periodic waveguides.
-- `Scattering`: 2D scattering problem solver for dielectric objects.
-- `Mesh_points_calculation.py`: Utility to compute mesh grid points.
-- `PML_sigma_calculation.py`: Utility to compute PML conductivity profiles.
+* `Band_Diagram_Solver`: FDFD-based solver for computing band diagrams of 2D photonic crystals.
+  *(Preliminary and not yet class-structured)*
+
+* `Electrostatic_Solver`: Solves electrostatic field distributions in 1D and 2D.
+  *(Note: strictly speaking, this is not FDFD-based)*
+
+* `Mode_Solver_1D`: FDFD mode solver for 1D slab waveguides.
+  *Supports anisotropic materials and impedance surfaces.*
+
+* `Mode_Solver_2D`: FDFD mode solver for 2D waveguides (structures homogeneous along the propagation direction).
+  *Supports anisotropic materials, impedance surfaces, and PML boundaries.*
+
+* `Mode_Solver_Periodic`: FDFD solver for periodic waveguide structures, including leaky-wave antennas.
+  *Supports anisotropic materials and PML.*
+
+* `Scattering`: 2D FDFD solver for electromagnetic scattering problems using the QAAQ formulation.
+  *Supports anisotropic materials and PML.*
+
+* `Mesh_points_calculation.py`: Utility for generating spatial mesh grid points for the simulation domain.
+
+* `PML_sigma_calculation.py`: Utility for computing sigma (conductivity) profiles in perfectly matched layers (PML).
 
 ---
 
-## 🚀 Getting Started
+## 🧠 Modal Analysis Workflow
 
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/yourusername/FDFD_CEM.git
-   cd FDFD_CEM
-   ```
+For modal analysis:
 
-2. Install required dependencies (NumPy and Matplotlib):
-   ```bash
-   pip install numpy matplotlib
-   ```
-
----
-
-## 🧠 How to Use Each Solver
-
-### 1. **Band Diagram Solver**
-**Path**: `Band_Diagram_Solver/2D_Band_Diagram.py`  
-Use this to compute band structures for 2D periodic media.
-
-```bash
-python Band_Diagram_Solver/2D_Band_Diagram.py
-```
-
-Make sure the lattice and material configurations are set in the script.
-
----
-
-### 2. **Electrostatic Solver**
-**Path**: `Electrostatic_Solver/`  
-Use `1D_Example.py` or `2D_example.py` to solve electrostatic potential distributions.
-
-```bash
-python Electrostatic_Solver/1D_Example.py
-python Electrostatic_Solver/2D_example.py
-```
-
-Modify boundary conditions and permittivity distributions as needed.
-
----
-
-### 3. **1D Mode Solver**
-**Path**: `Mode_Solver_1D/FDFD_1D_Mode_Solver.py`  
-This solver computes guided modes in 1D waveguides.
-
-```bash
-python Mode_Solver_1D/1D_Dispersion.py
-python Mode_Solver_1D/1D_Field_Visualization.py
-```
-
----
-
-### 4. **2D Mode Solver**
-**Path**: `Mode_Solver_2D/FDFD_Mode_Solver.py`  
-Run `2D_Dispersion.py` and `2D_Field_Visualization.py` to compute and visualize modes.
-
-```bash
-python Mode_Solver_2D/2D_Dispersion.py
-python Mode_Solver_2D/2D_Field_Visualization.py
-```
-
----
-
-### 5. **Periodic Mode Solver**
-**Path**: `Mode_Solver_Periodic/Periodic_Mode_Solver.py`  
-For periodic boundary condition problems and frequency sweeps:
-
-```bash
-python Mode_Solver_Periodic/2D_Periodic_Freq_Sweep.py
-python Mode_Solver_Periodic/2D_Periodic_Field_Visualization.py
-```
-
----
-
-### 6. **Scattering Solver**
-**Path**: `Scattering/Scattering_Solver_2D.py`  
-Use for computing field distributions from incident waves on scatterers.
-
-```bash
-python Scattering/Scattering_Example.py
-```
-
----
-
-## 📌 Notes
-- The derivative operators are implemented using `yee_derivative.py`.
-- Make sure your Python version is 3.6+.
-- Figures and visualizations are saved using `matplotlib`.
+1. **Create the mesh** using your preferred geometry and resolution.
+2. **Add objects** using `solver.add_object()`.
+3. **Apply absorbing boundaries** using `solver.add_absorbing_boundary()` or `solver.add_UPML()`.
+4. **Solve modes** using `solver.solve`
+5. **Visualize modal fields** along with their propagation constants (α and β) using: `solver.visualize_with_gui()`
