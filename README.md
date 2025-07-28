@@ -35,7 +35,7 @@ For modal analysis:
 1. **Create the mesh** using your preferred geometry and resolution.
 2. **Add objects** using `solver.add_object()`.
 3. **Apply absorbing boundaries** using `solver.add_absorbing_boundary()` or `solver.add_UPML()`.
-4. **Solve modes** using `solver.solve`
+4. **Solve modes** using `solver.solve()`
 5. **Visualize modal fields** along with their propagation constants (α and β) using: `solver.visualize_with_gui()`
 
 
