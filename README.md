@@ -19,7 +19,7 @@ This repository contains a beginner-friendly suite of **Finite-Difference Freque
 * `Mode_Solver_Periodic`: FDFD solver for periodic waveguide structures, including leaky-wave antennas.
   *Supports anisotropic materials and PML.*
 
-* `Scattering`: 2D FDFD solver for electromagnetic scattering problems using the QAAQ formulation.
+* `Scattering`: 2D FDFD TM/TE solver for electromagnetic scattering problems using the QAAQ formulation.
   *Supports anisotropic materials and PML.*
 
 * `Mesh_points_calculation.py`: Utility for generating spatial mesh grid points for the simulation domain.
