@@ -371,9 +371,9 @@ class FDFDModeSolver:
                 im = ax.imshow(np.abs(fields[i]), cmap='viridis',
                                extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
                                vmin=0, vmax=1)
-                # ax.imshow(np.abs(self.epsilon['zz']), cmap='inferno',
-                #          extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-                #          vmax=20, alpha=0.2)
+                ax.imshow(np.abs(self.epsilon['zz']), cmap='inferno',
+                          extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+                          vmax=20, alpha=0.2)
                 ax.set_title(titles[i])
                 ax.set_xlabel('x (mm)')
                 ax.set_ylabel('y (mm)')
