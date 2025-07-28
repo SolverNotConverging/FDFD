@@ -1,0 +1,427 @@
+import tkinter as tk
+from tkinter import ttk
+
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from scipy.sparse import diags, bmat
+from scipy.sparse.linalg import eigs
+
+from yee_derivative import yeeder2d
+
+
+class FDFDModeSolver:
+    def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes):
+        self.frequency = frequency
+        self.x_range = x_range
+        self.y_range = y_range
+        self.Nx = Nx
+        self.Ny = Ny
+        self.dx = x_range / Nx
+        self.dy = y_range / Ny
+        self.k_0 = 2 * np.pi * frequency / 3e8
+        self.dx_normalized = self.k_0 * self.dx
+        self.dy_normalized = self.k_0 * self.dy
+        self.epsilon = {comp: np.ones((Ny, Nx), dtype=complex) for comp in ['xx', 'yy', 'zz']}
+        self.mu = {comp: np.ones((Ny, Nx), dtype=complex) for comp in ['xx', 'yy', 'zz']}
+        self.num_modes = num_modes
+        self.propagation_constant = None
+        self.attenuation_constant = None
+
+    def add_object(self, epsilon, mu, x_indices, y_indices):
+        """Add an object with given permittivity and permeability tensors at specified grid indices."""
+        x_min, x_max = x_indices
+        y_min, y_max = y_indices
+        for comp, value in epsilon.items():
+            self.epsilon[comp][y_min:y_max, x_min:x_max] = value
+        for comp, value in mu.items():
+            self.mu[comp][y_min:y_max, x_min:x_max] = value
+
+    def add_absorbing_boundaries(self, pml_width=50, n=3, sigma_max=2, direction='both'):
+        """Add absorbing boundaries using a polynomial conductivity profile.
+
+        Parameters:
+        - pml_width: Thickness of the PML in grid points.
+        - n: Polynomial order for the conductivity profile.
+        - sigma_max: Maximum normalized conductivity.
+        - direction: 'x', 'y', or 'both' to specify which boundaries to apply the PML.
+        """
+        Nx, Ny = self.Nx, self.Ny
+        sigma_x = np.zeros((Ny, Nx))
+        sigma_y = np.zeros((Ny, Nx))
+
+        if direction in ('x', 'both'):
+            # Create PML profile for x-direction
+            for i in range(pml_width):
+                sigma_x[:, i] = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_x[:, -i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
+
+        if direction in ('y', 'both'):
+            # Create PML profile for y-direction
+            for i in range(pml_width):
+                sigma_y[i, :] = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_y[-i - 1, :] = sigma_max * ((pml_width - i) / pml_width) ** n
+
+        # Combine sigma_x and sigma_y based on the direction
+        sigma = sigma_x + sigma_y
+
+        # Apply PML profile to permittivity tensors
+        for comp in self.epsilon:
+            mask = np.abs(self.epsilon[comp]) <= 100
+            self.epsilon[comp][mask] *= (1 + 1j / (8.85e-12 * 2 * np.pi * self.frequency) * sigma[mask])
+
+    def add_UPML(self, pml_width: int = 50, n: int = 3, sigma_max: float = 25, direction: str = "both", ):
+        """
+        Add uniaxial PML using polynomial conductivity profiles.
+
+        Parameters
+        ----------
+        pml_width : int
+            Thickness of the PML in grid points.
+        n : int
+            Polynomial order of the conductivity profile.
+        sigma_max : float
+            Maximum normalised conductivity (σ / (ε0 ω) at the inner PML edge).
+        direction : {'x', 'y', 'both'}
+            Which boundaries receive the PML.
+        """
+
+        Nx, Ny = self.Nx, self.Ny
+        sigma_x = np.zeros((Ny, Nx))
+        sigma_y = np.zeros((Ny, Nx))
+
+        # --- build σ profiles --------------------------------------------------
+        if direction in ("x", "both"):
+            for i in range(pml_width):
+                prof = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_x[:, i] = prof  # left
+                sigma_x[:, -i - 1] = prof  # right
+
+        if direction in ("y", "both"):
+            for i in range(pml_width):
+                prof = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_y[i, :] = prof  # bottom
+                sigma_y[-i - 1, :] = prof  # top
+
+        # --- stretch variables (κ = 1 everywhere) ------------------------------
+        eps0 = 8.854187817e-12  # F m⁻¹
+        omega = 2 * np.pi * self.frequency
+
+        self.Sx = 1.0 + 1j * sigma_x / (eps0 * omega)
+        self.Sy = 1.0 + 1j * sigma_y / (eps0 * omega)
+
+        # --- make ε uniaxial ---------------------------------------------------
+        #
+        #   ε′_xx = ε_r * Sy / Sx
+        #   ε′_yy = ε_r * Sx / Sy
+        #   ε′_zz = ε_r * Sx * Sy
+        #
+        # (For TE-z you really only need ε_zz, but updating all three keeps the
+        #  data structure consistent for other polarisations.)
+
+        self.epsilon["xx"] *= self.Sy / self.Sx
+        self.epsilon["yy"] *= self.Sx / self.Sy
+        self.epsilon["zz"] *= self.Sx * self.Sy
+
+    # ------------------------------------------------------------------
+    # Balanced surface‑impedance sheet for 2‑D grids
+    # ------------------------------------------------------------------
+    def add_impedance_surface_balanced(
+            self,
+            Zs: complex,
+            position: float | int,
+            *,
+            orientation: str = "x",
+            thickness_cells: int = 1,
+            eps_components: tuple[str, ...] = ("xx", "yy", "zz"),
+            mu_components: tuple[str, ...] = ("xx", "yy", "zz"),
+    ):
+        """
+        Embed an impedance sheet whose admittance is split equally
+        between ε‑ and µ‑perturbations, so TE and TM load identically.
+
+        Parameters
+        ----------
+        Zs : complex
+            Desired sheet impedance in ohms (may be complex).
+        position : float | int
+            • If *orientation* == 'x': x‑coordinate (m) or x‑index (int)
+              of the *leftmost* cell that will hold the sheet.
+            • If *orientation* == 'y': y‑coordinate (m) or y‑index (int)
+              of the *bottom* cell that will hold the sheet.
+        orientation : {'x', 'y'}, optional
+            'x' → vertical sheet normal to x (constant‑x line)
+            'y' → horizontal sheet normal to y (constant‑y line)
+        thickness_cells : int, optional
+            Number of grid cells that represent the sheet.  Default 1.
+        eps_components, mu_components : tuple[str], optional
+            Tensor components to perturb.  Leave defaults for isotropy,
+            or supply e.g. ("yy",) to limit to one component.
+        """
+        # ──────────────────────────────────────────────────────────────────
+        # 1) figure out the slice of cells that will receive the update
+        # ──────────────────────────────────────────────────────────────────
+        if orientation not in ("x", "y"):
+            raise ValueError("orientation must be 'x' or 'y'.")
+
+        if orientation == "x":
+            if isinstance(position, float):
+                idx = int(round(position / self.dx))
+            else:
+                idx = int(position)
+            if not (0 <= idx < self.Nx):
+                raise ValueError("Impedance surface lies outside the x‑domain.")
+            sl_x = slice(idx, idx + thickness_cells)
+            sl_y = slice(None)
+            t = thickness_cells * self.dx  # physical thickness [m]
+
+        else:  # orientation == "y"
+            if isinstance(position, float):
+                idy = int(round(position / self.dy))
+            else:
+                idy = int(position)
+            if not (0 <= idy < self.Ny):
+                raise ValueError("Impedance surface lies outside the y‑domain.")
+            sl_x = slice(None)
+            sl_y = slice(idy, idy + thickness_cells)
+            t = thickness_cells * self.dy  # physical thickness [m]
+
+        # guard against overrunning the grid
+        if sl_x.stop is not None and sl_x.stop > self.Nx:
+            raise ValueError("thickness_cells runs beyond the right boundary.")
+        if sl_y.stop is not None and sl_y.stop > self.Ny:
+            raise ValueError("thickness_cells runs beyond the top boundary.")
+
+        # ──────────────────────────────────────────────────────────────────
+        # 2) balanced conversion  (same formula as 1‑D version)
+        # ──────────────────────────────────────────────────────────────────
+        eps0 = 8.854187817e-12
+        mu0 = 4.0e-7 * np.pi
+        delta_eps = -1j / (2 * 2 * np.pi * self.frequency * eps0 * t * Zs)
+        delta_mu = -1j * Zs / (2 * 2 * np.pi * self.frequency * mu0 * t)
+
+        # ──────────────────────────────────────────────────────────────────
+        # 3) write perturbations into ε and µ
+        # ──────────────────────────────────────────────────────────────────
+        for comp in eps_components:
+            self.epsilon[comp][sl_y, sl_x] += delta_eps
+        for comp in mu_components:
+            self.mu[comp][sl_y, sl_x] += delta_mu
+
+        # ──────────────────────────────────────────────────────────────────
+        # 4) invalidate previous eigen‑solution (if any)
+        # ──────────────────────────────────────────────────────────────────
+        self.propagation_constant = None
+        self.attenuation_constant = None
+
+    def solve(self):
+        """Solve for the modes and calculate field components."""
+        epsilon_diag = {comp: diags(self.epsilon[comp].flatten()) for comp in self.epsilon}
+        mu_diag = {comp: diags(self.mu[comp].flatten()) for comp in self.mu}
+
+        Dx_e, Dy_e, Dx_h, Dy_h = self._yeeder2d()
+        epsilon_zz_inv = epsilon_diag['zz'].power(-1)
+        P11 = Dx_e @ epsilon_zz_inv @ Dy_h
+        P12 = -(Dx_e @ epsilon_zz_inv @ Dx_h + mu_diag['yy'])
+        P21 = Dy_e @ epsilon_zz_inv @ Dy_h + mu_diag['xx']
+        P22 = -Dy_e @ epsilon_zz_inv @ Dx_h
+        P = bmat([[P11, P12], [P21, P22]])
+
+        mu_zz_inv = mu_diag['zz'].power(-1)
+        Q11 = Dx_h @ mu_zz_inv @ Dy_e
+        Q12 = -(Dx_h @ mu_zz_inv @ Dx_e + epsilon_diag['yy'])
+        Q21 = Dy_h @ mu_zz_inv @ Dy_e + epsilon_diag['xx']
+        Q22 = -Dy_h @ mu_zz_inv @ Dx_e
+        Q = bmat([[Q11, Q12], [Q21, Q22]])
+
+        Omega = P @ Q
+        self.eigenvalues, self.eigenvectors = eigs(Omega, k=self.num_modes, sigma=-13)
+
+        self.gamma_tilda = -1j * self._sqrt_positive_real(self.eigenvalues)
+        self.propagation_constant = np.real(self.gamma_tilda)
+        self.attenuation_constant = np.imag(self.gamma_tilda)
+
+        # Calculate fields
+        Exy = self.eigenvectors
+        Nx, Ny = self.Nx, self.Ny
+        eigenvalues_inv = diags(np.sqrt(self.eigenvalues)).power(-1)
+        self.Ex = Exy[: Nx * Ny, :]
+        self.Ey = Exy[Nx * Ny:, :]
+        Hxy = Q @ Exy @ eigenvalues_inv
+        self.Hx = Hxy[: Nx * Ny, :]
+        self.Hy = Hxy[Nx * Ny:, :]
+        self.Ez = epsilon_diag['zz'].power(-1) @ (Dx_h @ self.Hy - Dy_h @ self.Hx)
+        self.Hz = mu_diag['zz'].power(-1) @ (Dx_e @ self.Ey - Dy_e @ self.Ex)
+
+    def visualize(self, mode=1, **kwargs):
+        """Visualize selected field components for a given mode.
+
+        Keyword arguments:
+        Use any of the following to selectively plot components:
+        ex=True, ey=True, ez=True, eabs=True, hx=True, hy=True, hz=True, habs=True
+        """
+        Nx, Ny = self.Nx, self.Ny
+        mode -= 1
+
+        # Reshape fields for visualization
+        ex = self.Ex[:, mode].reshape(Ny, Nx)
+        ey = self.Ey[:, mode].reshape(Ny, Nx)
+        ez = self.Ez[:, mode].reshape(Ny, Nx)
+        hx = self.Hx[:, mode].reshape(Ny, Nx)
+        hy = self.Hy[:, mode].reshape(Ny, Nx)
+        hz = self.Hz[:, mode].reshape(Ny, Nx)
+
+        # Normalize fields
+        e_abs = np.sqrt(np.abs(ex) ** 2 + np.abs(ey) ** 2 + np.abs(ez) ** 2)
+        h_abs = np.sqrt(np.abs(hx) ** 2 + np.abs(hy) ** 2 + np.abs(hz) ** 2)
+
+        ex /= np.max(e_abs)
+        ey /= np.max(e_abs)
+        ez /= np.max(e_abs)
+        hx /= np.max(h_abs)
+        hy /= np.max(h_abs)
+        hz /= np.max(h_abs)
+
+        # Prepare field dictionary
+        field_map = {
+            'ex': (ex, 'Ex'),
+            'ey': (ey, 'Ey'),
+            'ez': (ez, 'Ez'),
+            'hx': (hx, 'Hx'),
+            'hy': (hy, 'Hy'),
+            'hz': (hz, 'Hz'),
+            'eabs': (e_abs / np.max(e_abs), '|E|'),
+            'habs': (h_abs / np.max(h_abs), '|H|'),
+        }
+
+        # Determine which components to plot
+        selected_fields = [key for key in field_map if kwargs.get(key)]
+        if not selected_fields:
+            selected_fields = ['ex', 'ey', 'ez', 'hx', 'hy', 'hz']
+
+        n_fields = len(selected_fields)
+        ncols = 3
+        nrows = (n_fields + 2) // 3
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), layout='compressed')
+        axes = np.array(axes).reshape(-1)  # Flatten in case of 1D array
+
+        for i, field_name in enumerate(selected_fields):
+            field_data, title = field_map[field_name]
+            ax = axes[i]
+            im = ax.imshow(np.abs(field_data), cmap='viridis',
+                           extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3])
+            ax.imshow(np.abs(self.epsilon['xx']), cmap='inferno',
+                      extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+                      vmax=20, alpha=0.2)
+            ax.set_title(title)
+            ax.set_xlabel('x (mm)')
+            ax.set_ylabel('y (mm)')
+
+        for j in range(i + 1, len(axes)):
+            fig.delaxes(axes[j])  # Remove unused subplots
+
+        fig.suptitle(
+            rf'Mode {mode + 1}: $\hat{{\beta}}$ = {self.propagation_constant[mode]:.4f}, '
+            rf'$\hat{{\alpha}}$ = {self.attenuation_constant[mode]:.4f}',
+            fontsize=16
+        )
+        fig.colorbar(im, ax=axes[:i + 1], location='right', shrink=1, pad=0.02, label='Normalized Magnitude')
+        plt.show()
+
+    def visualize_with_gui(self):
+        """Visualize field components with a dropdown menu for mode selection."""
+        Nx, Ny = self.Nx, self.Ny
+        colorbar = [None]  # To track and remove old colorbar
+
+        def plot_mode(selected_mode):
+            mode = int(selected_mode) - 1
+
+            # Reshape and normalize
+            ex = self.Ex[:, mode].reshape(Ny, Nx)
+            ey = self.Ey[:, mode].reshape(Ny, Nx)
+            ez = self.Ez[:, mode].reshape(Ny, Nx)
+            hx = self.Hx[:, mode].reshape(Ny, Nx)
+            hy = self.Hy[:, mode].reshape(Ny, Nx)
+            hz = self.Hz[:, mode].reshape(Ny, Nx)
+
+            e_abs = np.sqrt(np.abs(ex) ** 2 + np.abs(ey) ** 2 + np.abs(ez) ** 2)
+            h_abs = np.sqrt(np.abs(hx) ** 2 + np.abs(hy) ** 2 + np.abs(hz) ** 2)
+
+            ex /= np.max(e_abs)
+            ey /= np.max(e_abs)
+            ez /= np.max(e_abs)
+            hx /= np.max(h_abs)
+            hy /= np.max(h_abs)
+            hz /= np.max(h_abs)
+
+            fields = [ex, ey, ez, hx, hy, hz]
+            titles = ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']
+
+            # Clear previous axes
+            for ax in axes.flat:
+                ax.clear()
+
+            if colorbar[0] is not None:
+                colorbar[0].remove()
+                colorbar[0] = None
+
+            # Plot and keep last image for colorbar
+            for i, ax in enumerate(axes.flat):
+                im = ax.imshow(np.abs(fields[i]), cmap='viridis',
+                               extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+                               vmin=0, vmax=1)
+                # ax.imshow(np.abs(self.epsilon['zz']), cmap='inferno',
+                #          extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+                #          vmax=20, alpha=0.2)
+                ax.set_title(titles[i])
+                ax.set_xlabel('x (mm)')
+                ax.set_ylabel('y (mm)')
+
+            # Adjust layout and add colorbar
+            fig.subplots_adjust(right=0.86)  # Leave space for colorbar
+            cbar_ax = fig.add_axes([0.87, 0.15, 0.02, 0.7])  # position [left, bottom, width, height]
+            norm = plt.Normalize(vmin=0, vmax=1)
+            sm = plt.cm.ScalarMappable(cmap='viridis', norm=norm)
+            colorbar[0] = fig.colorbar(sm, cax=cbar_ax)
+            colorbar[0].set_label("Normalized Magnitude")
+
+            fig.suptitle(
+                rf'Mode {mode + 1}: $\hat{{\beta}}$= {self.propagation_constant[mode]:.4f}, '
+                rf'$\hat{{\alpha}}$ = {self.attenuation_constant[mode]:.4f}',
+                fontsize=16
+            )
+            canvas.draw()
+
+        # Tkinter GUI setup
+        root = tk.Tk()
+        root.title("Field Visualization")
+
+        fig, axes = plt.subplots(2, 3, figsize=(12, 6))
+        canvas = FigureCanvasTkAgg(fig, master=root)
+        canvas_widget = canvas.get_tk_widget()
+        canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        mode_var = tk.StringVar(value="1")
+        mode_menu = ttk.Combobox(root, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
+        mode_menu.pack(side=tk.LEFT, padx=10, pady=10)
+        mode_menu.bind("<<ComboboxSelected>>", lambda event: plot_mode(mode_var.get()))
+
+        quit_button = tk.Button(root, text="Quit", command=root.destroy)
+        quit_button.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        plot_mode(mode_var.get())
+        root.mainloop()
+
+    def _yeeder2d(self):
+        """Generate derivative matrices on a 2D Yee grid."""
+        dx_normalised = self.k_0 * self.dx
+        dy_normalised = self.k_0 * self.dy
+        DEX, DEY, DHX, DHY = yeeder2d([self.Nx, self.Ny], [dx_normalised, dy_normalised], [0, 0])
+
+        return DEX, DEY, DHX, DHY
+
+    def _sqrt_positive_real(self, x):
+        """Calculate the square root with positive real part."""
+        sqrt = np.sqrt(x)
+        return np.where(np.imag(sqrt) < 0, -sqrt, sqrt)
