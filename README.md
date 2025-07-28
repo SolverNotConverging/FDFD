@@ -37,3 +37,6 @@ For modal analysis:
 3. **Apply absorbing boundaries** using `solver.add_absorbing_boundary()` or `solver.add_UPML()`.
 4. **Solve modes** using `solver.solve`
 5. **Visualize modal fields** along with their propagation constants (α and β) using: `solver.visualize_with_gui()`
+
+
+
