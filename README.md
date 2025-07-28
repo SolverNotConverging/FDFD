@@ -39,4 +39,8 @@ For modal analysis:
 5. **Visualize modal fields** along with their propagation constants (α and β) using: `solver.visualize_with_gui()`
 
 
+### Reference
+R. Rumpf, Electromagnetic and Photonic Simulation for the Beginner:
+Finite-Difference Frequency-Domain in MATLAB. Artech House, 2022.
+
 
