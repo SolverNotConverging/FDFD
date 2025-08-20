@@ -1,9 +1,9 @@
 from FDFD_1D_Mode_Solver import FDFDModeSolver
 
 # Parameters for the simulation
-x_range = 50e-3  # 40 mm in x-direction
+x_range = 50e-3  # 50 mm in x-direction
 Nx = 5000  # Grid points in x
-frequency = 100e9  # 25 GHz
+frequency = 100e9  # 100 GHz
 num_modes = 15  # Number of modes to compute
 
 # Initialize solver and define structure
