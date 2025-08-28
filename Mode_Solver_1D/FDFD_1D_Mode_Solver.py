@@ -51,14 +51,42 @@ class FDFDModeSolver:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def add_object(self, epsilon_tensor: dict[str, complex], mu_tensor: dict[str, complex],
-                   x_slice: tuple[int, int]):
-        x_min, x_max = x_slice
-        for comp, val in epsilon_tensor.items():
-            self.epsilon[comp][x_min:x_max] = val
-        for comp, val in mu_tensor.items():
-            self.mu[comp][x_min:x_max] = val
-        self._clear_results()  # invalidate any previous solution
+    def add_object(self, epsilon, mu, x_range):
+        # ---- helpers ----
+        def _norm_three(name, val):
+            # scalar -> [s, s, s]; length-3 1D -> as-is
+            if np.isscalar(val):
+                return np.full(3, val, dtype=complex)
+            arr = np.asarray(val, dtype=complex)
+            if arr.ndim == 1 and arr.size == 3:
+                return arr
+            raise ValueError(f"{name} must be a scalar or a length-3 1D array (xx, yy, zz).")
+
+        # ---- ranges ----
+        try:
+            x0, x1 = int(x_range[0]), int(x_range[1])
+        except Exception:
+            raise ValueError("x_range must be (min, max) integer-like pairs.")
+
+        if not x1 > x0:
+            x1, x0 = x0, x1
+
+        Nx = self.Nx
+        if not 0 <= x0 < x1 <= Nx:
+            raise ValueError("Region is out of bounds of the simulation grid.")
+
+        # ---- materials ----
+        epsilon = _norm_three("epsilon", epsilon)
+        mu = _norm_three("mu", mu)
+
+        # ---- assign ----
+        self.epsilon['xx'][x0:x1] = epsilon[0]
+        self.epsilon['yy'][x0:x1] = epsilon[1]
+        self.epsilon['zz'][x0:x1] = epsilon[2]
+
+        self.mu['xx'][x0:x1] = mu[0]
+        self.mu['yy'][x0:x1] = mu[1]
+        self.mu['zz'][x0:x1] = mu[2]
 
     # ------------------------------------------------------------------
     # Balanced surface‑impedance sheet (electric + magnetic)
@@ -130,8 +158,8 @@ class FDFDModeSolver:
         # results are no longer valid
         self._clear_results()
 
-    def add_absorbing_boundaries(self, pml_width: int = 50, n: int = 3, sigma_max: float = 25,
-                                 direction: str = "both", ):
+    def add_UPML(self, pml_width: int = 50, n: int = 3, sigma_max: float = 25,
+                 direction: str = "both", ):
         Nx = self.Nx
         sigma_x = np.zeros(Nx)
 
@@ -150,13 +178,16 @@ class FDFDModeSolver:
         omega = 2 * np.pi * self.frequency
 
         self.Sx = 1.0 + 1j * sigma_x / (eps0 * omega)
-        self.epsilon["xx"] *= self.Sx
+        self.epsilon["xx"] *= 1 / self.Sx
         self.epsilon["yy"] *= self.Sx
         self.epsilon["zz"] *= self.Sx
+        self.mu["xx"] *= 1 / self.Sx
+        self.mu["yy"] *= self.Sx
+        self.mu["zz"] *= self.Sx
 
         # ------------------------------------------------------------------
 
-    def solve_modes(self):
+    def solve(self):
         """Compute the lowest‑order eigen‑modes (TE & TM)."""
 
         # Build diagonal sparse matrices for ε and μ

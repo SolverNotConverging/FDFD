@@ -8,9 +8,9 @@ num_modes = 15  # Number of modes to compute
 
 # Initialize solver and define structure
 solver = FDFDModeSolver(frequency, x_range, Nx, num_modes)
-solver.add_object({"xx": 10.2, "yy": 10.2, "zz": 10.2}, {"xx": 1.0, "yy": 1.0, "zz": 1.0}, (2000, 3000))
+solver.add_object(10.2, 1, (2000, 3000))
 
 # Solve for the eigenmodes
-solver.solve_modes()
+solver.solve()
 # solver.visualize_with_gui()
 solver.visualize_with_gui()
