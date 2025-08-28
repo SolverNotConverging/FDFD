@@ -13,7 +13,7 @@ solver = FDFDModeSolver(frequency, x_range, y_range, Nx, Ny, num_modes)
 solver.add_object(-1e8, 1, (0, 150), (44, 45))
 solver.add_object(-1e8, 1, (250, 400), (44, 45))
 solver.add_object(10.2, 1, (0, 400), (45, 58))
-solver.add_object(-1e8, 1, (150, 250), (58, 59))
+solver.add_object(-1e8, 1, (0, 400), (58, 59))
 solver.add_UPML(50, 3, 5, direction='x')
 
 # Solve for the eigenmodes
