@@ -19,13 +19,13 @@ data_rows = []
 with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
     for freq in frequencies:
         solver = FDFDModeSolver(frequency=freq, x_range=x_range, y_range=y_range, Nx=Nx, Ny=Ny, num_modes=num_modes)
-        solver.add_object({'xx': -1e8, 'yy': -1e8, 'zz': -1e8}, {'xx': 1, 'yy': 1, 'zz': 1}, (130, 150), (44, 45))
-        solver.add_object({'xx': -1e8, 'yy': -1e8, 'zz': -1e8}, {'xx': 1, 'yy': 1, 'zz': 1}, (250, 270), (44, 45))
-        solver.add_object({'xx': 11.8, 'yy': 11.8, 'zz': 11.8}, {'xx': 1, 'yy': 1, 'zz': 1}, (0, 400), (45, 58))
-        solver.add_object({'xx': -1e8, 'yy': -1e8, 'zz': -1e8}, {'xx': 1, 'yy': 1, 'zz': 1}, (150, 250), (58, 59))
-        solver.add_object({'xx': -1e8, 'yy': -1e8, 'zz': -1e8}, {'xx': 1, 'yy': 1, 'zz': 1}, (0, 130), (58, 59))
-        solver.add_object({'xx': -1e8, 'yy': -1e8, 'zz': -1e8}, {'xx': 1, 'yy': 1, 'zz': 1}, (270, 400), (58, 59))
-        solver.add_absorbing_boundaries(80, 3, 20, direction='x')
+        solver.add_object(-1e8, 1, (130, 150), (44, 45))
+        solver.add_object(-1e8, 1, (250, 270), (44, 45))
+        solver.add_object(10.2, 1, (0, 400), (45, 58))
+        solver.add_object(-1e8, 1, (150, 250), (58, 59))
+        solver.add_object(-1e8, 1, (0, 130), (58, 59))
+        solver.add_object(-1e8, 1, (270, 400), (58, 59))
+        solver.add_UPML(80, 3, 20, direction='x')
 
         solver.solve()
 

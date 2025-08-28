@@ -28,47 +28,54 @@ class FDFDModeSolver:
         self.propagation_constant = None
         self.attenuation_constant = None
 
-    def add_object(self, epsilon, mu, x_indices, y_indices):
-        """Add an object with given permittivity and permeability tensors at specified grid indices."""
-        x_min, x_max = x_indices
-        y_min, y_max = y_indices
-        for comp, value in epsilon.items():
-            self.epsilon[comp][y_min:y_max, x_min:x_max] = value
-        for comp, value in mu.items():
-            self.mu[comp][y_min:y_max, x_min:x_max] = value
-
-    def add_absorbing_boundaries(self, pml_width=50, n=3, sigma_max=2, direction='both'):
-        """Add absorbing boundaries using a polynomial conductivity profile.
-
-        Parameters:
-        - pml_width: Thickness of the PML in grid points.
-        - n: Polynomial order for the conductivity profile.
-        - sigma_max: Maximum normalized conductivity.
-        - direction: 'x', 'y', or 'both' to specify which boundaries to apply the PML.
+    def add_object(self, epsilon, mu, x_range, y_range):
         """
-        Nx, Ny = self.Nx, self.Ny
-        sigma_x = np.zeros((Ny, Nx))
-        sigma_y = np.zeros((Ny, Nx))
+        Add a rectangular region with isotropic or diagonal-anisotropic material.
 
-        if direction in ('x', 'both'):
-            # Create PML profile for x-direction
-            for i in range(pml_width):
-                sigma_x[:, i] = sigma_max * ((pml_width - i) / pml_width) ** n
-                sigma_x[:, -i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
+        Parameters
+        ----------
+        epsilon : scalar (isotropic) or length-3 1D (xx, yy, zz)
+        mu      : scalar (isotropic) or length-3 1D (xx, yy, zz)
+        x_range : (x_min, x_max) indices [inclusive, exclusive)
+        y_range : (y_min, y_max) indices [inclusive, exclusive)
+        """
 
-        if direction in ('y', 'both'):
-            # Create PML profile for y-direction
-            for i in range(pml_width):
-                sigma_y[i, :] = sigma_max * ((pml_width - i) / pml_width) ** n
-                sigma_y[-i - 1, :] = sigma_max * ((pml_width - i) / pml_width) ** n
+        # ---- helpers ----
+        def _norm_three(name, val):
+            # scalar -> [s, s, s]; length-3 1D -> as-is
+            if np.isscalar(val):
+                return np.full(3, val, dtype=complex)
+            arr = np.asarray(val, dtype=complex)
+            if arr.ndim == 1 and arr.size == 3:
+                return arr
+            raise ValueError(f"{name} must be a scalar or a length-3 1D array (xx, yy, zz).")
 
-        # Combine sigma_x and sigma_y based on the direction
-        sigma = sigma_x + sigma_y
+        # ---- ranges ----
+        try:
+            x0, x1 = int(x_range[0]), int(x_range[1])
+            y0, y1 = int(y_range[0]), int(y_range[1])
+        except Exception:
+            raise ValueError("x_range and y_range must be (min, max) integer-like pairs.")
 
-        # Apply PML profile to permittivity tensors
-        for comp in self.epsilon:
-            mask = np.abs(self.epsilon[comp]) <= 100
-            self.epsilon[comp][mask] *= (1 + 1j / (8.85e-12 * 2 * np.pi * self.frequency) * sigma[mask])
+        if not (x1 > x0 and y1 > y0):
+            raise ValueError("x_range and y_range must satisfy max > min.")
+
+        Ny, Nx = self.Ny, self.Nx
+        if not (0 <= x0 < x1 <= Nx and 0 <= y0 < y1 <= Ny):
+            raise ValueError("Region is out of bounds of the simulation grid.")
+
+        # ---- materials ----
+        epsilon = _norm_three("epsilon", epsilon)
+        mu = _norm_three("mu", mu)
+
+        # ---- assign ----
+        self.epsilon['xx'][y0:y1, x0:x1] = epsilon[0]
+        self.epsilon['yy'][y0:y1, x0:x1] = epsilon[1]
+        self.epsilon['zz'][y0:y1, x0:x1] = epsilon[2]
+
+        self.mu['xx'][y0:y1, x0:x1] = mu[0]
+        self.mu['yy'][y0:y1, x0:x1] = mu[1]
+        self.mu['zz'][y0:y1, x0:x1] = mu[2]
 
     def add_UPML(self, pml_width: int = 50, n: int = 3, sigma_max: float = 25, direction: str = "both", ):
         """
@@ -110,22 +117,13 @@ class FDFDModeSolver:
         self.Sx = 1.0 + 1j * sigma_x / (eps0 * omega)
         self.Sy = 1.0 + 1j * sigma_y / (eps0 * omega)
 
-        # --- make ε uniaxial ---------------------------------------------------
-        #
-        #   ε′_xx = ε_r * Sy / Sx
-        #   ε′_yy = ε_r * Sx / Sy
-        #   ε′_zz = ε_r * Sx * Sy
-        #
-        # (For TE-z you really only need ε_zz, but updating all three keeps the
-        #  data structure consistent for other polarisations.)
-
         self.epsilon["xx"] *= self.Sy / self.Sx
         self.epsilon["yy"] *= self.Sx / self.Sy
         self.epsilon["zz"] *= self.Sx * self.Sy
+        self.mu["xx"] *= self.Sy / self.Sx
+        self.mu["yy"] *= self.Sx / self.Sy
+        self.mu["zz"] *= self.Sx * self.Sy
 
-    # ------------------------------------------------------------------
-    # Balanced surface‑impedance sheet for 2‑D grids
-    # ------------------------------------------------------------------
     def add_impedance_surface_balanced(
             self,
             Zs: complex,

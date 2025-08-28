@@ -21,9 +21,8 @@ for m in range(num_modes):
 # Frequency scan
 for f in freqs:
     solver = FDFDModeSolver(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
-    solver.add_object({"xx": 10.2, "yy": 10.2, "zz": 10.2}, {"xx": 1.0, "yy": 1.0, "zz": 1.0}, (500, 627))
-    solver.add_object({"xx": -1e8, "yy": -1e8, "zz": -1e8}, {"xx": 1.0, "yy": 1.0, "zz": 1.0}, (627, 628))
-    solver.solve_modes()
+    solver.add_object(10.2, 1, (500, 627))
+    solver.solve()
 
     # Append all modes
     for m in range(num_modes):
