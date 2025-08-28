@@ -84,16 +84,12 @@ class TM_Mode_Solver:
             # Polynomial grading profile σ(x)
             sigma_val = sigma_max * ((pml_width - i) / pml_width) ** order_n
 
-            # Tangential components (Ey, Ez):  + j σ / (ω ε₀)
-            damping_tangential = 1j * sigma_val * inv_omega_eps0
-
-            # Normal component (Ex):           + (ω ε₀) / (j σ)
-            damping_normal = omega_eps0 / (1j * sigma_val)
+            Sx = 1 + 1j * sigma_val * inv_omega_eps0
 
             # Update relative-permittivity arrays at column i
-            self.Eryy[:, i] += damping_tangential
-            self.Erzz[:, i] += damping_tangential
-            self.Erxx[:, i] += damping_normal
+            self.Eryy[:, i] *= Sx
+            self.Erzz[:, i] *= Sx
+            self.Erxx[:, i] *= 1 / Sx
 
     def solve_modes(self):
         N = self.N

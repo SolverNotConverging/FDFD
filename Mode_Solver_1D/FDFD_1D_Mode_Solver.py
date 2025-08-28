@@ -185,7 +185,7 @@ class FDFDModeSolver:
         self.mu["yy"] *= self.Sx
         self.mu["zz"] *= self.Sx
 
-        # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def solve(self):
         """Compute the lowest‑order eigen‑modes (TE & TM)."""
