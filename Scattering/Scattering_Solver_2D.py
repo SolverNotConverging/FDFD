@@ -123,7 +123,7 @@ class FDFD2DScatteringSolver:
     # ============ 3.  Uniaxial PML  (UPML) ======================================
     def add_UPML(self, pml_width=20, n=3, sigma_max=5.0, direction="both"):
         Nx, Ny = self.Nx, self.Ny
-        sigma_x = np.zeros((Ny, Nx));
+        sigma_x = np.zeros((Ny, Nx))
         sigma_y = np.zeros_like(sigma_x)
 
         # --- build σ(x), σ(y) ---------------------------------------------------

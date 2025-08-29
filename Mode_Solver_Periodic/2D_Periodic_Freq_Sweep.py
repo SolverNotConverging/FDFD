@@ -42,7 +42,7 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     solver.add_UPML(pml_width=50, sigma_max=5)
 
     try:
-        solver.solve_modes()
+        solver.solve()
         for mode in range(num_modes):
             gamma = solver.gammas[mode]
             data[f"Alpha_Mode_{mode + 1}"].append(gamma.real)
