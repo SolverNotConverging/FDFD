@@ -16,11 +16,11 @@ class TM_Mode_Solver:
         self.N = Nx * Nz
         self.num_modes = num_modes
 
-        self.c = 3e8
-        self.omega = 2 * np.pi * freq
-        self.k0 = self.omega / self.c
         self.epsilon0 = 8.85e-12
         self.mu0 = 1.26e-6
+        self.c = 1 / np.sqrt(self.epsilon0 * self.mu0)
+        self.omega = 2 * np.pi * freq
+        self.k0 = self.omega / self.c
 
         self.guess = guess
         self.eigenvectors = None
@@ -84,25 +84,33 @@ class TM_Mode_Solver:
             self.Mryy[np.ix_(z_indices, x_indices)] = mu[1]
             self.Mrzz[np.ix_(z_indices, x_indices)] = mu[2]
 
-    def add_UPML(self, pml_width: int = 50, sigma_max: float = 5, order_n: int = 3):
-        # Pre-compute constants
-        omega_eps0 = self.omega * self.epsilon0  # ω ε₀
-        inv_omega_eps0 = 1.0 / omega_eps0  # 1 / (ω ε₀)
+    def add_UPML(self, pml_width=20, n=3, sigma_max=5.0, direction="top"):
+        Nx, Nz = self.Nx, self.Nz
+        sigma_x = np.zeros((Nz, Nx))
 
-        for i in range(pml_width):  # x-index inside the PML
-            # Polynomial grading profile σ(x)
-            sigma_val = sigma_max * ((pml_width - i) / pml_width) ** order_n
+        def profile(i):  # polynomial grading
+            return sigma_max * ((pml_width - i) / pml_width) ** n
 
-            Sx = 1 + 1j * sigma_val * inv_omega_eps0
+        if direction in ("t", "top", "both"):
+            for i in range(pml_width):
+                s = profile(i)
+                sigma_x[:, i] = s  # top
+        if direction in ("b", "bottom", "both"):
+            for i in range(pml_width):
+                s = profile(i)
+                sigma_x[:, -i - 1] = s  # bottom
 
-            self.Erxx[:, i] *= 1 / Sx
-            self.Eryy[:, i] *= Sx
-            self.Erzz[:, i] *= Sx
-            self.Mrxx[:, i] *= 1 / Sx
-            self.Mryy[:, i] *= Sx
-            self.Mrzz[:, i] *= Sx
+        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * self.omega)
 
-    def solve_modes(self):
+        # uniaxial scaling
+        self.Erxx *= 1 / Sx
+        self.Eryy *= Sx
+        self.Erzz *= Sx
+        self.Mrxx *= 1 / Sx
+        self.Mryy *= Sx
+        self.Mrzz *= Sx
+
+    def solve(self):
         N = self.N
         Erxx_diag = diags(self.Erxx.ravel())
         Erzz_diag = diags(self.Erzz.ravel())
@@ -195,11 +203,11 @@ class TE_Mode_Solver:
         self.N = Nx * Nz
         self.num_modes = num_modes
 
-        self.c = 3e8
-        self.omega = 2 * np.pi * freq
-        self.k0 = self.omega / self.c
         self.epsilon0 = 8.85e-12
         self.mu0 = 1.26e-6
+        self.c = 1 / np.sqrt(self.epsilon0 * self.mu0)
+        self.omega = 2 * np.pi * freq
+        self.k0 = self.omega / self.c
 
         self.guess = guess
         self.eigenvectors = None
@@ -263,25 +271,33 @@ class TE_Mode_Solver:
             self.Mryy[np.ix_(z_indices, x_indices)] = mu[1]
             self.Mrzz[np.ix_(z_indices, x_indices)] = mu[2]
 
-    def add_UPML(self, pml_width: int = 50, sigma_max: float = 5, order_n: int = 3):
-        # Pre-compute constants
-        omega_eps0 = self.omega * self.epsilon0  # ω ε₀
-        inv_omega_eps0 = 1.0 / omega_eps0  # 1 / (ω ε₀)
+    def add_UPML(self, pml_width=20, n=3, sigma_max=5.0, direction="top"):
+        Nx, Nz = self.Nx, self.Nz
+        sigma_x = np.zeros((Nz, Nx))
 
-        for i in range(pml_width):  # x-index inside the PML
-            # Polynomial grading profile σ(x)
-            sigma_val = sigma_max * ((pml_width - i) / pml_width) ** order_n
+        def profile(i):  # polynomial grading
+            return sigma_max * ((pml_width - i) / pml_width) ** n
 
-            Sx = 1 + 1j * sigma_val * inv_omega_eps0
+        if direction in ("t", "top", "both"):
+            for i in range(pml_width):
+                s = profile(i)
+                sigma_x[:, i] = s  # top
+        if direction in ("b", "bottom", "both"):
+            for i in range(pml_width):
+                s = profile(i)
+                sigma_x[:, -i - 1] = s  # bottom
 
-            self.Erxx[:, i] *= 1 / Sx
-            self.Eryy[:, i] *= Sx
-            self.Erzz[:, i] *= Sx
-            self.Mrxx[:, i] *= 1 / Sx
-            self.Mryy[:, i] *= Sx
-            self.Mrzz[:, i] *= Sx
+        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * self.omega)
 
-    def solve_modes(self):
+        # uniaxial scaling
+        self.Erxx *= 1 / Sx
+        self.Eryy *= Sx
+        self.Erzz *= Sx
+        self.Mrxx *= 1 / Sx
+        self.Mryy *= Sx
+        self.Mrzz *= Sx
+
+    def solve(self):
         N = self.N
 
         Eryy_diag = diags(self.Eryy.ravel())

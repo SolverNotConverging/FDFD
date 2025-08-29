@@ -30,6 +30,6 @@ sim.add_mask(value=80)  # total field region = inner 50‑cell frame
 
 # --------------------------------------------------------------------------
 # 4. plane‑wave excitation (45° from +x axis)
-sim.add_source(src_type="plane_wave", angle_deg=10.0, polarization="TE")
+sim.add_source(src_type="plane_wave", angle_deg=45.0, polarization="TE")
 sim.solve_total_field_TM()  # returns Ny×Nx array
 sim.TM_Visualization()
