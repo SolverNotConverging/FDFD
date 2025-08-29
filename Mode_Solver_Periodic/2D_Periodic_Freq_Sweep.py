@@ -6,12 +6,12 @@ from tqdm import tqdm
 from Periodic_Mode_Solver import TM_Mode_Solver
 
 x_range = 20e-3  # 20 mm in x-direction
-z_range = 5e-3  # 5 mm in y-direction
+z_range = 5e-3  # 5 mm in z-direction
 Nx = 200  # Number of grid points in x-direction
-Nz = 50  # Number of grid points in y-direction
-f_start = 20e9
-f_stop = 21e9
-f_step = 0.05e9
+Nz = 50  # Number of grid points in z-direction
+f_start = 22e9
+f_stop = 26e9
+f_step = 0.02e9
 frequencies = np.arange(f_start, f_stop, f_step)
 num_modes = 4
 
@@ -35,10 +35,11 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     solver = TM_Mode_Solver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
                             guess=sigma_guess)
     # Define structure
-    solver.add_object(-1e8, 1, x_indices=[164], z_indices=range(0, 5))
-    solver.add_object(10.2, 1, x_indices=range(165, 190), z_indices=range(solver.Nz))
+    solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(0, 14))
+    solver.add_object(3, 1, x_indices=range(162, 177), z_indices=range(solver.Nz))
+    solver.add_object(10.2, 1, x_indices=range(177, 190), z_indices=range(solver.Nz))
     solver.add_object(-1e8, 1, x_indices=[190], z_indices=range(solver.Nz))
-    solver.add_absorbing_boundaries(pml_width=50, sigma_max=20)
+    solver.add_UPML(pml_width=50, sigma_max=5)
 
     try:
         solver.solve_modes()
