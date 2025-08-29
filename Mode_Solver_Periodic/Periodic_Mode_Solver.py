@@ -62,7 +62,9 @@ class TM_Mode_Solver:
         self.Erxx = np.ones(shape, dtype=complex)
         self.Eryy = np.ones(shape, dtype=complex)
         self.Erzz = np.ones(shape, dtype=complex)
-        self.Mu = np.ones(shape, dtype=complex)
+        self.Mrxx = np.ones(shape, dtype=complex)
+        self.Mryy = np.ones(shape, dtype=complex)
+        self.Mrzz = np.ones(shape, dtype=complex)
 
     def add_object(self, epsilon, mu, x_indices, z_indices):
         if np.isscalar(epsilon):
@@ -73,9 +75,16 @@ class TM_Mode_Solver:
             self.Erxx[np.ix_(z_indices, x_indices)] = epsilon[0]
             self.Eryy[np.ix_(z_indices, x_indices)] = epsilon[1]
             self.Erzz[np.ix_(z_indices, x_indices)] = epsilon[2]
-        self.Mu[np.ix_(z_indices, x_indices)] = mu
+        if np.isscalar(mu):
+            self.Mrxx[np.ix_(z_indices, x_indices)] = mu
+            self.Mryy[np.ix_(z_indices, x_indices)] = mu
+            self.Mrzz[np.ix_(z_indices, x_indices)] = mu
+        else:
+            self.Mrxx[np.ix_(z_indices, x_indices)] = mu[0]
+            self.Mryy[np.ix_(z_indices, x_indices)] = mu[1]
+            self.Mrzz[np.ix_(z_indices, x_indices)] = mu[2]
 
-    def add_absorbing_boundaries(self, pml_width: int = 50, sigma_max: float = 5, order_n: int = 3):
+    def add_UPML(self, pml_width: int = 50, sigma_max: float = 5, order_n: int = 3):
         # Pre-compute constants
         omega_eps0 = self.omega * self.epsilon0  # ω ε₀
         inv_omega_eps0 = 1.0 / omega_eps0  # 1 / (ω ε₀)
@@ -86,18 +95,20 @@ class TM_Mode_Solver:
 
             Sx = 1 + 1j * sigma_val * inv_omega_eps0
 
-            # Update relative-permittivity arrays at column i
+            self.Erxx[:, i] *= 1 / Sx
             self.Eryy[:, i] *= Sx
             self.Erzz[:, i] *= Sx
-            self.Erxx[:, i] *= 1 / Sx
+            self.Mrxx[:, i] *= 1 / Sx
+            self.Mryy[:, i] *= Sx
+            self.Mrzz[:, i] *= Sx
 
     def solve_modes(self):
         N = self.N
         Erxx_diag = diags(self.Erxx.ravel())
         Erzz_diag = diags(self.Erzz.ravel())
-        Mu_diag = diags(self.Mu.ravel())
+        Mryy_diag = diags(self.Mryy.ravel())
 
-        D1 = 1j * self.omega * self.mu0 * Mu_diag + 1j / self.omega * self.DEX @ (
+        D1 = 1j * self.omega * self.mu0 * Mryy_diag + 1j / self.omega * self.DEX @ (
                 1 / self.epsilon0 * Erzz_diag.power(-1) @ self.DHX)
         D2 = 1j * self.omega * self.epsilon0 * Erxx_diag
         Zero = diags(np.zeros(N))
@@ -230,7 +241,9 @@ class TE_Mode_Solver:
         self.Erxx = np.ones(shape, dtype=complex)
         self.Eryy = np.ones(shape, dtype=complex)
         self.Erzz = np.ones(shape, dtype=complex)
-        self.Mu = np.ones(shape, dtype=complex)
+        self.Mrxx = np.ones(shape, dtype=complex)
+        self.Mryy = np.ones(shape, dtype=complex)
+        self.Mrzz = np.ones(shape, dtype=complex)
 
     def add_object(self, epsilon, mu, x_indices, z_indices):
         if np.isscalar(epsilon):
@@ -241,22 +254,16 @@ class TE_Mode_Solver:
             self.Erxx[np.ix_(z_indices, x_indices)] = epsilon[0]
             self.Eryy[np.ix_(z_indices, x_indices)] = epsilon[1]
             self.Erzz[np.ix_(z_indices, x_indices)] = epsilon[2]
-        self.Mu[np.ix_(z_indices, x_indices)] = mu
+        if np.isscalar(mu):
+            self.Mrxx[np.ix_(z_indices, x_indices)] = mu
+            self.Mryy[np.ix_(z_indices, x_indices)] = mu
+            self.Mrzz[np.ix_(z_indices, x_indices)] = mu
+        else:
+            self.Mrxx[np.ix_(z_indices, x_indices)] = mu[0]
+            self.Mryy[np.ix_(z_indices, x_indices)] = mu[1]
+            self.Mrzz[np.ix_(z_indices, x_indices)] = mu[2]
 
-    def add_absorbing_boundaries(self, pml_width: int = 50,
-                                 sigma_max: float = 20, order_n: int = 3):
-        """
-        Add a polynomially graded PML on the –x face (columns 0 … pml_width-1).
-
-        Parameters
-        ----------
-        pml_width : int
-            Number of cells in the PML region.
-        sigma_max : float
-            Conductivity at the outer edge of the domain (i = 0).
-        order_n : int
-            Polynomial order of the grading profile.
-        """
+    def add_UPML(self, pml_width: int = 50, sigma_max: float = 5, order_n: int = 3):
         # Pre-compute constants
         omega_eps0 = self.omega * self.epsilon0  # ω ε₀
         inv_omega_eps0 = 1.0 / omega_eps0  # 1 / (ω ε₀)
@@ -265,26 +272,25 @@ class TE_Mode_Solver:
             # Polynomial grading profile σ(x)
             sigma_val = sigma_max * ((pml_width - i) / pml_width) ** order_n
 
-            # Tangential components (Ey, Ez):  + j σ / (ω ε₀)
-            damping_tangential = 1j * sigma_val * inv_omega_eps0
+            Sx = 1 + 1j * sigma_val * inv_omega_eps0
 
-            # Normal component (Ex):           + (ω ε₀) / (j σ)
-            damping_normal = omega_eps0 / (1j * sigma_val)
-
-            # Update relative-permittivity arrays at column i
-            self.Eryy[:, i] += damping_tangential
-            self.Erzz[:, i] += damping_tangential
-            self.Erxx[:, i] += damping_normal
+            self.Erxx[:, i] *= 1 / Sx
+            self.Eryy[:, i] *= Sx
+            self.Erzz[:, i] *= Sx
+            self.Mrxx[:, i] *= 1 / Sx
+            self.Mryy[:, i] *= Sx
+            self.Mrzz[:, i] *= Sx
 
     def solve_modes(self):
         N = self.N
 
         Eryy_diag = diags(self.Eryy.ravel())
-        Mu_diag = diags(self.Mu.ravel())
+        Mrxx_diag = diags(self.Mrxx.ravel())
+        Mrzz_diag = diags(self.Mrzz.ravel())
 
         D1 = -1j * self.omega * self.epsilon0 * Eryy_diag - 1j / self.omega * self.DHX @ (
-                1 / self.mu0 * Mu_diag.power(-1) @ self.DEX)
-        D2 = -1j * self.omega * self.mu0 * Mu_diag
+                1 / self.mu0 * Mrzz_diag.power(-1) @ self.DEX)
+        D2 = -1j * self.omega * self.mu0 * Mrxx_diag
         Zero = diags(np.zeros(N))
 
         A = bmat([[self.DHZ, D1], [D2, self.DEZ]]).tocsr()
