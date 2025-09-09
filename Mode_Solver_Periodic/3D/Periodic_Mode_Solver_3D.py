@@ -13,7 +13,7 @@ class Periodic_3D_Mode_Solver:
                  Nx=90, Ny=40, Nz=21,
                  x_range=30e-3, y_range=10e-3, z_range=7e-3,
                  freq=24e9, num_modes=5,
-                 sigma_guess_func=None):
+                 sigma_guess_func=None, tol=0):
         # Store parameters
         self.Nx, self.Ny, self.Nz = Nx, Ny, Nz
         self.dx, self.dy, self.dz = x_range / Nx, y_range / Ny, z_range / Nz
@@ -32,6 +32,8 @@ class Periodic_3D_Mode_Solver:
         else:
             self.sigma_guess = 0
 
+        self.tol = tol
+
         # Grids
         self.Ix, self.Iy, self.Iz = eye(Nx), eye(Ny), eye(Nz)
         self.DEX = kron(kron(self.Iz, self.Iy), self.diff_operator(Nx)) / self.dx
@@ -45,7 +47,9 @@ class Periodic_3D_Mode_Solver:
         self.Erxx_3D = np.ones((Nz, Ny, Nx), dtype=complex)
         self.Eryy_3D = np.ones((Nz, Ny, Nx), dtype=complex)
         self.Erzz_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Mu_3D = np.ones((Nz, Ny, Nx), dtype=complex)
+        self.Mrxx_3D = np.ones((Nz, Ny, Nx), dtype=complex)
+        self.Mryy_3D = np.ones((Nz, Ny, Nx), dtype=complex)
+        self.Mrzz_3D = np.ones((Nz, Ny, Nx), dtype=complex)
 
         # Storage
         self.fields = {}
@@ -70,34 +74,74 @@ class Periodic_3D_Mode_Solver:
         return D.tocsr()
 
     # --- Helper functions for modeling
-    def add_object(self, x_slice, y_slice, z_slice, erxx=1, eryy=1, erzz=1, mu=1):
-        self.Erxx_3D[z_slice, y_slice, x_slice] = erxx
-        self.Eryy_3D[z_slice, y_slice, x_slice] = eryy
-        self.Erzz_3D[z_slice, y_slice, x_slice] = erzz
-        self.Mu_3D[z_slice, y_slice, x_slice] = mu
+    def add_object(self, er, mr, x_slice, y_slice, z_slice):
+        if np.isscalar(er):
+            self.Erxx_3D[z_slice, y_slice, x_slice] = er
+            self.Eryy_3D[z_slice, y_slice, x_slice] = er
+            self.Erzz_3D[z_slice, y_slice, x_slice] = er
+        else:
+            self.Erxx_3D[z_slice, y_slice, x_slice] = er[0]
+            self.Eryy_3D[z_slice, y_slice, x_slice] = er[1]
+            self.Erzz_3D[z_slice, y_slice, x_slice] = er[2]
 
-    def add_absorbing_boundary(self, sides=['-x', '+x', '-y', '+y'], width=10, max_loss=40):
+        if np.isscalar(mr):
+            self.Mrxx_3D[z_slice, y_slice, x_slice] = mr
+            self.Mryy_3D[z_slice, y_slice, x_slice] = mr
+            self.Mrzz_3D[z_slice, y_slice, x_slice] = mr
+        else:
+            self.Mrxx_3D[z_slice, y_slice, x_slice] = mr[0]
+            self.Mryy_3D[z_slice, y_slice, x_slice] = mr[1]
+            self.Mrzz_3D[z_slice, y_slice, x_slice] = mr[2]
+
+    def add_absorbing_boundary(self, sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3):
+        # Assumes e^{+i ω t}. If using e^{-i ω t}, change +1j -> -1j.
         omega = self.omega
-        for side in sides:
-            for i in range(width):
-                sigma = max_loss * ((width - i) / width) ** 3
-                loss = 1j / (omega * self.epsilon0) * sigma
-                if side == '-x':
-                    self.Erxx_3D[:, :, i] += loss
-                    self.Eryy_3D[:, :, i] += loss
-                    self.Erzz_3D[:, :, i] += loss
-                elif side == '+x':
-                    self.Erxx_3D[:, :, -1 - i] += loss
-                    self.Eryy_3D[:, :, -1 - i] += loss
-                    self.Erzz_3D[:, :, -1 - i] += loss
-                elif side == '-y':
-                    self.Erxx_3D[:, i, :] += loss
-                    self.Eryy_3D[:, i, :] += loss
-                    self.Erzz_3D[:, i, :] += loss
-                elif side == '+y':
-                    self.Erxx_3D[:, -1 - i, :] += loss
-                    self.Eryy_3D[:, -1 - i, :] += loss
-                    self.Erzz_3D[:, -1 - i, :] += loss
+        e0 = self.epsilon0
+
+        nx = self.Nx
+        ny = self.Ny
+        assert width > 0
+        assert width <= nx // 2 and width <= ny // 2, "PML width too large for grid."
+
+        for i in range(width):
+            sigma = max_loss * ((width - i) / width) ** n
+            S = 1 + 1j * sigma / (omega * e0)  # flip sign if using e^{-iωt}
+
+            if '-x' in sides:
+                sl = np.s_[:, :, i]
+                self.Erxx_3D[sl] /= S
+                self.Eryy_3D[sl] *= S
+                self.Erzz_3D[sl] *= S
+                self.Mrxx_3D[sl] /= S
+                self.Mryy_3D[sl] *= S
+                self.Mrzz_3D[sl] *= S
+
+            if '+x' in sides:
+                sl = np.s_[:, :, -1 - i]
+                self.Erxx_3D[sl] /= S
+                self.Eryy_3D[sl] *= S
+                self.Erzz_3D[sl] *= S
+                self.Mrxx_3D[sl] /= S
+                self.Mryy_3D[sl] *= S
+                self.Mrzz_3D[sl] *= S
+
+            if '-y' in sides:
+                sl = np.s_[:, i, :]
+                self.Erxx_3D[sl] *= S
+                self.Eryy_3D[sl] /= S
+                self.Erzz_3D[sl] *= S
+                self.Mrxx_3D[sl] *= S
+                self.Mryy_3D[sl] /= S
+                self.Mrzz_3D[sl] *= S
+
+            if '+y' in sides:
+                sl = np.s_[:, -1 - i, :]
+                self.Erxx_3D[sl] *= S
+                self.Eryy_3D[sl] /= S
+                self.Erzz_3D[sl] *= S
+                self.Mrxx_3D[sl] *= S
+                self.Mryy_3D[sl] /= S
+                self.Mrzz_3D[sl] *= S
 
     # --- Solver
     def solve(self):
@@ -108,20 +152,23 @@ class Periodic_3D_Mode_Solver:
         Erxx = diags(self.Erxx_3D.ravel())
         Eryy = diags(self.Eryy_3D.ravel())
         Erzz = diags(self.Erzz_3D.ravel())
-        Mu = diags(self.Mu_3D.ravel())
+        Mrxx = diags(self.Mrxx_3D.ravel())
+        Mryy = diags(self.Mryy_3D.ravel())
+        Mrzz = diags(self.Mrzz_3D.ravel())
         Zero = diags(np.zeros(N))
 
         # Build system matrices
         A = bmat([
             [self.DEZ, Zero, self.DEX @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY),
-             self.DEX @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX) + 1j * omega * mu0 * Mu],
-            [Zero, self.DEZ, self.DEY @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY) - 1j * omega * mu0 * Mu,
+             self.DEX @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX) + 1j * omega * mu0 * Mryy],
+            [Zero, self.DEZ,
+             self.DEY @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY) - 1j * omega * mu0 * Mrxx,
              self.DEY @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX)],
-            [self.DHX @ (1j / (omega * mu0) * Mu.power(-1) @ self.DEY),
-             self.DHX @ (-1j / (omega * mu0) * Mu.power(-1) @ self.DEX) - 1j * omega * epsilon0 * Eryy,
+            [self.DHX @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY),
+             self.DHX @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX) - 1j * omega * epsilon0 * Eryy,
              self.DHZ, Zero],
-            [self.DHY @ (1j / (omega * mu0) * Mu.power(-1) @ self.DEY) + 1j * omega * epsilon0 * Erxx,
-             self.DHY @ (-1j / (omega * mu0) * Mu.power(-1) @ self.DEX),
+            [self.DHY @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY) + 1j * omega * epsilon0 * Erxx,
+             self.DHY @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX),
              Zero, self.DHZ]
         ]).tocsr()
 
@@ -130,7 +177,7 @@ class Periodic_3D_Mode_Solver:
                   [Zero, Zero, B_diag.conj().T, Zero], [Zero, Zero, Zero, B_diag.conj().T]]).tocsr()
 
         # Solve
-        self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess)
+        self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess, tol=self.tol)
         self.gammas = self.eigenvalues / self.k0
         self.store_fields()
 
@@ -211,7 +258,7 @@ class Periodic_3D_Mode_Solver:
         x_slice = Nx // 2
         z_slice = Nz // 2
 
-        im0 = axs[0, 0].imshow(np.abs(self.Erxx_3D[:, :, x_slice]).T, cmap='viridis',
+        im0 = axs[0, 0].imshow(np.abs(self.Erzz_3D[:, :, x_slice]).T, cmap='viridis',
                                extent=[0, Nz * dz * 1e3, 0, Ny * dy * 1e3], vmax=20)
         axs[0, 0].set_title('Unit Cell')
         plt.colorbar(im0, ax=axs[0, 0], fraction=0.046, pad=0.04)
@@ -226,7 +273,7 @@ class Periodic_3D_Mode_Solver:
             ax.set_title(title)
             plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-        im0 = axs[1, 0].imshow(np.abs(self.Erxx_3D[z_slice, :, :]), cmap='viridis',
+        im0 = axs[1, 0].imshow(np.abs(self.Erzz_3D[z_slice, :, :]), cmap='viridis',
                                extent=[0, Nx * dx * 1e3, 0, Ny * dy * 1e3], vmax=20)
         axs[1, 0].set_title('Unit Cell')
         plt.colorbar(im0, ax=axs[1, 0], fraction=0.046, pad=0.04)
