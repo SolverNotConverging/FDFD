@@ -1,18 +1,18 @@
 from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver  # adjust to your module name
 
 # --- Small grid
-solver = Periodic_3D_Mode_Solver(Nx=30, Ny=30, Nz=10,
-                                 x_range=15e-3, y_range=15e-3, z_range=10e-3,
-                                 freq=18e9, num_modes=5)
+solver = Periodic_3D_Mode_Solver(Nx=40, Ny=40, Nz=10,
+                                 x_range=15e-3, y_range=15e-3, z_range=5e-3,
+                                 freq=18e9, num_modes=2, tol=1e-2)
 
 # Build waveguide unit cell
-solver.add_object(slice(10, 20), slice(15, 20), slice(0, 10), erxx=7, eryy=7, erzz=7)
+solver.add_object(7, 1, slice(15, 25), slice(18, 28), slice(0, 10))
 
 # Periodic inclusions within the unit cell
-solver.add_object(slice(10, 20), slice(12, 15), slice(0, 3), erxx=7, eryy=7, erzz=7)
+solver.add_object(7, 1, slice(15, 25), slice(15, 18), slice(0, 3))
 
 # Absorbing layers along ±y
-solver.add_absorbing_boundary(['-x', '+x', '-y', '+y'], width=5, max_loss=30)
+solver.add_absorbing_boundary(['-x', '+x', '-y', '+y'], width=5, max_loss=5, n=3)
 
 solver.solve()
 
