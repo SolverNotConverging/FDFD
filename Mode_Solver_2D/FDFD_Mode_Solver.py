@@ -124,7 +124,7 @@ class FDFDModeSolver:
         self.mu["yy"] *= self.Sx / self.Sy
         self.mu["zz"] *= self.Sx * self.Sy
 
-    def add_impedance_surface_balanced(
+    def add_impedance_surface(
             self,
             Zs: complex,
             position: float | int,
