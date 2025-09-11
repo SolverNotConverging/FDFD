@@ -132,12 +132,8 @@ class FDFDModeSolver:
             orientation: str = "x",
             thickness_cells: int = 1,
             eps_components: tuple[str, ...] = ("xx", "yy", "zz"),
-            mu_components: tuple[str, ...] = ("xx", "yy", "zz"),
     ):
         """
-        Embed an impedance sheet whose admittance is split equally
-        between ε‑ and µ‑perturbations, so TE and TM load identically.
-
         Parameters
         ----------
         Zs : complex
