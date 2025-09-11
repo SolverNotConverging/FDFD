@@ -194,17 +194,13 @@ class FDFDModeSolver:
         # 2) balanced conversion  (same formula as 1‑D version)
         # ──────────────────────────────────────────────────────────────────
         eps0 = 8.854187817e-12
-        mu0 = 4.0e-7 * np.pi
         delta_eps = -1j / (2 * 2 * np.pi * self.frequency * eps0 * t * Zs)
-        delta_mu = -1j * Zs / (2 * 2 * np.pi * self.frequency * mu0 * t)
 
         # ──────────────────────────────────────────────────────────────────
         # 3) write perturbations into ε and µ
         # ──────────────────────────────────────────────────────────────────
         for comp in eps_components:
             self.epsilon[comp][sl_y, sl_x] += delta_eps
-        for comp in mu_components:
-            self.mu[comp][sl_y, sl_x] += delta_mu
 
         # ──────────────────────────────────────────────────────────────────
         # 4) invalidate previous eigen‑solution (if any)
