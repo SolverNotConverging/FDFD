@@ -194,7 +194,7 @@ class FDFDModeSolver:
         # 2) balanced conversion  (same formula as 1‑D version)
         # ──────────────────────────────────────────────────────────────────
         eps0 = 8.854187817e-12
-        delta_eps = -1j / (2 * 2 * np.pi * self.frequency * eps0 * t * Zs)
+        delta_eps = -1j / (2 * np.pi * self.frequency * eps0 * t * Zs)
 
         # ──────────────────────────────────────────────────────────────────
         # 3) write perturbations into ε and µ
