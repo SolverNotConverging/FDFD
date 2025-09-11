@@ -2,8 +2,8 @@ from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver  # adjust to your mo
 
 # --- Small grid
 solver = Periodic_3D_Mode_Solver(Nx=40, Ny=40, Nz=10,
-                                 x_range=15e-3, y_range=15e-3, z_range=5e-3,
-                                 freq=18e9, num_modes=2, tol=1e-2)
+                                 x_range=4e-3, y_range=4e-3, z_range=1e-3,
+                                 freq=50e9, num_modes=2, tol=1e-2)
 
 # Build waveguide unit cell
 solver.add_object(7, 1, slice(15, 25), slice(18, 28), slice(0, 10))
