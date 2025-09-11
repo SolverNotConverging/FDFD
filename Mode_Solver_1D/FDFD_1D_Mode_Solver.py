@@ -141,19 +141,14 @@ class FDFDModeSolver:
         # 2) convert sheet impedance → Δε  and  Δµ  (balanced split)
         # ------------------------------------------------------------------
         eps0 = 8.854187817e-12  # F/m
-        mu0 = 4.0e-7 * np.pi  # H/m
 
-        delta_eps = -1j / (2 * self.omega * eps0 * t * Zs)
-        delta_mu = -1j * Zs / (2 * self.omega * mu0 * t)
+        delta_eps = -1j / (self.omega * eps0 * t * Zs)
 
         # ------------------------------------------------------------------
         # 3) write the perturbations into the chosen tensor components
         # ------------------------------------------------------------------
         for comp in eps_components:
             self.epsilon[comp][sl] += delta_eps
-
-        for comp in mu_components:
-            self.mu[comp][sl] += delta_mu
 
         # results are no longer valid
         self._clear_results()
