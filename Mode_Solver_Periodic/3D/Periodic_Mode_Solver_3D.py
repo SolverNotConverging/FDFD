@@ -9,14 +9,14 @@ from scipy.sparse.linalg import eigs
 
 
 class Periodic_3D_Mode_Solver:
-    def __init__(self,
-                 Nx=90, Ny=40, Nz=21,
-                 x_range=30e-3, y_range=10e-3, z_range=7e-3,
-                 freq=24e9, num_modes=5,
-                 sigma_guess_func=None, tol=0):
+    def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess_func=None, tol=0):
         # Store parameters
-        self.Nx, self.Ny, self.Nz = Nx, Ny, Nz
-        self.dx, self.dy, self.dz = x_range / Nx, y_range / Ny, z_range / Nz
+        self.Nx = Nx
+        self.Ny = Ny
+        self.Nz = Nz
+        self.dx = x_range / Nx
+        self.dy = y_range / Ny
+        self.dz = z_range / Nz
         self.N = Nx * Ny * Nz
 
         self.freq = freq
