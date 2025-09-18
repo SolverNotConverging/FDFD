@@ -10,7 +10,7 @@ num_modes = 10  # Number of modes to solve for
 guess = 0
 
 solver = TM_Mode_Solver(freq=frequency, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
-                        guess=guess)
+                        guess=guess, ncv=40)
 
 # Define structure
 solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(0, 14))
