@@ -1,10 +1,10 @@
-from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver  # adjust to your module name
+from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver
 
 # --- Small grid
 
-Nx = 39
-Ny = 60
-Nz = 28
+Nx = 10
+Ny = 10
+Nz = 10
 
 solver = Periodic_3D_Mode_Solver(Nx=Nx, Ny=Ny, Nz=Nz,
                                  x_range=7.8e-3, y_range=6e-3, z_range=5.7e-3,
@@ -20,7 +20,7 @@ solver.add_object(1, 1e8, slice(0, 1), slice(0, Ny), slice(0, Nz))
 solver.add_object(1, 1e8, slice(Nx - 1, Nx), slice(0, Ny), slice(0, Nz))
 
 # Absorbing layers along ±y
-solver.add_absorbing_boundary(['+y'], width=15, max_loss=10, n=3)
+solver.add_absorbing_boundary(['+y'], width=2, max_loss=10, n=3)
 
 solver.solve()
 
