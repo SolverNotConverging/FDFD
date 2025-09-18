@@ -20,9 +20,9 @@ def calculate_sigma_max(n, R, eta, d):
 
 
 # Example usage:
-n = 2  # Polynomial order
-R = 1e-50  # Desired reflection coefficient
-eta = 377/math.sqrt(10.2)  # Wave impedance (Ohms), for EM in vacuum
+n = 3  # Polynomial order
+R = 1e-10  # Desired reflection coefficient
+eta = 377  # Wave impedance (Ohms), for EM in vacuum
 d = 10e-3  # PML thickness (meters)
 
 sigma_max = calculate_sigma_max(n, R, eta, d)
