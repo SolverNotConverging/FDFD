@@ -27,7 +27,7 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
     solver = Periodic_3D_Mode_Solver(Nx=Nx, Ny=Ny, Nz=Nz, x_range=x_range, y_range=y_range, z_range=z_range, freq=f,
-                                     num_modes=num_modes, sigma_guess_func=sigma_guess, tol=tol)
+                                     num_modes=num_modes, sigma_guess_func=sigma_guess, tol=tol, ncv=None)
     solver.add_object(1e8, 1, slice(0, Nx), slice(Ny - 31, Ny - 30), slice(0, Nz))
     solver.add_object(1, 1, slice(5, Nx - 5), slice(Ny - 31, Ny - 30), slice(0, 7))
     solver.add_object(3, 1, slice(0, Nx), slice(Ny - 29, Ny - 14), slice(0, Nz))
