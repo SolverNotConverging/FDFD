@@ -20,7 +20,7 @@ solver.add_object(1, 1e8, slice(0, 1), slice(0, Ny), slice(0, Nz))
 solver.add_object(1, 1e8, slice(Nx - 1, Nx), slice(0, Ny), slice(0, Nz))
 
 # Absorbing layers along ±y
-solver.add_absorbing_boundary(['+y'], width=15, max_loss=10, n=3)
+solver.add_UPML(['+y'], width=15, max_loss=10, n=3)
 
 solver.solve()
 
