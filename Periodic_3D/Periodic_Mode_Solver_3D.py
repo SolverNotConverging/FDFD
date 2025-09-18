@@ -9,7 +9,7 @@ from scipy.sparse.linalg import eigs
 
 
 class Periodic_3D_Mode_Solver:
-    def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess_func=None, tol=0):
+    def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess_func=None, tol=0, ncv=None):
         # Store parameters
         self.Nx = Nx
         self.Ny = Ny
@@ -33,6 +33,7 @@ class Periodic_3D_Mode_Solver:
             self.sigma_guess = 0
 
         self.tol = tol
+        self.ncv = ncv
 
         # Grids
         self.Ix, self.Iy, self.Iz = eye(Nx), eye(Ny), eye(Nz)
@@ -177,7 +178,8 @@ class Periodic_3D_Mode_Solver:
                   [Zero, Zero, B_diag.conj().T, Zero], [Zero, Zero, Zero, B_diag.conj().T]]).tocsr()
 
         # Solve
-        self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess, tol=self.tol)
+        self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess, tol=self.tol,
+                                                   ncv=self.ncv)
         self.gammas = self.eigenvalues / self.k0
         self.store_fields()
 

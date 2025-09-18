@@ -9,7 +9,7 @@ from scipy.sparse.linalg import eigs
 
 
 class TM_Mode_Solver:
-    def __init__(self, freq=24e9, x_range=20e-3, z_range=5e-3, Nx=200, Nz=50, num_modes=6, guess=0):
+    def __init__(self, freq=24e9, x_range=20e-3, z_range=5e-3, Nx=200, Nz=50, num_modes=6, guess=0, tol=0, ncv=None):
         self.freq = freq
         self.Nx, self.Nz = Nx, Nz
         self.dx, self.dz = x_range / Nx, z_range / Nz
@@ -25,6 +25,9 @@ class TM_Mode_Solver:
         self.guess = guess
         self.eigenvectors = None
         self.gammas = None
+
+        self.tol = tol
+        self.ncv = ncv
 
         self._init_operators()
         self._init_materials()
@@ -312,7 +315,7 @@ class TE_Mode_Solver:
         A = bmat([[self.DHZ, D1], [D2, self.DEZ]]).tocsr()
         B = bmat([[self.D3, Zero], [Zero, self.D4]]).tocsr()
 
-        eigenvalues, eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.guess)
+        eigenvalues, eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.guess, tol=tol, ncv=ncv)
         self.eigenvectors = eigenvectors
         self.gammas = eigenvalues / self.k0
 
