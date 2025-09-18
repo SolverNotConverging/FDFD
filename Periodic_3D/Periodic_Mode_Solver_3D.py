@@ -486,11 +486,11 @@ class Periodic_3D_Mode_Solver:
         Returns a fully populated solver ready for plotting.
         """
         with np.load(path, allow_pickle=False) as d:
-            Nx = int(d['Nx']);
-            Ny = int(d['Ny']);
+            Nx = int(d['Nx'])
+            Ny = int(d['Ny'])
             Nz = int(d['Nz'])
-            x_range = float(d['x_range']);
-            y_range = float(d['y_range']);
+            x_range = float(d['x_range'])
+            y_range = float(d['y_range'])
             z_range = float(d['z_range'])
             freq = float(d['freq'])
             num_modes = int(d['num_modes'])
