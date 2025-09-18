@@ -413,6 +413,11 @@ class Periodic_3D_Mode_Solver:
         alpha = float(np.real(self.gammas[mode_index]))
         fig.suptitle(f"Mode {mode_index} | Slice {axis}={index} | Beta={beta:.4f}, Alpha={alpha:.4f}", fontsize=12)
 
+        # >>> Add these two lines <<<
+        fig.tight_layout()
+        fig.canvas.draw_idle()
+        plt.close(fig)  # prevent accumulation of hidden figures
+
         return fig
 
     def _results_dict(self, include_eigenvectors=False):
