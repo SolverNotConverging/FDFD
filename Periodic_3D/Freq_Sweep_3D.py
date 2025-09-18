@@ -44,7 +44,7 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
         print(f"Frequency Sweep at {f / 1e9:.3f} GHz")
         for n in range(num_modes):
             print(f"Mode {n}: Beta: {solver.gammas[n].real}; Alpha: {solver.gammas[n].imag}")
-        solver.save_results(f"Freq_Sweep_3D/modes_{f}.npz")
+        solver.save_results(f"Freq_Sweep_3D/{f / 1e9:.0f}_GHz.npz")
     except Exception as e:
         # fill with NaNs if fails
         print(f"[WARN] eigs failed at {f / 1e9:.2f} GHz: {e}")
