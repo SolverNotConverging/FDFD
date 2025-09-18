@@ -93,7 +93,7 @@ class Periodic_3D_Mode_Solver:
             self.Mryy_3D[z_slice, y_slice, x_slice] = mr[1]
             self.Mrzz_3D[z_slice, y_slice, x_slice] = mr[2]
 
-    def add_absorbing_boundary(self, sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3):
+    def add_UPML(self, sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3):
         # Assumes e^{+i ω t}. If using e^{-i ω t}, change +1j -> -1j.
         omega = self.omega
         e0 = self.epsilon0
