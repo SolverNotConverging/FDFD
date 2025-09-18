@@ -8,7 +8,7 @@ Nz = 28
 
 solver = Periodic_3D_Mode_Solver(Nx=Nx, Ny=Ny, Nz=Nz,
                                  x_range=7.8e-3, y_range=6e-3, z_range=5.7e-3,
-                                 freq=22e9, num_modes=2, tol=1e-2)
+                                 freq=22e9, num_modes=2, tol=0.1)
 
 # Build waveguide unit cell
 solver.add_object(1e8, 1, slice(0, Nx), slice(Ny - 31, Ny - 30), slice(0, Nz))

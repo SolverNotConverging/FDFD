@@ -33,7 +33,7 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
     solver = TM_Mode_Solver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
-                            guess=sigma_guess)
+                            guess=sigma_guess, ncv=None)
     # Define structure
     solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(0, 14))
     solver.add_object(3, 1, x_indices=range(162, 177), z_indices=range(solver.Nz))
