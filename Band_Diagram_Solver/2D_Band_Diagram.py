@@ -366,8 +366,14 @@ class BandDiagramSolver2D:
         ax_illustration = fig.add_subplot(gs[3:6, 0:3])
         ax_bands = fig.add_subplot(gs[:, 3:])
 
+
+        structure_map = np.real_if_close(self.ER2)
+        if np.iscomplexobj(structure_map):
+            structure_map = np.abs(structure_map)
+
         im = ax_structure.imshow(
-            self.ER2.T,
+            np.asarray(structure_map, dtype=float).T,
+
             extent=(self.xa2.min(), self.xa2.max(), self.ya2.min(), self.ya2.max()),
             origin="lower",
             cmap="viridis",
