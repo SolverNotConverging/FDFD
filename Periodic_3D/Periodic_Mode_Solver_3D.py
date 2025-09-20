@@ -9,7 +9,7 @@ from scipy.sparse.linalg import eigs
 
 
 class Periodic_3D_Mode_Solver:
-    def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess_func=None, tol=0, ncv=None):
+    def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess=None, tol=0, ncv=None):
         # Store parameters
         self.Nx = Nx
         self.Ny = Ny
@@ -26,9 +26,8 @@ class Periodic_3D_Mode_Solver:
         self.mu0 = 1.26e-6
         self.num_modes = num_modes
 
-        # Frequency-dependent guess
-        if sigma_guess_func:
-            self.sigma_guess = sigma_guess_func(freq)
+        if sigma_guess is not None:
+            self.sigma_guess = sigma_guess
         else:
             self.sigma_guess = 0
 
