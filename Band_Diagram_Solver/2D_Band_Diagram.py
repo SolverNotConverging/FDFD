@@ -11,7 +11,9 @@ zone and plot the resulting bands.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from typing import Any, Callable, Iterable, Sequence
+
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -353,6 +355,7 @@ class BandDiagramSolver2D:
         result: BandStructureResult,
         *,
         wnmax: float | None = None,
+
         path_artist_kwargs: dict[str, Any] | None = None,
     ) -> tuple[Figure, tuple[Axes, Axes, Axes]]:
         """Create the unit-cell, Bloch-path and band-diagram figure.
@@ -368,14 +371,17 @@ class BandDiagramSolver2D:
             :meth:`matplotlib.axes.Axes.plot` when drawing the Bloch path.
         """
 
+
         beta_count = result.beta_path.shape[1]
         x_axis = np.arange(beta_count)
 
         fig = plt.figure(constrained_layout=True)
         gs = gridspec.GridSpec(6, 8, figure=fig)
         ax_structure = fig.add_subplot(gs[0:3, 0:3])
+
         ax_path = fig.add_subplot(gs[3:6, 0:3])
         ax_bands = fig.add_subplot(gs[:, 3:])
+
 
         structure_map = np.real_if_close(self.ER2)
         if np.iscomplexobj(structure_map):
@@ -383,6 +389,7 @@ class BandDiagramSolver2D:
 
         im = ax_structure.imshow(
             np.asarray(structure_map, dtype=float).T,
+
             extent=(self.xa2.min(), self.xa2.max(), self.ya2.min(), self.ya2.max()),
             origin="lower",
             cmap="viridis",
@@ -391,7 +398,9 @@ class BandDiagramSolver2D:
         cbar = fig.colorbar(im, ax=ax_structure)
         cbar.set_label(r"$\epsilon_r$")
 
+
         self._draw_bloch_path_panel(ax_path, result, path_artist_kwargs)
+
 
         for pol, style in (("TM", "b"), ("TE", "r")):
             if pol in result.frequencies:
@@ -417,6 +426,7 @@ class BandDiagramSolver2D:
         ax_bands.set_xlabel(r"Bloch wave vector $\vec{\beta}$")
         ax_bands.set_ylabel(r"Normalised frequency $a / \lambda_0$")
         ax_bands.set_title("Photonic Band Diagram")
+
 
         return fig, (ax_structure, ax_path, ax_bands)
 
@@ -512,6 +522,7 @@ class BandDiagramSolver2D:
         ax.set_ylabel(r"$\beta_y$ (rad/m)")
         ax.set_title("Bloch Path")
 
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -553,8 +564,10 @@ def _example() -> None:
     solver.set_tick_labels(labels, tick_positions)
 
     result = solver.compute_band_structure(beta_path, num_bands=5)
+
     fig, axes = solver.plot_band_diagram(result, wnmax=0.6)
     axes[1].set_title("Bloch Path: Γ–X–M–Γ")
+
     plt.show()
 
 

@@ -1,3 +1,4 @@
+
 """Example usage of :class:`BandDiagramSolver2D` with multiple Bloch paths."""
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 MODULE_NAME = "band_diagram_solver_2d"
 MODULE_PATH = Path(__file__).with_name("2D_Band_Diagram.py")
 _spec = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)
@@ -20,6 +22,7 @@ _module = importlib.util.module_from_spec(_spec)
 sys.modules[MODULE_NAME] = _module
 _spec.loader.exec_module(_module)
 BandDiagramSolver2D = _module.BandDiagramSolver2D
+
 
 
 def build_solver() -> "BandDiagramSolver2D":
@@ -160,6 +163,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     if figures:
         plt.show()
+
 
 
 if __name__ == "__main__":
