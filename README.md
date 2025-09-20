@@ -109,11 +109,6 @@ Python module so you know exactly which API calls to use.
    |Hy|/|Ex|/|Ez| for TM or |Ey|/|Hx|/|Hz| for TE, overlaid on the
    permittivity map and annotated with the complex propagation constants.【F:Periodic_2D/Periodic_Mode_Solver.py†L169-L231】【F:Periodic_2D/Periodic_Mode_Solver.py†L308-L380】
 
-5. **Post-process** – `visualize_with_gui()` reshapes the eigenvectors to
-   display |Ex| and |Hy|, overlaying the material map and annotating the
-   complex propagation constants for each mode.【F:Periodic_2D/Periodic_Mode_Solver.py†L169-L231】
-
-
 ### 3‑D periodic structures (`Periodic_3D`)
 
 1. **Initialise the solver** – create [`Periodic_3D_Mode_Solver`](Periodic_3D/Periodic_Mode_Solver_3D.py)
