@@ -85,25 +85,34 @@ Python module so you know exactly which API calls to use.
 
 ### 2‑D periodic structures (`Periodic_2D`)
 
+
 1. **Select the polarisation solver** – instantiate either
    [`TM_Mode_Solver`](Periodic_2D/Periodic_Mode_Solver.py) to compute the
    TM field triplet (Hy, Ex, Ez) or [`TE_Mode_Solver`](Periodic_2D/Periodic_Mode_Solver.py)
    for the complementary TE components (Ey, Hx, Hz).  Both constructors
    share the same signature (frequency, domain sizes, grid resolution)
    and build Bloch-periodic derivative operators along *z*.【F:Periodic_2D/Periodic_Mode_Solver.py†L10-L73】【F:Periodic_2D/Periodic_Mode_Solver.py†L204-L287】
+   
 2. **Define the unit cell** – `add_object()` populates regions (slices
    along *x* and *z*) with scalar or anisotropic permittivity/permeability.
    Optional `add_UPML()` stretches the coordinates to absorb radiation
    at the transverse boundaries.【F:Periodic_2D/Periodic_Mode_Solver.py†L75-L129】【F:Periodic_2D/Periodic_Mode_Solver.py†L238-L270】
+
 3. **Solve the Bloch eigen-problem** – `solve()` assembles the generalised
    eigen-system A·v = λ·B·v with shift-invert around the supplied guess
    for the complex propagation constant.  The resulting eigenvalues are
    normalised by k₀ to yield γ/k₀, whose imaginary part is β and real
    part is −α.【F:Periodic_2D/Periodic_Mode_Solver.py†L131-L167】【F:Periodic_2D/Periodic_Mode_Solver.py†L272-L306】
+   
 4. **Post-process** – `visualize_with_gui()` reshapes the eigenvectors to
    display the available field components for the chosen polarisation:
    |Hy|/|Ex|/|Ez| for TM or |Ey|/|Hx|/|Hz| for TE, overlaid on the
    permittivity map and annotated with the complex propagation constants.【F:Periodic_2D/Periodic_Mode_Solver.py†L169-L231】【F:Periodic_2D/Periodic_Mode_Solver.py†L308-L380】
+
+5. **Post-process** – `visualize_with_gui()` reshapes the eigenvectors to
+   display |Ex| and |Hy|, overlaying the material map and annotating the
+   complex propagation constants for each mode.【F:Periodic_2D/Periodic_Mode_Solver.py†L169-L231】
+
 
 ### 3‑D periodic structures (`Periodic_3D`)
 
@@ -148,6 +157,7 @@ The workflow mirrors the other solvers:
 5. **Plot the diagram** with `plot_band_diagram()` to reproduce the
    familiar unit-cell plus band plot layout.  The helper accepts an
    optional illustration image for the bottom-left panel.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L311-L358】
+
 
 A runnable example script,
 [`example_square_lattice.py`](Band_Diagram_Solver/example_square_lattice.py),
