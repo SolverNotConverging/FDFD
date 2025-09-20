@@ -145,14 +145,22 @@ The workflow mirrors the other solvers:
    Bloch vector and solves the TE/TM sparse eigen-problems.  Eigenvalues
    are sorted and normalised to `a/λ`.  Results are returned as a
    `BandStructureResult` dataclass for easy post-processing.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L206-L293】
-5. **Plot the diagram** with `plot_band_diagram()` to reproduce the
-   familiar unit-cell plus band plot layout.  The helper accepts an
-   optional illustration image for the bottom-left panel.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L311-L358】
+
+5. **Plot the diagram** with `plot_band_diagram()`, which renders the
+   unit cell, overlays the sampled Bloch path directly in reciprocal
+   space, and charts the TE/TM bands.  You can tweak the path styling via
+   the optional ``path_artist_kwargs`` argument.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L311-L406】
+
 
 A runnable example script,
 [`example_square_lattice.py`](Band_Diagram_Solver/example_square_lattice.py),
 mirrors the dielectric-rod unit-cell calculation and demonstrates how to
-instantiate the solver, sweep the Γ–X–M–Γ path and plot the TE/TM bands.【F:Band_Diagram_Solver/example_square_lattice.py†L1-L41】
+
+instantiate the solver, sweep the default Γ–X–M–Γ path or a custom
+user-defined route, and plot the resulting TE/TM bands.  Command-line
+flags expose the path selection, β samples, number of bands and plotting
+limits.【F:Band_Diagram_Solver/example_square_lattice.py†L1-L140】
+
 
 ---
 

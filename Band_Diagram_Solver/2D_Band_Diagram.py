@@ -11,13 +11,15 @@ zone and plot the resulting bands.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
-from typing import Callable, Iterable, Sequence
+
+from typing import Any, Callable, Iterable, Sequence
+
 
 import matplotlib.gridspec as gridspec
-import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from scipy.sparse import diags
 from scipy.sparse.linalg import eigs
 
@@ -353,9 +355,22 @@ class BandDiagramSolver2D:
         result: BandStructureResult,
         *,
         wnmax: float | None = None,
-        illustration_path: str | None = None,
-    ):
-        """Create a figure similar to the original MATLAB-style layout."""
+
+        path_artist_kwargs: dict[str, Any] | None = None,
+    ) -> tuple[Figure, tuple[Axes, Axes, Axes]]:
+        """Create the unit-cell, Bloch-path and band-diagram figure.
+
+        Parameters
+        ----------
+        result : BandStructureResult
+            Output from :meth:`compute_band_structure`.
+        wnmax : float, optional
+            Upper limit for the normalised frequency axis.
+        path_artist_kwargs : dict, optional
+            Extra keyword arguments forwarded to
+            :meth:`matplotlib.axes.Axes.plot` when drawing the Bloch path.
+        """
+
 
         beta_count = result.beta_path.shape[1]
         x_axis = np.arange(beta_count)
@@ -363,7 +378,8 @@ class BandDiagramSolver2D:
         fig = plt.figure(constrained_layout=True)
         gs = gridspec.GridSpec(6, 8, figure=fig)
         ax_structure = fig.add_subplot(gs[0:3, 0:3])
-        ax_illustration = fig.add_subplot(gs[3:6, 0:3])
+
+        ax_path = fig.add_subplot(gs[3:6, 0:3])
         ax_bands = fig.add_subplot(gs[:, 3:])
 
 
@@ -382,12 +398,9 @@ class BandDiagramSolver2D:
         cbar = fig.colorbar(im, ax=ax_structure)
         cbar.set_label(r"$\epsilon_r$")
 
-        if illustration_path and os.path.exists(illustration_path):
-            image = mpimg.imread(illustration_path)
-            ax_illustration.imshow(image)
-            ax_illustration.axis("off")
-        else:
-            ax_illustration.axis("off")
+
+        self._draw_bloch_path_panel(ax_path, result, path_artist_kwargs)
+
 
         for pol, style in (("TM", "b"), ("TE", "r")):
             if pol in result.frequencies:
@@ -414,7 +427,101 @@ class BandDiagramSolver2D:
         ax_bands.set_ylabel(r"Normalised frequency $a / \lambda_0$")
         ax_bands.set_title("Photonic Band Diagram")
 
-        return fig, (ax_structure, ax_illustration, ax_bands)
+
+        return fig, (ax_structure, ax_path, ax_bands)
+
+    def _draw_bloch_path_panel(
+        self,
+        ax: Axes,
+        result: BandStructureResult,
+        path_artist_kwargs: dict[str, Any] | None,
+    ) -> None:
+        """Render the sampled Bloch path in reciprocal space."""
+
+        beta_path = result.beta_path
+        if beta_path.size == 0:
+            ax.axis("off")
+            return
+
+        default_kwargs: dict[str, Any] = {
+            "color": "tab:blue",
+            "linewidth": 1.5,
+        }
+        if path_artist_kwargs:
+            default_kwargs.update(path_artist_kwargs)
+
+        ax.plot(beta_path[0], beta_path[1], **default_kwargs)
+        ax.scatter(
+            beta_path[0],
+            beta_path[1],
+            s=10,
+            color=default_kwargs.get("color", "tab:blue"),
+            alpha=0.3,
+        )
+
+        ticks = result.tick_positions
+        labels = result.tick_labels if any(result.tick_labels) else [""] * len(ticks)
+
+        for label, idx in zip(labels, ticks):
+            if idx >= beta_path.shape[1]:
+                continue
+            bx, by = beta_path[:, idx]
+            ax.scatter(bx, by, s=30, color="black", zorder=3)
+            if label:
+                ax.annotate(
+                    label,
+                    xy=(bx, by),
+                    xytext=(6, 6),
+                    textcoords="offset points",
+                    fontsize=9,
+                    weight="bold",
+                )
+
+        g = np.pi / self.a
+        square = np.array([
+            [-g, -g],
+            [g, -g],
+            [g, g],
+            [-g, g],
+            [-g, -g],
+        ])
+        ax.plot(
+            square[:, 0],
+            square[:, 1],
+            linestyle="--",
+            linewidth=1.0,
+            color="0.5",
+            label="1st BZ",
+        )
+
+        if "1st BZ" not in [text.get_text() for text in ax.texts]:
+            ax.text(
+                g,
+                g,
+                "1st BZ",
+                ha="right",
+                va="bottom",
+                fontsize=8,
+                color="0.4",
+            )
+
+        x_vals = beta_path[0]
+        y_vals = beta_path[1]
+        x_min, x_max = float(np.min(x_vals)), float(np.max(x_vals))
+        y_min, y_max = float(np.min(y_vals)), float(np.max(y_vals))
+        x_span = x_max - x_min
+        y_span = y_max - y_min
+        x_pad = 0.05 * x_span if x_span else max(abs(x_max), 1.0) * 0.05
+        y_pad = 0.05 * y_span if y_span else max(abs(y_max), 1.0) * 0.05
+
+        ax.set_xlim(x_min - x_pad, x_max + x_pad)
+        ax.set_ylim(y_min - y_pad, y_max + y_pad)
+        ax.set_aspect("equal", adjustable="box")
+        ax.grid(True, linestyle=":", linewidth=0.5)
+        ax.set_xlabel(r"$\beta_x$ (rad/m)")
+        ax.set_ylabel(r"$\beta_y$ (rad/m)")
+        ax.set_title("Bloch Path")
+
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -458,8 +565,9 @@ def _example() -> None:
 
     result = solver.compute_band_structure(beta_path, num_bands=5)
 
-    illustration = os.path.join(os.path.dirname(__file__), "2D_Band_Diagram_Illustration.png")
-    solver.plot_band_diagram(result, wnmax=0.6, illustration_path=illustration)
+    fig, axes = solver.plot_band_diagram(result, wnmax=0.6)
+    axes[1].set_title("Bloch Path: Γ–X–M–Γ")
+
     plt.show()
 
 
