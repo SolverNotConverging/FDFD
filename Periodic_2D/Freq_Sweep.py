@@ -8,10 +8,10 @@ from Periodic_Mode_Solver import TM_Mode_Solver
 x_range = 20e-3  # 20 mm in x-direction
 z_range = 5e-3  # 5 mm in z-direction
 Nx = 200  # Number of grid points in x-direction
-Nz = 50  # Number of grid points in z-direction
+Nz = 100  # Number of grid points in z-direction
 f_start = 22e9
-f_stop = 26e9
-f_step = 0.02e9
+f_stop = 27e9
+f_step = 0.1e9
 frequencies = np.arange(f_start, f_stop, f_step)
 num_modes = 4
 
@@ -35,8 +35,9 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     solver = TM_Mode_Solver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
                             guess=sigma_guess, ncv=None)
     # Define structure
-    solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(0, 14))
-    solver.add_object(3, 1, x_indices=range(162, 177), z_indices=range(solver.Nz))
+    solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(0, 10))
+    solver.add_object(-1e8, 1, x_indices=[161], z_indices=range(18, 23))
+    solver.add_object(-1e8, 1, x_indices=(162, 177), z_indices=range(32, 37))
     solver.add_object(10.2, 1, x_indices=range(177, 190), z_indices=range(solver.Nz))
     solver.add_object(-1e8, 1, x_indices=[190], z_indices=range(solver.Nz))
     solver.add_UPML(pml_width=50, sigma_max=5)
@@ -63,11 +64,11 @@ df.to_excel(r"Freq_Swep\mode_data.xlsx", index=False)
 # ----------------------
 # Plot
 # ----------------------
-fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+fig, axs = plt.subplots(2, 1, figsize=(10, 8))
 
 for mode in range(1, num_modes + 1):
-    axs[0].scatter(df["Frequency (Hz)"] / 1e9, df[f"Alpha_Mode_{mode}"], label=f'Mode {mode}', s=15)
-    axs[1].scatter(df["Frequency (Hz)"] / 1e9, df[f"Beta_Mode_{mode}"], label=f'Mode {mode}', s=15)
+    axs[0].scatter(df["Frequency (GHz)"] / 1e9, df[f"Alpha_Mode_{mode}"], label=f'Mode {mode}', s=15)
+    axs[1].scatter(df["Frequency (GHz)"] / 1e9, df[f"Beta_Mode_{mode}"], label=f'Mode {mode}', s=15)
 
 axs[0].set_ylabel(r'$\alpha / k_0$')
 axs[0].legend()
