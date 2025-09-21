@@ -105,7 +105,7 @@ class BandDiagramSolver2D:
         ya2 = np.arange(1, self.Ny2 + 1) * self.dy2
         self.xa2 = xa2 - np.mean(xa2)
         self.ya2 = ya2 - np.mean(ya2)
-        self.X2, self.Y2 = np.meshgrid(self.xa2, self.ya2, indexing="xy")
+        self.X2, self.Y2 = np.meshgrid(self.xa2, self.ya2, indexing="ij")
 
         # Material maps on the double-resolution grid
         self.ER2 = np.full((self.Nx2, self.Ny2), background_er, dtype=complex)
