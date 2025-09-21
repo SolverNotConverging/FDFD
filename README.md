@@ -22,7 +22,7 @@ jump directly to the solver that matches your problem.
 
 | Folder | Description |
 | --- | --- |
-| `Band_Diagram_Solver/` | Contains the new class-based band diagram engine [`2D_Band_Diagram.py`](Band_Diagram_Solver/2D_Band_Diagram.py).  Users can compose a unit cell by adding objects, sweep Bloch wave vectors and visualise TE/TM photonic bands. |
+| `Band_Diagram_Solver/` | Contains the class-based band diagram engine [`Band_Diagram.py`](Band_Diagram_Solver/Band_Diagram.py).  Users can compose a rectangular unit cell by adding objects, sweep Bloch wave vectors and visualise TE/TM photonic bands. |
 
 ### Other solvers and utilities
 
@@ -127,39 +127,41 @@ Python module so you know exactly which API calls to use.
 
 ## 📊 Photonic band diagrams (`Band_Diagram_Solver`)
 
-[`BandDiagramSolver2D`](Band_Diagram_Solver/2D_Band_Diagram.py) is a
-fully fledged class replacing the previous script-style implementation.
-The workflow mirrors the other solvers:
+[`BandDiagramSolver2D`](Band_Diagram_Solver/Band_Diagram.py) is a fully
+fledged class replacing the previous script-style implementation.  The
+workflow mirrors the other solvers:
 
-1. **Instantiate the solver** with the lattice constant and Yee grid size.
-   The constructor creates a 2×-refined helper grid that matches Rumpf's
-   subpixel averaging strategy.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L38-L88】
+1. **Instantiate the solver** with the rectangular lattice periods (`a`
+   along x and optional `b` along y) and Yee grid size.  The constructor
+   creates a 2×-refined helper grid that matches Rumpf's subpixel averaging
+   strategy.【F:Band_Diagram_Solver/Band_Diagram.py†L57-L118】
 2. **Add geometry** using `add_object()` or convenience helpers such as
    `add_circular_inclusion()`; masks can be arrays or callables of the
-   helper grid coordinates.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L90-L134】
-3. **Define the Bloch path** with `default_high_symmetry_path()` (Γ–X–M–Γ
-   for square lattices) and `generate_bloch_path()`, then optionally set
-   tick labels for the symmetry points.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L142-L204】
+   helper grid coordinates.【F:Band_Diagram_Solver/Band_Diagram.py†L120-L167】
+3. **Define the Bloch path** with `default_rectangular_lattice_path()`
+   (Γ–X–M–Y–Γ for rectangular cells) and `generate_bloch_path()`, then
+   optionally set tick labels for the symmetry points.【F:Band_Diagram_Solver/Band_Diagram.py†L169-L270】
 4. **Compute the bands** using `compute_band_structure()`, which extracts
    the Yee-grid material tensors, builds derivative operators for each
    Bloch vector and solves the TE/TM sparse eigen-problems.  Eigenvalues
    are sorted and normalised to `a/λ`.  Results are returned as a
-   `BandStructureResult` dataclass for easy post-processing.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L206-L293】
+   `BandStructureResult` dataclass for easy post-processing.【F:Band_Diagram_Solver/Band_Diagram.py†L272-L361】
 
-5. **Plot the diagram** with `plot_band_diagram()`, which renders the
-   unit cell, overlays the sampled Bloch path directly in reciprocal
-   space, and charts the TE/TM bands.  You can tweak the path styling via
-   the optional ``path_artist_kwargs`` argument.【F:Band_Diagram_Solver/2D_Band_Diagram.py†L311-L406】
+5. **Plot the diagram** with `plot_band_diagram()`, which renders the unit
+   cell, overlays the sampled Bloch path directly in reciprocal space,
+   charts the TE/TM bands, saves the figure to `band_diagram.png`, and
+   displays it.  You can tweak the path styling via the optional
+   ``path_artist_kwargs`` argument.【F:Band_Diagram_Solver/Band_Diagram.py†L363-L459】
 
 
-A runnable example script,
-[`example_square_lattice.py`](Band_Diagram_Solver/example_square_lattice.py),
-mirrors the dielectric-rod unit-cell calculation and demonstrates how to
+Example scripts illustrate both square and rectangular settings:
 
-instantiate the solver, sweep the default Γ–X–M–Γ path or a custom
-user-defined route, and plot the resulting TE/TM bands.  Command-line
-flags expose the path selection, β samples, number of bands and plotting
-limits.【F:Band_Diagram_Solver/example_square_lattice.py†L1-L140】
+* [`example_square_lattice.py`](Band_Diagram_Solver/example_square_lattice.py)
+  mirrors the dielectric-rod unit-cell calculation using the default
+  Γ–X–M–Y–Γ path and relies on the automatic plotting behaviour.【F:Band_Diagram_Solver/example_square_lattice.py†L1-L12】
+* [`example_rectangular_unitcell.py`](Band_Diagram_Solver/example_rectangular_unitcell.py)
+  demonstrates an asymmetric rectangular cell that mixes callable masks
+  and the inclusion helper before sweeping the same high-symmetry path.【F:Band_Diagram_Solver/example_rectangular_unitcell.py†L1-L21】
 
 
 ---
