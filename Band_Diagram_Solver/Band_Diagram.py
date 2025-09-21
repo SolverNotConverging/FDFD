@@ -1,11 +1,11 @@
 """Two-dimensional FDFD band diagram solver.
 
-This module now exposes a :class:`BandDiagramSolver2D` that wraps the
-workflow for defining a periodic unit cell, sweeping Bloch wave vectors
-and extracting the photonic band structure.  The API mirrors the style of
-the other solvers in the repository – users can programmatically add
-objects to the Yee grid, request a path through the irreducible Brillouin
-zone and plot the resulting bands.
+This module exposes :class:`BandDiagramSolver2D`, a convenience wrapper for
+defining a periodic **rectangular** unit cell, sweeping Bloch wave vectors and
+extracting the photonic band structure.  The API mirrors the style of the
+other solvers in the repository – users can programmatically add objects to
+the Yee grid, request a path through the irreducible Brillouin zone and plot
+the resulting bands.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class BandStructureResult:
     frequencies : dict[str, np.ndarray]
         Dictionary keyed by polarisation ('TE' and/or 'TM').  Each entry is
         an array of shape (num_bands, N) containing the normalised
-        frequencies ``a/λ``.
+        frequencies ``a/λ`` (using the x-period ``a``).
     eigenvalues : dict[str, np.ndarray]
         Un-normalised eigen-values (ω/c)² returned by the eigensolver for
         each polarisation.
@@ -62,9 +62,12 @@ class BandDiagramSolver2D:
     Parameters
     ----------
     a : float
-        Lattice constant of the (square) unit cell.
+        Period of the unit cell along the x direction.
     Nx, Ny : int
         Number of Yee cells along x and y.  ``Ny`` defaults to ``Nx``.
+    b : float, optional
+        Period of the unit cell along the y direction.  Defaults to ``a`` when
+        omitted, preserving the square-lattice behaviour.
     background_er, background_ur : float
         Permittivity and permeability that fill the unit cell before any
         user objects are added.
@@ -79,18 +82,20 @@ class BandDiagramSolver2D:
         Nx: int,
         Ny: int | None = None,
         *,
+        b: float | None = None,
         background_er: float = 1.0,
         background_ur: float = 1.0,
         boundary_conditions: tuple[int, int] = (1, 1),
     ) -> None:
         self.a = float(a)
+        self.b = float(b) if b is not None else float(a)
         self.Nx = int(Nx)
         self.Ny = int(Ny) if Ny is not None else int(Nx)
         self.boundary_conditions = tuple(boundary_conditions)
 
         # Spatial resolution and double-resolution (2×) Yee helper grid
         self.dx = self.a / self.Nx
-        self.dy = self.a / self.Ny
+        self.dy = self.b / self.Ny
         self.Nx2 = 2 * self.Nx
         self.Ny2 = 2 * self.Ny
         self.dx2 = self.dx / 2
@@ -176,18 +181,19 @@ class BandDiagramSolver2D:
     # ------------------------------------------------------------------
     # Bloch-path utilities
     # ------------------------------------------------------------------
-    def default_square_lattice_path(self) -> tuple[list[np.ndarray], list[str]]:
-        """Return the Γ–X–M–Γ path for a square lattice."""
+    def default_rectangular_lattice_path(self) -> tuple[list[np.ndarray], list[str]]:
+        """Return the Γ–X–M–Y–Γ path for a rectangular lattice."""
 
-        T1 = (2 * np.pi / self.a) * np.array([1.0, 0.0])
-        T2 = (2 * np.pi / self.a) * np.array([0.0, 1.0])
+        gx = 2 * np.pi / self.a
+        gy = 2 * np.pi / self.b
 
         gamma = np.array([0.0, 0.0])
-        x_point = 0.5 * T1
-        m_point = 0.5 * (T1 + T2)
+        x_point = 0.5 * np.array([gx, 0.0])
+        m_point = 0.5 * np.array([gx, gy])
+        y_point = 0.5 * np.array([0.0, gy])
 
-        points = [gamma, x_point, m_point, gamma]
-        labels = ["Γ", "X", "M", "Γ"]
+        points = [gamma, x_point, m_point, y_point, gamma]
+        labels = ["Γ", "X", "M", "Y", "Γ"]
         return points, labels
 
     def generate_bloch_path(
@@ -369,8 +375,12 @@ class BandDiagramSolver2D:
         path_artist_kwargs : dict, optional
             Extra keyword arguments forwarded to
             :meth:`matplotlib.axes.Axes.plot` when drawing the Bloch path.
+        
+        Notes
+        -----
+        The figure is saved to ``band_diagram.png`` and displayed via
+        :func:`matplotlib.pyplot.show` before the axes tuple is returned.
         """
-
 
         beta_count = result.beta_path.shape[1]
         x_axis = np.arange(beta_count)
@@ -427,6 +437,8 @@ class BandDiagramSolver2D:
         ax_bands.set_ylabel(r"Normalised frequency $a / \lambda_0$")
         ax_bands.set_title("Photonic Band Diagram")
 
+        fig.savefig("band_diagram.png", dpi=300, bbox_inches="tight")
+        plt.show()
 
         return fig, (ax_structure, ax_path, ax_bands)
 
@@ -477,17 +489,18 @@ class BandDiagramSolver2D:
                     weight="bold",
                 )
 
-        g = np.pi / self.a
-        square = np.array([
-            [-g, -g],
-            [g, -g],
-            [g, g],
-            [-g, g],
-            [-g, -g],
+        gx = np.pi / self.a
+        gy = np.pi / self.b
+        rectangle = np.array([
+            [-gx, -gy],
+            [gx, -gy],
+            [gx, gy],
+            [-gx, gy],
+            [-gx, -gy],
         ])
         ax.plot(
-            square[:, 0],
-            square[:, 1],
+            rectangle[:, 0],
+            rectangle[:, 1],
             linestyle="--",
             linewidth=1.0,
             color="0.5",
@@ -496,8 +509,8 @@ class BandDiagramSolver2D:
 
         if "1st BZ" not in [text.get_text() for text in ax.texts]:
             ax.text(
-                g,
-                g,
+                gx,
+                gy,
                 "1st BZ",
                 ha="right",
                 va="bottom",
