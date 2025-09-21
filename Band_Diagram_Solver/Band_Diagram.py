@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 from typing import Any, Callable, Iterable, Sequence
 
-
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,15 +76,15 @@ class BandDiagramSolver2D:
     """
 
     def __init__(
-        self,
-        a: float,
-        Nx: int,
-        Ny: int | None = None,
-        *,
-        b: float | None = None,
-        background_er: float = 1.0,
-        background_ur: float = 1.0,
-        boundary_conditions: tuple[int, int] = (1, 1),
+            self,
+            a: float,
+            Nx: int,
+            Ny: int | None = None,
+            *,
+            b: float | None = None,
+            background_er: float = 1.0,
+            background_ur: float = 1.0,
+            boundary_conditions: tuple[int, int] = (1, 1),
     ) -> None:
         self.a = float(a)
         self.b = float(b) if b is not None else float(a)
@@ -118,11 +117,11 @@ class BandDiagramSolver2D:
     # Geometry helpers
     # ------------------------------------------------------------------
     def add_object(
-        self,
-        mask: MaskLike,
-        *,
-        er: complex | float | np.ndarray | None = None,
-        ur: complex | float | np.ndarray | None = None,
+            self,
+            mask: MaskLike,
+            *,
+            er: complex | float | np.ndarray | None = None,
+            ur: complex | float | np.ndarray | None = None,
     ) -> None:
         """Insert an object into the unit cell.
 
@@ -157,12 +156,12 @@ class BandDiagramSolver2D:
             self.UR2 = np.where(selection, ur_array, self.UR2)
 
     def add_circular_inclusion(
-        self,
-        radius: float,
-        *,
-        center: tuple[float, float] = (0.0, 0.0),
-        er: complex | float | None = None,
-        ur: complex | float | None = None,
+            self,
+            radius: float,
+            *,
+            center: tuple[float, float] = (0.0, 0.0),
+            er: complex | float | None = None,
+            ur: complex | float | None = None,
     ) -> None:
         """Convenience wrapper that inserts a circular inclusion."""
 
@@ -190,16 +189,15 @@ class BandDiagramSolver2D:
         gamma = np.array([0.0, 0.0])
         x_point = 0.5 * np.array([gx, 0.0])
         m_point = 0.5 * np.array([gx, gy])
-        y_point = 0.5 * np.array([0.0, gy])
 
-        points = [gamma, x_point, m_point, y_point, gamma]
-        labels = ["Γ", "X", "M", "Y", "Γ"]
+        points = [gamma, x_point, m_point, gamma]
+        labels = ["Γ", "X", "M", "Γ"]
         return points, labels
 
     def generate_bloch_path(
-        self,
-        symmetry_points: Sequence[Sequence[float]],
-        total_points: int,
+            self,
+            symmetry_points: Sequence[Sequence[float]],
+            total_points: int,
     ) -> tuple[np.ndarray, list[int]]:
         """Sample a polyline connecting the supplied symmetry points."""
 
@@ -256,12 +254,12 @@ class BandDiagramSolver2D:
     # Solver core
     # ------------------------------------------------------------------
     def compute_band_structure(
-        self,
-        beta_path: np.ndarray,
-        *,
-        num_bands: int,
-        polarisations: Iterable[str] = ("TE", "TM"),
-        eig_sigma: float = 0.0,
+            self,
+            beta_path: np.ndarray,
+            *,
+            num_bands: int,
+            polarisations: Iterable[str] = ("TE", "TM"),
+            eig_sigma: float = 0.0,
     ) -> BandStructureResult:
         """Solve for the requested polarisations along ``beta_path``."""
 
@@ -357,12 +355,12 @@ class BandDiagramSolver2D:
     # Plotting
     # ------------------------------------------------------------------
     def plot_band_diagram(
-        self,
-        result: BandStructureResult,
-        *,
-        wnmax: float | None = None,
+            self,
+            result: BandStructureResult,
+            *,
+            wnmax: float | None = None,
 
-        path_artist_kwargs: dict[str, Any] | None = None,
+            path_artist_kwargs: dict[str, Any] | None = None,
     ) -> tuple[Figure, tuple[Axes, Axes, Axes]]:
         """Create the unit-cell, Bloch-path and band-diagram figure.
 
@@ -392,7 +390,6 @@ class BandDiagramSolver2D:
         ax_path = fig.add_subplot(gs[3:6, 0:3])
         ax_bands = fig.add_subplot(gs[:, 3:])
 
-
         structure_map = np.real_if_close(self.ER2)
         if np.iscomplexobj(structure_map):
             structure_map = np.abs(structure_map)
@@ -408,9 +405,7 @@ class BandDiagramSolver2D:
         cbar = fig.colorbar(im, ax=ax_structure)
         cbar.set_label(r"$\epsilon_r$")
 
-
         self._draw_bloch_path_panel(ax_path, result, path_artist_kwargs)
-
 
         for pol, style in (("TM", "b"), ("TE", "r")):
             if pol in result.frequencies:
@@ -443,10 +438,10 @@ class BandDiagramSolver2D:
         return fig, (ax_structure, ax_path, ax_bands)
 
     def _draw_bloch_path_panel(
-        self,
-        ax: Axes,
-        result: BandStructureResult,
-        path_artist_kwargs: dict[str, Any] | None,
+            self,
+            ax: Axes,
+            result: BandStructureResult,
+            path_artist_kwargs: dict[str, Any] | None,
     ) -> None:
         """Render the sampled Bloch path in reciprocal space."""
 
@@ -534,8 +529,6 @@ class BandDiagramSolver2D:
         ax.set_xlabel(r"$\beta_x$ (rad/m)")
         ax.set_ylabel(r"$\beta_y$ (rad/m)")
         ax.set_title("Bloch Path")
-
-
 
     # ------------------------------------------------------------------
     # Internal helpers
