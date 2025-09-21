@@ -176,7 +176,7 @@ class BandDiagramSolver2D:
     # ------------------------------------------------------------------
     # Bloch-path utilities
     # ------------------------------------------------------------------
-    def default_high_symmetry_path(self) -> tuple[list[np.ndarray], list[str]]:
+    def default_square_lattice_path(self) -> tuple[list[np.ndarray], list[str]]:
         """Return the Γ–X–M–Γ path for a square lattice."""
 
         T1 = (2 * np.pi / self.a) * np.array([1.0, 0.0])
@@ -521,6 +521,7 @@ class BandDiagramSolver2D:
         ax.set_xlabel(r"$\beta_x$ (rad/m)")
         ax.set_ylabel(r"$\beta_y$ (rad/m)")
         ax.set_title("Bloch Path")
+
 
 
     # ------------------------------------------------------------------

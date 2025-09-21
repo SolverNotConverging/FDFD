@@ -1,4 +1,4 @@
-from Periodic_Mode_Solver import TM_Mode_Solver
+from Periodic_Mode_Solver import TE_Mode_Solver
 
 # Parameters for the simulation
 x_range = 20e-3  # 20 mm in x-direction
@@ -9,7 +9,7 @@ frequency = 23.5e9  # Frequency
 num_modes = 10  # Number of modes to solve for
 guess = 0
 
-solver = TM_Mode_Solver(freq=frequency, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
+solver = TE_Mode_Solver(freq=frequency, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz, num_modes=num_modes,
                         guess=guess, ncv=40)
 
 # Define structure
