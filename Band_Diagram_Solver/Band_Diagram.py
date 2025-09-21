@@ -190,10 +190,9 @@ class BandDiagramSolver2D:
         gamma = np.array([0.0, 0.0])
         x_point = 0.5 * np.array([gx, 0.0])
         m_point = 0.5 * np.array([gx, gy])
-        y_point = 0.5 * np.array([0.0, gy])
 
-        points = [gamma, x_point, m_point, y_point, gamma]
-        labels = ["Γ", "X", "M", "Y", "Γ"]
+        points = [gamma, x_point, m_point, gamma]
+        labels = ["Γ", "X", "M", "Γ"]
         return points, labels
 
     def generate_bloch_path(
