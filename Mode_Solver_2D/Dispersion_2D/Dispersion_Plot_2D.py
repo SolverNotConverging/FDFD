@@ -1,34 +1,40 @@
 import pandas as pd
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 
-df = pd.read_excel("2D_modes_dispersion.xlsx")
+# Load the wide-format Excel file
+df = pd.read_excel("Surface Wave Guide.xlsx")
 
-# Extract unique modes and frequencies
-modes = df["mode_index"].unique()
-frequencies = sorted(df["frequency_GHz"].unique())
+# Identify all mode columns dynamically
+beta_cols  = [c for c in df.columns if "beta" in c.lower()]
+alpha_cols = [c for c in df.columns if "alpha" in c.lower()]
 
-# Plotting
+# Extract mode numbers
+modes = sorted({int(c.split()[1]) for c in beta_cols})
+
+# --- Plotting ---
 fig, ax = plt.subplots(2, 1, figsize=(10, 8))
 
-# Plot propagation constant for each mode
-for mode in modes:
-    sub_df = df[df["mode_index"] == mode]
-    ax[0].scatter(sub_df["frequency_GHz"], sub_df["propagation_constant"], label=f"Mode {mode}",s=1)
+# Plot propagation constants (β)
+for m in modes:
+    beta_col = f"Mode {m} beta"
+    if beta_col in df.columns:
+        ax[0].plot(df["frequency_GHz"], df[beta_col],'x-', label=f"Mode {m}")
 ax[0].set_title("Propagation Constant vs Frequency")
 ax[0].set_xlabel("Frequency (GHz)")
 ax[0].set_ylabel(r"$\hat{\beta}$")
 ax[0].grid(True)
-ax[0].legend()
+ax[0].legend(ncol=3, fontsize=8, loc="best")
 
-# Plot attenuation constant for each mode
-for mode in modes:
-    sub_df = df[df["mode_index"] == mode]
-    ax[1].scatter(sub_df["frequency_GHz"], sub_df["attenuation_constant"], label=f"Mode {mode}", s=1)
+# Plot attenuation constants (α)
+for m in modes:
+    alpha_col = f"Mode {m} alpha"
+    if alpha_col in df.columns:
+        ax[1].plot(df["frequency_GHz"], df[alpha_col],'x-', label=f"Mode {m}")
 ax[1].set_title("Attenuation Constant vs Frequency")
 ax[1].set_xlabel("Frequency (GHz)")
 ax[1].set_ylabel(r"$\alpha$")
 ax[1].grid(True)
-ax[1].legend()
+ax[1].legend(ncol=3, fontsize=8, loc="best")
 
 plt.tight_layout()
 plt.show()
