@@ -10,8 +10,8 @@ x_range = 40e-3
 y_range = 10e-3
 Nx = 400
 Ny = 100
-frequencies = np.arange(18e9, 20e9, 1e9)
-num_modes = 10
+frequencies = np.arange(20e9, 100e9, 5e9)
+num_modes = 20
 
 # Storage for DataFrame
 data_rows = []
@@ -19,13 +19,12 @@ data_rows = []
 with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
     for freq in frequencies:
         solver = FDFDModeSolver(frequency=freq, x_range=x_range, y_range=y_range, Nx=Nx, Ny=Ny, num_modes=num_modes)
-        solver.add_object(-1e8, 1, (130, 150), (44, 45))
-        solver.add_object(-1e8, 1, (250, 270), (44, 45))
-        solver.add_object(10.2, 1, (0, 400), (45, 58))
-        solver.add_object(-1e8, 1, (150, 250), (58, 59))
-        solver.add_object(-1e8, 1, (0, 130), (58, 59))
-        solver.add_object(-1e8, 1, (270, 400), (58, 59))
-        solver.add_UPML(80, 3, 20, direction='x')
+        solver.add_object(1e8, 1, (0, 150), (44, 45))
+        solver.add_object(1e8, 1, (250, 400), (44, 45))
+        solver.add_object(10.2, 1, (0, 400), (45, 56))
+        solver.add_object(3, 1, (0, 400), (56, 58))
+        solver.add_object(1e8, 1, (150, 250), (58, 59))
+        solver.add_UPML(50, 3, 5, direction='x')
 
         solver.solve()
 

@@ -6,9 +6,9 @@ from FDFD_1D_Mode_Solver import FDFDModeSolver  # Your custom solver
 
 # Parameters
 freqs = np.linspace(10e9, 100e9, 100)  # 10 GHz to 100 GHz
-x_range = 10e-3
-Nx = 1000
-num_modes = 3
+x_range = 20e-3
+Nx = 2000
+num_modes = 5
 
 # Initialize a dictionary to store mode data
 data = {"Frequency (GHz)": freqs * 1e-9}
@@ -21,7 +21,9 @@ for m in range(num_modes):
 # Frequency scan
 for f in freqs:
     solver = FDFDModeSolver(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
-    solver.add_object(10.2, 1, (500, 627))
+    solver.add_object(10.2, 1, (1322, 1449))
+    solver.add_object(2.2, 1, (1449, 1500))
+    solver.add_object(-1e8, 1, (1500, 1501))
     solver.solve()
 
     # Append all modes

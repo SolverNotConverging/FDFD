@@ -9,7 +9,7 @@ df = pd.read_excel(file_path)
 num_modes = sum(col.startswith("Beta_TE_") for col in df.columns)
 
 # Plotting
-fig, axes = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
+fig, axes = plt.subplots(2, 1, figsize=(6, 6), sharex=True)
 
 # Beta plot
 for m in range(num_modes):

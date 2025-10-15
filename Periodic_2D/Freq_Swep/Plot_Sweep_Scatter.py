@@ -23,7 +23,7 @@ for i, col in enumerate(alpha_columns):
 axs[0].set_ylabel(r'$\alpha / k_0$')
 axs[0].legend()
 axs[0].grid(True)
-axs[0].set_ylim([0, 0.1])
+axs[0].set_ylim([0, 0.12])
 
 # Beta / k0
 for i, col in enumerate(beta_columns):
