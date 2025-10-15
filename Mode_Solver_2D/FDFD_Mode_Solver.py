@@ -77,7 +77,7 @@ class FDFDModeSolver:
         self.mu['yy'][y0:y1, x0:x1] = mu[1]
         self.mu['zz'][y0:y1, x0:x1] = mu[2]
 
-    def add_UPML(self, pml_width: int = 50, n: int = 3, sigma_max: float = 25, direction: str = "both", ):
+    def add_UPML(self, pml_width: int = 50, n: int = 3, sigma_max: float = 5, direction: str = "both", ):
         """
         Add uniaxial PML using polynomial conductivity profiles.
 
@@ -98,17 +98,25 @@ class FDFDModeSolver:
         sigma_y = np.zeros((Ny, Nx))
 
         # --- build σ profiles --------------------------------------------------
-        if direction in ("x", "both"):
+        if direction in ("x-", "x", "both"):
             for i in range(pml_width):
                 prof = sigma_max * ((pml_width - i) / pml_width) ** n
                 sigma_x[:, i] = prof  # left
-                sigma_x[:, -i - 1] = prof  # right
 
-        if direction in ("y", "both"):
+        if direction in ("x+", "x", "both"):
             for i in range(pml_width):
                 prof = sigma_max * ((pml_width - i) / pml_width) ** n
-                sigma_y[i, :] = prof  # bottom
-                sigma_y[-i - 1, :] = prof  # top
+                sigma_x[:, -i - 1] = prof  # right
+
+        if direction in ("y-", "y", "both"):
+            for i in range(pml_width):
+                prof = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_y[-i - 1, :] = prof  # bottom
+
+        if direction in ("y+", "y", "both"):
+            for i in range(pml_width):
+                prof = sigma_max * ((pml_width - i) / pml_width) ** n
+                sigma_y[i, :] = prof  # top
 
         # --- stretch variables (κ = 1 everywhere) ------------------------------
         eps0 = 8.854187817e-12  # F m⁻¹
