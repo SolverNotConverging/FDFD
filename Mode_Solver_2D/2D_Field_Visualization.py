@@ -5,8 +5,8 @@ x_range = 40e-3  # 15 mm in x-direction
 y_range = 10e-3  # 10 mm in y-direction
 Nx = 400  # Grid points in x
 Ny = 100  # Grid points in y
-frequency = 25e9  # 25 GHz
-num_modes = 20  # Number of modes to compute
+frequency = 15e9  # 25 GHz
+num_modes = 40  # Number of modes to compute
 
 # Initialize solver and define structure
 solver = FDFDModeSolver(frequency, x_range, y_range, Nx, Ny, num_modes)
