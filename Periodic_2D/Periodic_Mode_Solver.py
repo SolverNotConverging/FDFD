@@ -9,7 +9,7 @@ from scipy.sparse.linalg import eigs
 
 
 class TM_Mode_Solver:
-    def __init__(self, freq=24e9, x_range=20e-3, z_range=5e-3, Nx=200, Nz=50, num_modes=6, guess=0, tol=0, ncv=None):
+    def __init__(self, freq, x_range, z_range, Nx, Nz, num_modes, guess=0, tol=0, ncv=None):
         self.freq = freq
         self.Nx, self.Nz = Nx, Nz
         self.dx, self.dz = x_range / Nx, z_range / Nz
