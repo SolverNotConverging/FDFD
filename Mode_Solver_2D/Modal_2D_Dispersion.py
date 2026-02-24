@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -7,18 +8,18 @@ from tqdm import tqdm
 from FDFD_Mode_Solver import FDFDModeSolver
 
 # Parameters
-x_range = 40e-3
-y_range = 10e-3
-Nx = 400
-Ny = 100
-frequencies = np.arange(15e9, 30e9, 0.2e9)
-num_modes = 40
+x_range = 20e-3
+y_range = 20e-3
+Nx = 200
+Ny = 200
+frequencies = np.arange(10e9, 30e9, 1e9)
+num_modes = 6
 
 # Output folder
 out_dir = r"Dispersion_2D"
 os.makedirs(out_dir, exist_ok=True)
 xlsx_path = os.path.join(out_dir, "2D_modes_dispersion.xlsx")
-png_path  = os.path.join(out_dir, "2D_modes_plot.png")
+png_path = os.path.join(out_dir, "2D_modes_plot.png")
 
 # We'll build one row per frequency. Each row will have:
 # frequency_GHz, Mode 1 beta, Mode 1 alpha, Mode 2 beta, Mode 2 alpha, ...
@@ -31,14 +32,7 @@ with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
         )
 
         # Geometry
-        solver.add_object(1e8, 1, (130, 150), (56, 57))
-        solver.add_object(1e8, 1, (250, 270), (56, 57))
-        solver.add_object(10.2, 1, (0, Nx), (57, 70))
-        solver.add_object(1e8, 1, (150, 250), (70, 71))
-        solver.add_object(1e8, 1, (0, 130), (70, 71))
-        solver.add_object(1e8, 1, (270, Nx), (70, 71))
-
-        solver.add_UPML(50, 3, 5, direction='x')
+        solver.add_object(10, 1, (60, 140), (70, 130))
         solver.solve()
 
         # Build the frequency row
@@ -48,13 +42,13 @@ with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
 
         for m in range(n_available):
             mode_num = m + 1
-            row[f"Mode {mode_num} beta"]  = solver.propagation_constant[m]
+            row[f"Mode {mode_num} beta"] = solver.propagation_constant[m]
             row[f"Mode {mode_num} alpha"] = solver.attenuation_constant[m]
 
         # If fewer modes are available, fill the rest with NaN so columns are consistent
         for m in range(n_available, num_modes):
             mode_num = m + 1
-            row[f"Mode {mode_num} beta"]  = np.nan
+            row[f"Mode {mode_num} beta"] = np.nan
             row[f"Mode {mode_num} alpha"] = np.nan
 
         rows.append(row)
