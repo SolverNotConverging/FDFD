@@ -119,7 +119,7 @@ Python module so you know exactly which API calls to use.
    normalised by k₀ to yield γ/k₀, whose imaginary part is β and real
    part is −α.【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L131-L167】【F:
    Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L272-L306】
-4. ***Inspect modal fields** – `visualize_with_gui()` reshapes the eigenvectors to
+4. **Inspect modal fields** – `visualize_with_gui()` reshapes the eigenvectors to
    display the available field components for the chosen polarisation:
    |Hy|/|Ex|/|Ez| for TM or |Ey|/|Hx|/|Hz| for TE, overlaid on the
    permittivity map and annotated with the complex propagation constants.【F:
