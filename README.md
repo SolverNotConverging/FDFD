@@ -7,7 +7,7 @@ The repository is organised by application area, allowing you to jump directly t
 
 ## 📁 Repository map
 
-### Waveguide & cavity mode solvers
+### Waveguide & Periodic Structure mode solvers (eigen-value solvers)
 
 | Folder                | Description                                                                                                                                                                                                                            |
 |-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
