@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the wide-format Excel file
-df = pd.read_excel("Surface Wave Guide.xlsx")
+df = pd.read_excel("2D_modes_dispersion.xlsx")
 
 # Identify all mode columns dynamically
 beta_cols  = [c for c in df.columns if "beta" in c.lower()]
