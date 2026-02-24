@@ -134,6 +134,7 @@ class PeriodicTMModeSolver:
     def visualize_with_gui(self):
         if self.eigenvectors is None:
             raise RuntimeError("You need to run solve_modes() first.")
+        import sys
 
         def plot_mode(selected_mode):
             mode = int(selected_mode) - 1
@@ -177,21 +178,48 @@ class PeriodicTMModeSolver:
 
         root = tk.Tk()
         root.title("TM Mode Viewer")
+        if sys.platform == "darwin":
+            root.tk.call("tk", "scaling", 1.0)
 
-        fig, axs = plt.subplots(1, 3, figsize=(12, 5))
+        def _configure_window():
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            w = int(sw * 0.9)
+            h = int(sh * 0.85)
+            root.geometry(f"{w}x{h}")
+            root.minsize(900, 600)
+            return w, h
+
+        win_w, win_h = _configure_window()
+
+        plot_frame = tk.Frame(root)
+        plot_frame.grid(row=0, column=0, sticky="nsew")
+
+        controls_frame = tk.Frame(root)
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=10)
+
+        dpi = 100
+        fig_w = max(8.0, (win_w / dpi) * 0.95)
+        fig_h = max(4.5, (win_h / dpi) * 0.65)
+        fig, axs = plt.subplots(1, 3, figsize=(fig_w, fig_h), dpi=dpi)
         axes = axs
         colorbars = []
 
-        canvas = FigureCanvasTkAgg(fig, master=root)
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         mode_var = tk.StringVar(value="1")
-        mode_menu = ttk.Combobox(root, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
-        mode_menu.pack(side=tk.LEFT, padx=10, pady=10)
+        mode_menu = ttk.Combobox(controls_frame, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
+        mode_menu.grid(row=0, column=0, padx=10, sticky="w")
         mode_menu.bind("<<ComboboxSelected>>", lambda event: plot_mode(mode_var.get()))
 
-        quit_button = tk.Button(root, text="Quit", command=root.destroy)
-        quit_button.pack(side=tk.RIGHT, padx=10, pady=10)
+        quit_button = tk.Button(controls_frame, text="Quit", command=root.destroy)
+        quit_button.grid(row=0, column=1, padx=10, sticky="e")
+
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        controls_frame.columnconfigure(0, weight=0)
+        controls_frame.columnconfigure(1, weight=1)
 
         plot_mode(mode_var.get())
 
@@ -325,6 +353,7 @@ class PeriodicTEModeSolver:
     def visualize_with_gui(self):
         if self.eigenvectors is None:
             raise RuntimeError("You need to run solve_modes() first.")
+        import sys
 
         def plot_mode(selected_mode):
             mode = int(selected_mode) - 1
@@ -373,27 +402,52 @@ class PeriodicTEModeSolver:
 
         root = tk.Tk()
         root.title("TE Mode Viewer")
+        if sys.platform == "darwin":
+            root.tk.call("tk", "scaling", 1.0)
 
-        fig, axs = plt.subplots(1, 3, figsize=(12, 5))
+        def _configure_window():
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            w = int(sw * 0.9)
+            h = int(sh * 0.85)
+            root.geometry(f"{w}x{h}")
+            root.minsize(900, 600)
+            return w, h
+
+        win_w, win_h = _configure_window()
+
+        plot_frame = tk.Frame(root)
+        plot_frame.grid(row=0, column=0, sticky="nsew")
+
+        dpi = 100
+        fig_w = max(8.0, (win_w / dpi) * 0.95)
+        fig_h = max(4.5, (win_h / dpi) * 0.65)
+        fig, axs = plt.subplots(1, 3, figsize=(fig_w, fig_h), dpi=dpi)
         axes = axs
         colorbars = []
 
-        canvas = FigureCanvasTkAgg(fig, master=root)
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         controls_frame = tk.Frame(root)
-        controls_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=10)
 
         mode_var = tk.StringVar(value="1")
         mode_menu = ttk.Combobox(controls_frame, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
-        mode_menu.pack(side=tk.LEFT, padx=10)
+        mode_menu.grid(row=0, column=0, padx=10, sticky="w")
         mode_menu.bind("<<ComboboxSelected>>", lambda event: plot_mode(mode_var.get()))
 
         save_button = tk.Button(controls_frame, text="Save Figure", command=save_figure)
-        save_button.pack(side=tk.LEFT, padx=10)
+        save_button.grid(row=0, column=1, padx=10, sticky="w")
 
         quit_button = tk.Button(controls_frame, text="Quit", command=root.destroy)
-        quit_button.pack(side=tk.RIGHT, padx=10)
+        quit_button.grid(row=0, column=2, padx=10, sticky="e")
+
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        controls_frame.columnconfigure(0, weight=0)
+        controls_frame.columnconfigure(1, weight=0)
+        controls_frame.columnconfigure(2, weight=1)
 
         plot_mode(mode_var.get())
 

@@ -3,6 +3,7 @@ from tkinter import ttk
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy.sparse import diags, kron, eye, bmat
 from scipy.sparse.linalg import eigs
@@ -255,10 +256,23 @@ class PeriodicModeSolver3D:
 
         root = tk.Tk()
         root.title("3D Periodic Mode Viewer — Slice Explorer")
+        if sys.platform == "darwin":
+            root.tk.call("tk", "scaling", 1.0)
+
+        def _configure_window():
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            w = int(sw * 0.9)
+            h = int(sh * 0.85)
+            root.geometry(f"{w}x{h}")
+            root.minsize(900, 600)
+            return w, h
+
+        _configure_window()
 
         # ==== Controls ====
         ctrl = ttk.Frame(root)
-        ctrl.pack(padx=10, pady=10, fill='x')
+        ctrl.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
         # Mode selector
         ttk.Label(ctrl, text="Mode:").grid(row=0, column=0, padx=(0, 6), sticky='w')
@@ -287,7 +301,7 @@ class PeriodicModeSolver3D:
 
         # ==== Plot area ====
         plot_frame = ttk.Frame(root)
-        plot_frame.pack(fill='both', expand=True)
+        plot_frame.grid(row=1, column=0, sticky="nsew")
         canvas = None
 
         def update_spin_range():
@@ -328,6 +342,9 @@ class PeriodicModeSolver3D:
         # Initial setup
         update_spin_range()
         redraw()
+
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(1, weight=1)
 
         root.mainloop()
 
