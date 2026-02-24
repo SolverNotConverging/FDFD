@@ -8,7 +8,7 @@ from tqdm import tqdm
 from Mode_Solver_2D import ModeSolver2D
 
 # Parameters
-x_range = 20e-3
+x_range = 30e-3
 y_range = 20e-3
 Nx = 200
 Ny = 200
