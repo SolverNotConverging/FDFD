@@ -7,51 +7,48 @@ The repository is organised by application area, allowing you to jump directly t
 
 ## 📁 Repository map
 
-### Waveguide & Periodic Structure mode solvers (eigen-value solvers)
+### Overview (what each solver is for)
 
-| Folder                | Description                                                                                                                                                                                                                            |
-|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Mode_Solver_1D/`     | 1‑D slab waveguide eigen-mode solver with anisotropic materials, impedance sheets and uniaxial PML.  Main entry point: [`Mode_Solver_1D.py`](Mode_Solver_1D/Mode_Solver_1D.py).                                                        |
-| `Mode_Solver_2D/`     | 2‑D uniform waveguide eigen-mode solver for structures that are uniform along the propagation axis z.  Supports anisotropy, impedance sheets and UPML.  Main entry point: [`Mode_Solver_2D.py`](Mode_Solver_2D/Mode_Solver_2D.py). |
-| `Periodic_Solver_2D/` | 2‑D periodic structres (e.g. leaky-wave antennas) eigen-mode solver. Periodicity is enforced along *z*; materials may vary along *x* and *z*.                                                                                          |
-| `Periodic_Solver_3D/` | 3‑D periodic structures eigen-mode solver with periodic boundary along *z* and full-vector fields.                                                                                                                                     |
+- `Mode_Solver_1D/`: 1‑D slab waveguide eigen-modes (TE/TM) with anisotropy, impedance sheets, and UPML.
+- `Mode_Solver_2D/`: 2‑D waveguide cross-section eigen-modes for structures uniform along propagation.
+- `Periodic_Solver_2D/`: 2‑D Bloch-periodic waveguides (leaky-wave antennas, periodic lines) with TE/TM solvers.
+- `Periodic_Solver_3D/`: 3‑D Bloch-periodic eigen-modes with full-vector fields.
+- `Band_Diagram_Solver/`: 2‑D photonic crystal band diagrams (TE/TM bands over Bloch paths).
+- `Scattering/`: 2‑D TEz/TMz scattering with total-field/scattered-field masking.
+- `Electrostatic_Solver/`: 1‑D/2‑D electrostatic solvers bundled for convenience.
 
-### Examples and personal scripts
+### Solver groups
 
-Example scripts now live next to each solver, and each solver has an `example_outputs/`
-folder for CSV/NPZ outputs plus plotting helpers.
+| Group                    | Folder                  | Main entry point                                                              | Typical problems                                       |
+|--------------------------|-------------------------|-------------------------------------------------------------------------------|--------------------------------------------------------|
+| Waveguide & cavity modes | `Mode_Solver_1D/`       | [`Mode_Solver_1D.py`](Mode_Solver_1D/Mode_Solver_1D.py)                       | Slab waveguides, impedance sheets, anisotropic layers. |
+| Waveguide & cavity modes | `Mode_Solver_2D/`       | [`Mode_Solver_2D.py`](Mode_Solver_2D/Mode_Solver_2D.py)                       | Ridge/rectangular waveguides, cross-section modes.     |
+| Periodic structures      | `Periodic_Solver_2D/`   | [`Periodic_Mode_Solver_2D.py`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py) | 2‑D periodic waveguides, leaky-wave antennas (TM/TE).  |
+| Periodic structures      | `Periodic_Solver_3D/`   | [`Periodic_Solver_3D.py`](Periodic_Solver_3D/Periodic_Solver_3D.py)           | 3‑D periodic unit cells, Bloch modes.                  |
+| Band diagrams            | `Band_Diagram_Solver/`  | [`Band_Diagram_Solver.py`](Band_Diagram_Solver/Band_Diagram_Solver.py)        | Photonic crystal TE/TM band diagrams.                  |
+| Scattering               | `Scattering/`           | [`Scattering_Solver_2D.py`](Scattering/Scattering_Solver_2D.py)               | 2‑D TEz/TMz scattering (plane wave or point source).   |
+| Electrostatic            | `Electrostatic_Solver/` | [`Electrostatic_Solver.py`](Electrostatic_Solver/Electrostatic_Solver.py)     | Static field problems (1‑D/2‑D).                       |
+
+### Examples and outputs
+
+Example scripts live next to each solver, and each solver has an `example_outputs/` folder for CSV/NPZ outputs plus
+plotting helpers.
 
 - `Mode_Solver_1D/example_anisotropic_slab.py` and `Mode_Solver_1D/example_isotropic_slab.py`
 - `Mode_Solver_2D/example_ridge_dielectric_waveguide.py` and
   `Mode_Solver_2D/example_rectangular_dielectric_waveguide.py`
-- `Mode_Solver_1D/Modal_1D_Dispersion.py` and `Mode_Solver_2D/Modal_2D_Dispersion.py` (CSV outputs in
-  `example_outputs/`)
+- `Mode_Solver_1D/Modal_1D_Dispersion.py` and `Mode_Solver_2D/Modal_2D_Dispersion.py`
 - `Periodic_Solver_2D/Periodic_2D_Dispersion.py` and `Periodic_Solver_2D/example_surface_wave_leaky_wave_antenna.py`
 - `Periodic_Solver_3D/Periodic_3D_Dispersion.py` and `Periodic_Solver_3D/example_image_guide_leaky_wave_antenna.py`
+- `Scattering/example_scattering_by_cylinder.py`
+- `Band_Diagram_Solver/example_square_lattice.py` and `Band_Diagram_Solver/example_rectangular_unitcell.py`
 
-Output data is written to `example_outputs/` inside each solver directory. Modal 1‑D/2‑D and periodic 2‑D
-dispersion scripts save CSV files (with matching plotting helpers in the same folder); periodic 3‑D saves NPZ
-datasets for full-field storage.
+Output data is written to `example_outputs/` inside each solver directory. Modal 1‑D/2‑D and periodic 2‑D dispersion
+scripts save CSV files (with matching plotting helpers in the same folder); periodic 3‑D saves NPZ datasets for
+full-field storage.
 
-Personal field-visualisation and frequency-sweep scripts were moved to `personal_use/` and are gitignored. Run them from
+Personal field-visualisation and frequency-sweep scripts live in `personal_use/` and are gitignored. Run them from
 inside that folder; they import the solvers from the main directories.
-
-### Photonic crystal analysis
-
-| Folder                 | Description                                                                                                                                                                                                                                     |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Band_Diagram_Solver/` | Contains the class-based band diagram engine [`Band_Diagram_Solver.py`](Band_Diagram_Solver/Band_Diagram_Solver.py).  Users can compose a rectangular unit cell by adding objects, sweep Bloch wave vectors and visualise TE/TM photonic bands. |
-
-### Other solvers and utilities
-
-| Folder / File                | Purpose                                                                                  |
-|------------------------------|------------------------------------------------------------------------------------------|
-| `Scattering/`                | 2‑D TE/TM scattering solver formulated with the QAAQ matrix approach.                    |
-| `Electrostatic_Solver/`      | Electrostatic field solvers in 1‑D and 2‑D (not FDFD-based but bundled for convenience). |
-| `Mesh_points_calculation.py` | Generates spatial mesh points for arbitrary simulation domains.                          |
-| `PML_sigma_calculation.py`   | Utility for deriving polynomial conductivity profiles used in UPML implementations.      |
-
----
 
 ## 🧭 Detailed workflows
 
@@ -79,17 +76,20 @@ Python module so you know exactly which API calls to use.
    plot of Ey/Hx/Hz (TE) and Hy/Ex/Ez (TM) along the waveguide together
    with α/β readouts.【F:Mode_Solver_1D/Mode_Solver_1D.py†L248-L352】
 
+Example: `Mode_Solver_1D/example_isotropic_slab.py`, `Mode_Solver_1D/example_anisotropic_slab.py`, and
+`Mode_Solver_1D/Modal_1D_Dispersion.py`.
+
 ### 2‑D waveguide modes (`Mode_Solver_2D`)
 
 1. **Instantiate the solver** – construct [`ModeSolver2D`](Mode_Solver_2D/Mode_Solver_2D.py)
    with frequency, cross-section sizes and grid counts. The class
    pre-computes Yee-derivative matrices normalised by k₀ and initialises
    2‑D ε/µ tensors.【F:Mode_Solver_2D/Mode_Solver_2D.py†L13-L41】
-2. **Populate materials** – `add_object()` writes isotropic or
-   diagonal-anisotropic rectangles into the permittivity and permeability
-   maps. Optional helpers add impedance sheets (`add_impedance_surface()`)
-   aligned with x or y walls or add UPML regions (`add_UPML()`) at simulation boundaries.【F:
-   Mode_Solver_2D/Mode_Solver_2D.py†L43-L185】
+2. **Populate materials** – `add_object()` writes isotropic or diagonal-anisotropic rectangles into the permittivity and
+   permeability
+   maps. Optional helpers add impedance sheets (`add_impedance_surface()`) aligned with x or y walls or add UPML
+   regions (`add_UPML()`)
+   at simulation boundaries.【F:Mode_Solver_2D/Mode_Solver_2D.py†L43-L185】
 3. **Solve the eigen-problem for modes** – `solve()` block-assembles the P and Q matrices,
    forms Ω = P·Q and computes the requested number of eigenmodes using a
    shift-invert strategy. Electric and magnetic field components are
@@ -99,11 +99,14 @@ Python module so you know exactly which API calls to use.
    the eigenvectors into 2‑D maps, normalise magnitudes and overlay the
    material profile for context.【F:Mode_Solver_2D/Mode_Solver_2D.py†L232-L362】
 
+Example: `Mode_Solver_2D/example_ridge_dielectric_waveguide.py`,
+`Mode_Solver_2D/example_rectangular_dielectric_waveguide.py`, and `Mode_Solver_2D/Modal_2D_Dispersion.py`.
+
 ### 2‑D periodic structures (`Periodic_Solver_2D`)
 
 1. **Instantiate the solver** – instantiate either
-   [`PeriodicTMModeSolver`](Periodic_Solver_2D/Periodic_Solver_2D.py) to compute the
-   TM field triplet (Hy, Ex, Ez) or [`PeriodicTEModeSolver`](Periodic_Solver_2D/Periodic_Solver_2D.py)
+   [`PeriodicTMModeSolver`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py) to compute the
+   TM field triplet (Hy, Ex, Ez) or [`PeriodicTEModeSolver`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py)
    for the complementary TE components (Ey, Hx, Hz). Both constructors
    share the same signature (frequency, domain sizes, grid resolution)
    and build Bloch-periodic derivative operators along *z*.【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L10-L73】【F:
@@ -120,10 +123,12 @@ Python module so you know exactly which API calls to use.
    part is −α.【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L131-L167】【F:
    Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L272-L306】
 4. **Inspect modal fields** – `visualize_with_gui()` reshapes the eigenvectors to
-   display the available field components for the chosen polarisation:
-   |Hy|/|Ex|/|Ez| for TM or |Ey|/|Hx|/|Hz| for TE, overlaid on the
-   permittivity map and annotated with the complex propagation constants.【F:
+   display the available field components for the chosen polarisation: |Hy|/|Ex|/|Ez| for TM or |Ey|/|Hx|/|Hz| for TE,
+   overlaid on the permittivity map and annotated with the complex propagation constants.【F:
    Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L169-L231】【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L308-L380】
+
+Example: `Periodic_Solver_2D/example_surface_wave_leaky_wave_antenna.py` and
+`Periodic_Solver_2D/Periodic_2D_Dispersion.py`.
 
 ### 3‑D periodic structures (`Periodic_Solver_3D`)
 
@@ -143,9 +148,26 @@ Python module so you know exactly which API calls to use.
    into volumetric Ex/Ey/Hx/Hy arrays that can be sliced with
    `plot_field_plane()` for visual analysis.【F:Periodic_Solver_3D/Periodic_Solver_3D.py†L180-L216】
 
----
+Example: `Periodic_Solver_3D/example_image_guide_leaky_wave_antenna.py` and
+`Periodic_Solver_3D/Periodic_3D_Dispersion.py`.
 
-## 📊 Photonic band diagrams (`Band_Diagram_Solver`)
+### 2‑D scattering (`Scattering`)
+
+1. **Instantiate the solver** – create [`FDFD2DScatteringSolver`](Scattering/Scattering_Solver_2D.py) with frequency,
+   domain size, and grid resolution. The class prepares the Yee-grid operators and coordinate grids.【F:
+   Scattering/Scattering_Solver_2D.py†L9-L79】
+2. **Define materials** – call `add_object()` with a boolean mask to assign ε/µ for scatterers embedded in the
+   background medium.【F:Scattering/Scattering_Solver_2D.py†L81-L109】
+3. **Add excitation** – use `add_source()` for plane waves or point sources, selecting TE/TM polarization and source
+   parameters.【F:Scattering/Scattering_Solver_2D.py†L111-L153】
+4. **Absorbing boundaries and TF/SF mask** – apply `add_UPML()` and `add_mask()` to create the
+   total-field/scattered-field region.【F:Scattering/Scattering_Solver_2D.py†L155-L199】
+5. **Solve and visualise** – run `solve_total_field_TE()` or `solve_total_field_TM()` and plot quick diagnostics with
+   `TE_Visualization()` or `TM_Visualization()`.【F:Scattering/Scattering_Solver_2D.py†L201-L268】
+
+Example: `Scattering/example_scattering_by_cylinder.py`.
+
+### Photonic band diagrams (`Band_Diagram_Solver`)
 
 [`BandDiagramSolver2D`](Band_Diagram_Solver/Band_Diagram_Solver.py) is a fully
 fledged class replacing the previous script-style implementation. The
@@ -173,15 +195,7 @@ workflow mirrors the other solvers:
    displays it. You can tweak the path styling via the optional
    ``path_artist_kwargs`` argument.【F:Band_Diagram_Solver/Band_Diagram_Solver.py†L363-L459】
 
-Example scripts illustrate both square and rectangular settings:
-
-* [`example_square_lattice.py`](Band_Diagram_Solver/example_square_lattice.py)
-  mirrors the dielectric-rod unit-cell calculation using the default
-  Γ–X–M–Y–Γ path and relies on the automatic plotting behaviour.【F:Band_Diagram_Solver/example_square_lattice.py†L1-L12】
-* [`example_rectangular_unitcell.py`](Band_Diagram_Solver/example_rectangular_unitcell.py)
-  demonstrates an asymmetric rectangular cell that mixes callable masks
-  and the inclusion helper before sweeping the same high-symmetry path.【F:
-  Band_Diagram_Solver/example_rectangular_unitcell.py†L1-L21】
+Examples: `Band_Diagram_Solver/example_square_lattice.py` and `Band_Diagram_Solver/example_rectangular_unitcell.py`.
 
 ---
 
