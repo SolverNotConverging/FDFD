@@ -7,20 +7,18 @@ from tqdm import tqdm
 from Periodic_Solver_2D import PeriodicTMModeSolver
 
 x_range = 10e-3
-z_range = 6e-3
+z_range = 8e-3
 Nx = 200
-Nz = 120
-f_start = 15e9
-f_stop = 30e9
-f_step = 1e9
+Nz = 80
+f_start = 20e9
+f_stop = 35e9
+f_step = 0.2e9
 frequencies = np.arange(f_start, f_stop + f_step, f_step)
 num_modes = 4
 
 
 def guess_func(f):
-    f_ghz = f / 1e9
-    k_0 = 2 * np.pi * f / 3e8
-    return 1j * (0.18 * f_ghz - 3.0) * k_0
+    return 0
 
 
 data = {"Frequency (Hz)": frequencies}
@@ -32,15 +30,15 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
     solver = PeriodicTMModeSolver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
-                            num_modes=num_modes, guess=sigma_guess, ncv=None)
+                                  num_modes=num_modes, guess=sigma_guess, ncv=None)
 
     solver.add_object(-1e8, 1, x_indices=[25], z_indices=range(0, 10))
     solver.add_object(-1e8, 1, x_indices=[9], z_indices=range(0, Nz))
 
     # Dielectric loading (two regions)
-    solver.add_object(10.2, 1, x_indices=range(10, 25), z_indices=range(Nz))
+    solver.add_object(8, 1, x_indices=range(10, 25), z_indices=range(Nz))
 
-    solver.add_UPML(pml_width=80, n=3, sigma_max=5, direction="top")
+    solver.add_UPML(pml_width=30, n=3, sigma_max=5, direction="top")
 
     try:
         solver.solve()

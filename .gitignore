@@ -213,4 +213,6 @@ __marimo__/
 # Personal use scripts/data
 personal_use/
 
+mode_data.*
+
 
