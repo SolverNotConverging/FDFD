@@ -97,11 +97,11 @@ class TM_Mode_Solver:
         if direction in ("t", "top", "both"):
             for i in range(pml_width):
                 s = profile(i)
-                sigma_x[:, i] = s  # top
+                sigma_x[:, -i - 1] = s  # top
         if direction in ("b", "bottom", "both"):
             for i in range(pml_width):
                 s = profile(i)
-                sigma_x[:, -i - 1] = s  # bottom
+                sigma_x[:, i] = s  # bottom
 
         Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * self.omega)
 
@@ -158,11 +158,11 @@ class TM_Mode_Solver:
 
             for i, ax in enumerate(axes):
                 if i == 0:
-                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis',
+                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis', origin='lower',
                                    extent=[0, self.Nz * self.dz * 1e3, 0, self.Nx * self.dx * 1e3],
                                    vmin=1, vmax=20)
                 else:
-                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis',
+                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis', origin='lower',
                                    extent=[0, self.Nz * self.dz * 1e3, 0, self.Nx * self.dx * 1e3])
                 ax.set_title(titles[i])
                 ax.set_xlabel('z (mm)')
@@ -347,11 +347,11 @@ class TE_Mode_Solver:
 
             for i, ax in enumerate(axes):
                 if i == 0:
-                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis',
+                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis', origin='lower',
                                    extent=[0, self.Nz * self.dz * 1e3, 0, self.Nx * self.dx * 1e3],
                                    vmin=1, vmax=20)
                 else:
-                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis',
+                    im = ax.imshow(np.abs(fields[i].T), cmap='viridis', origin='lower',
                                    extent=[0, self.Nz * self.dz * 1e3, 0, self.Nx * self.dx * 1e3])
                 ax.set_title(titles[i])
                 ax.set_xlabel('z (mm)')
