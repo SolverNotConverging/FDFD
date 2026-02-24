@@ -10,7 +10,7 @@ num_modes = 6
 
 solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
 
-solver.add_object(10, 1, (60, 140), (70, 130))
+solver.add_object([10, 11, 12], 1, (60, 140), (70, 130))
 
 solver.solve()
 solver.visualize_with_gui()
