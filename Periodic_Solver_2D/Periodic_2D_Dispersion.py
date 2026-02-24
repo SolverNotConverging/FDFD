@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from Periodic_Mode_Solver_2D import PeriodicTMModeSolver
+from Periodic_Solver_2D import PeriodicTMModeSolver
 
 x_range = 10e-3
 z_range = 6e-3

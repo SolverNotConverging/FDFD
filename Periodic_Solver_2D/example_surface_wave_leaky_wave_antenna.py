@@ -1,4 +1,4 @@
-from Periodic_Mode_Solver_2D import PeriodicTMModeSolver
+from Periodic_Solver_2D import PeriodicTMModeSolver
 
 # Periodic leaky-wave antenna unit cell (TM)
 x_range = 10e-3

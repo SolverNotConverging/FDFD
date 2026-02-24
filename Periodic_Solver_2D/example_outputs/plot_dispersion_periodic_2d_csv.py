@@ -1,12 +1,10 @@
 """Plot periodic 2D dispersion CSV outputs.
 
-Usage:
-  python plot_dispersion_periodic_2d_csv.py /path/to/mode_data.csv
+Run this file directly in PyCharm. Adjust `csv_path` if needed.
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -41,14 +39,8 @@ def plot_periodic_2d(csv_path: Path) -> None:
     print(f"Plot saved to {out_path}")
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        raise SystemExit("Usage: python plot_dispersion_periodic_2d_csv.py /path/to/mode_data.csv")
-    csv_path = Path(sys.argv[1]).expanduser().resolve()
-    if not csv_path.exists():
-        raise SystemExit(f"CSV not found: {csv_path}")
-    plot_periodic_2d(csv_path)
-
-
 if __name__ == "__main__":
-    main()
+    csv_path = Path(__file__).resolve().parent / "mode_data.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+    plot_periodic_2d(csv_path)

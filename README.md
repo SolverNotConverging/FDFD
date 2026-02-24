@@ -103,8 +103,8 @@ Python module so you know exactly which API calls to use.
 ### 2‑D periodic structures (`Periodic_Solver_2D`)
 
 1. **Select the polarisation solver** – instantiate either
-   [`PeriodicTMModeSolver`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py) to compute the
-   TM field triplet (Hy, Ex, Ez) or [`PeriodicTEModeSolver`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py)
+   [`PeriodicTMModeSolver`](Periodic_Solver_2D/Periodic_Solver_2D.py) to compute the
+   TM field triplet (Hy, Ex, Ez) or [`PeriodicTEModeSolver`](Periodic_Solver_2D/Periodic_Solver_2D.py)
    for the complementary TE components (Ey, Hx, Hz).  Both constructors
    share the same signature (frequency, domain sizes, grid resolution)
    and build Bloch-periodic derivative operators along *z*.【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L10-L73】【F:Periodic_Solver_2D/Periodic_Mode_Solver_2D.py†L204-L287】
