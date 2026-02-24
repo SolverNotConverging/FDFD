@@ -8,7 +8,7 @@ from scipy.sparse import diags, kron, eye, bmat
 from scipy.sparse.linalg import eigs
 
 
-class Periodic_3D_Mode_Solver:
+class PeriodicModeSolver3D:
     def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess=None, tol=0, ncv=None):
         # Store parameters
         self.Nx = Nx

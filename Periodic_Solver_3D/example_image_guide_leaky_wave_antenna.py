@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver
+from Periodic_Solver_3D import PeriodicModeSolver3D
 
 Nx = 24
 Ny = 20
@@ -10,7 +10,7 @@ x_range = 6e-3
 y_range = 6e-3
 z_range = 8e-3
 
-solver = Periodic_3D_Mode_Solver(Nx=Nx, Ny=Ny, Nz=Nz,
+solver = PeriodicModeSolver3D(Nx=Nx, Ny=Ny, Nz=Nz,
                                  x_range=x_range, y_range=y_range, z_range=z_range,
                                  freq=22e9, num_modes=2, tol=0.1)
 

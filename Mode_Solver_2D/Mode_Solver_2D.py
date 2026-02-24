@@ -10,7 +10,7 @@ from scipy.sparse.linalg import eigs
 from yee_derivative import yeeder2d
 
 
-class FDFDModeSolver:
+class ModeSolver2D:
     def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes):
         self.frequency = frequency
         self.x_range = x_range

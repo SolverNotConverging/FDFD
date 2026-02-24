@@ -5,7 +5,7 @@ from scipy.sparse.linalg import eigs
 from yee_derivative import yeeder2d
 
 
-class FDFDModeSolver:
+class ModeSolver1D:
     """1‑D FDFD eigen‑mode solver for slab waveguides."""
 
     def __init__(self, frequency: float, x_range: float, Nx: int, num_modes: int, guess=-15):

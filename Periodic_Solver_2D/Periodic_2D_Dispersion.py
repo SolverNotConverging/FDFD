@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from Periodic_Mode_Solver import TM_Mode_Solver
+from Periodic_Mode_Solver_2D import PeriodicTMModeSolver
 
 x_range = 10e-3
 z_range = 6e-3
@@ -31,7 +31,7 @@ for mode in range(1, num_modes + 1):
 for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
-    solver = TM_Mode_Solver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
+    solver = PeriodicTMModeSolver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
                             num_modes=num_modes, guess=sigma_guess, ncv=None)
 
     solver.add_object(-1e8, 1, x_indices=[25], z_indices=range(0, 10))
