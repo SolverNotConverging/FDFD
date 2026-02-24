@@ -1,7 +1,7 @@
 from Mode_Solver_2D import ModeSolver2D
 
 # Rectangular waveguide cross section
-x_range = 20e-3
+x_range = 30e-3
 y_range = 20e-3
 Nx = 200
 Ny = 200
