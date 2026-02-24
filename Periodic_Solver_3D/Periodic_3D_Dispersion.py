@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from Periodic_Mode_Solver_3D import Periodic_3D_Mode_Solver
+from Periodic_Solver_3D import PeriodicModeSolver3D
 
 Nx = 20
 Ny = 18
@@ -33,7 +33,7 @@ output_dir.mkdir(parents=True, exist_ok=True)
 for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
-    solver = Periodic_3D_Mode_Solver(Nx=Nx, Ny=Ny, Nz=Nz,
+    solver = PeriodicModeSolver3D(Nx=Nx, Ny=Ny, Nz=Nz,
                                      x_range=x_range, y_range=y_range, z_range=z_range,
                                      freq=f, num_modes=num_modes, sigma_guess=sigma_guess,
                                      tol=tol, ncv=None)

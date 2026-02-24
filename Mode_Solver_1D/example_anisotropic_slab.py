@@ -1,4 +1,4 @@
-from FDFD_1D_Mode_Solver import FDFDModeSolver
+from Mode_Solver_1D import ModeSolver1D
 
 # Anisotropic slab waveguide (diagonal epsilon tensor)
 x_range = 8e-3
@@ -6,7 +6,7 @@ Nx = 800
 frequency = 100e9
 num_modes = 6
 
-solver = FDFDModeSolver(frequency, x_range, Nx, num_modes)
+solver = ModeSolver1D(frequency, x_range, Nx, num_modes)
 
 core_start = Nx // 2 - 100
 core_stop = Nx // 2 + 100

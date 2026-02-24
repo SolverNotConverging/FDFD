@@ -1,8 +1,10 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from FDFD_1D_Mode_Solver import FDFDModeSolver  # Your custom solver
+from Mode_Solver_1D import ModeSolver1D  # Your custom solver
 
 # Parameters
 freqs = np.linspace(10e9, 100e9, 100)  # 10 GHz to 100 GHz
@@ -20,7 +22,7 @@ for m in range(num_modes):
 
 # Frequency scan
 for f in freqs:
-    solver = FDFDModeSolver(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
+    solver = ModeSolver1D(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
 
     core_start = Nx // 2 - 100
     core_stop = Nx // 2 + 100
@@ -36,9 +38,15 @@ for f in freqs:
         data[f"Beta_TM_{m + 1}"].append(solver.beta_TM[m] if m < len(solver.beta_TM) else np.nan)
         data[f"Alpha_TM_{m + 1}"].append(solver.alpha_TM[m] if m < len(solver.alpha_TM) else np.nan)
 
-# Save to Excel
+# Output folder
+output_dir = Path(__file__).resolve().parent / "example_outputs"
+output_dir.mkdir(parents=True, exist_ok=True)
+csv_path = output_dir / "1D_modes_dispersion.csv"
+png_path = output_dir / "1D_modes_plot.png"
+
+# Save to CSV
 df = pd.DataFrame(data)
-df.to_excel(r"Dispersion_1D\1D_modes_dispersion.xlsx", index=False)
+df.to_csv(csv_path, index=False)
 
 # Plotting
 fig, axes = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
@@ -64,5 +72,5 @@ axes[1].legend(loc='upper right')
 axes[1].grid(True)
 
 plt.tight_layout()
-plt.savefig(r"Dispersion_1D\1D_modes_plot.png", dpi=300)
+plt.savefig(png_path, dpi=300)
 plt.show()

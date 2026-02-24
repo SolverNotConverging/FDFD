@@ -1,11 +1,11 @@
-import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from FDFD_Mode_Solver import FDFDModeSolver
+from Mode_Solver_2D import ModeSolver2D
 
 # Parameters
 x_range = 20e-3
@@ -16,10 +16,10 @@ frequencies = np.arange(10e9, 30e9, 1e9)
 num_modes = 6
 
 # Output folder
-out_dir = r"Dispersion_2D"
-os.makedirs(out_dir, exist_ok=True)
-xlsx_path = os.path.join(out_dir, "2D_modes_dispersion.xlsx")
-png_path = os.path.join(out_dir, "2D_modes_plot.png")
+output_dir = Path(__file__).resolve().parent / "example_outputs"
+output_dir.mkdir(parents=True, exist_ok=True)
+csv_path = output_dir / "2D_modes_dispersion.csv"
+png_path = output_dir / "2D_modes_plot.png"
 
 # We'll build one row per frequency. Each row will have:
 # frequency_GHz, Mode 1 beta, Mode 1 alpha, Mode 2 beta, Mode 2 alpha, ...
@@ -27,7 +27,7 @@ rows = []
 
 with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
     for freq in frequencies:
-        solver = FDFDModeSolver(
+        solver = ModeSolver2D(
             frequency=freq, x_range=x_range, y_range=y_range, Nx=Nx, Ny=Ny, num_modes=num_modes
         )
 
@@ -63,9 +63,9 @@ for m in range(1, num_modes + 1):
     ordered_cols += [f"Mode {m} beta", f"Mode {m} alpha"]
 df_wide = df_wide.reindex(columns=ordered_cols)
 
-# Save to Excel
-df_wide.to_excel(xlsx_path, index=False)
-print(f"Data saved to {xlsx_path}")
+# Save to CSV
+df_wide.to_csv(csv_path, index=False)
+print(f"Data saved to {csv_path}")
 
 # -------------------------
 # Plotting from wide format

@@ -8,7 +8,7 @@ from scipy.sparse import diags, kron, eye, bmat
 from scipy.sparse.linalg import eigs
 
 
-class TM_Mode_Solver:
+class PeriodicTMModeSolver:
     def __init__(self, freq, x_range, z_range, Nx, Nz, num_modes, guess=0, tol=0, ncv=None):
         self.freq = freq
         self.Nx, self.Nz = Nx, Nz
@@ -198,7 +198,7 @@ class TM_Mode_Solver:
         root.mainloop()
 
 
-class TE_Mode_Solver:
+class PeriodicTEModeSolver:
     def __init__(self, freq=30e9, x_range=20e-3, z_range=5e-3, Nx=200, Nz=50, num_modes=4, guess=0, tol=0, ncv=None):
         self.freq = freq
         self.Nx, self.Nz = Nx, Nz

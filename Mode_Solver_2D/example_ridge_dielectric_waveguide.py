@@ -1,4 +1,4 @@
-from FDFD_Mode_Solver import FDFDModeSolver
+from Mode_Solver_2D import ModeSolver2D
 
 # Ridge waveguide cross-section
 x_range = 24e-3
@@ -8,7 +8,7 @@ Ny = 160
 frequency = 30e9
 num_modes = 6
 
-solver = FDFDModeSolver(frequency, x_range, y_range, Nx, Ny, num_modes)
+solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
 
 # Slab
 solver.add_object(6.0, 1, (0, Nx), (60, 80))

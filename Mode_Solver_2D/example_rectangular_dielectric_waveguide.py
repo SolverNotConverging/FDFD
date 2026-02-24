@@ -1,4 +1,4 @@
-from FDFD_Mode_Solver import FDFDModeSolver
+from Mode_Solver_2D import ModeSolver2D
 
 # Rectangular waveguide cross section
 x_range = 20e-3
@@ -8,7 +8,7 @@ Ny = 200
 frequency = 30e9
 num_modes = 6
 
-solver = FDFDModeSolver(frequency, x_range, y_range, Nx, Ny, num_modes)
+solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
 
 solver.add_object(10, 1, (60, 140), (70, 130))
 

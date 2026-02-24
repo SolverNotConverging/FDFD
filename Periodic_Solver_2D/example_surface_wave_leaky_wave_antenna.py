@@ -1,4 +1,4 @@
-from Periodic_Mode_Solver import TM_Mode_Solver
+from Periodic_Mode_Solver_2D import PeriodicTMModeSolver
 
 # Periodic leaky-wave antenna unit cell (TM)
 x_range = 10e-3
@@ -9,7 +9,7 @@ frequency = 26e9
 num_modes = 6
 guess = 0
 
-solver = TM_Mode_Solver(freq=frequency, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
+solver = PeriodicTMModeSolver(freq=frequency, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
                         num_modes=num_modes, guess=guess)
 
 # Ground/metal edges
