@@ -19,15 +19,15 @@ The repository is organised by application area, allowing you to jump directly t
 
 ### Solver groups
 
-| Group                    | Folder                  | Main entry point                                                              | Typical problems                                       |
-|--------------------------|-------------------------|-------------------------------------------------------------------------------|--------------------------------------------------------|
-| Waveguide & cavity modes | `Mode_Solver_1D/`       | [`Mode_Solver_1D.py`](Mode_Solver_1D/Mode_Solver_1D.py)                       | Slab waveguides, impedance sheets, anisotropic layers. |
-| Waveguide & cavity modes | `Mode_Solver_2D/`       | [`Mode_Solver_2D.py`](Mode_Solver_2D/Mode_Solver_2D.py)                       | Ridge/rectangular waveguides, cross-section modes.     |
-| Periodic structures      | `Periodic_Solver_2D/`   | [`Periodic_Mode_Solver_2D.py`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py) | 2‑D periodic waveguides, leaky-wave antennas (TM/TE).  |
-| Periodic structures      | `Periodic_Solver_3D/`   | [`Periodic_Solver_3D.py`](Periodic_Solver_3D/Periodic_Solver_3D.py)           | 3‑D periodic unit cells, Bloch modes.                  |
-| Band diagrams            | `Band_Diagram_Solver/`  | [`Band_Diagram_Solver.py`](Band_Diagram_Solver/Band_Diagram_Solver.py)        | Photonic crystal TE/TM band diagrams.                  |
-| Scattering               | `Scattering/`           | [`Scattering_Solver_2D.py`](Scattering/Scattering_Solver_2D.py)               | 2‑D TEz/TMz scattering (plane wave or point source).   |
-| Electrostatic            | `Electrostatic_Solver/` | [`Electrostatic_Solver.py`](Electrostatic_Solver/Electrostatic_Solver.py)     | Static field problems (1‑D/2‑D).                       |
+| Group                    | Folder                  | Main entry point                                                              | Typical applications                                  |
+|--------------------------|-------------------------|-------------------------------------------------------------------------------|-------------------------------------------------------|
+| Waveguide & cavity modes | `Mode_Solver_1D/`       | [`Mode_Solver_1D.py`](Mode_Solver_1D/Mode_Solver_1D.py)                       | Slab waveguides modal analysis.                       |
+| Waveguide & cavity modes | `Mode_Solver_2D/`       | [`Mode_Solver_2D.py`](Mode_Solver_2D/Mode_Solver_2D.py)                       | General waveguides modal analysis.                    |
+| Periodic structures      | `Periodic_Solver_2D/`   | [`Periodic_Mode_Solver_2D.py`](Periodic_Solver_2D/Periodic_Mode_Solver_2D.py) | 2‑D periodic waveguides, leaky-wave antennas (TM/TE). |
+| Periodic structures      | `Periodic_Solver_3D/`   | [`Periodic_Solver_3D.py`](Periodic_Solver_3D/Periodic_Solver_3D.py)           | 3‑D periodic waveguides, leaky-wave antennas.         |
+| Band diagrams            | `Band_Diagram_Solver/`  | [`Band_Diagram_Solver.py`](Band_Diagram_Solver/Band_Diagram_Solver.py)        | Photonic crystal TE/TM band diagrams.                 |
+| Scattering               | `Scattering/`           | [`Scattering_Solver_2D.py`](Scattering/Scattering_Solver_2D.py)               | 2‑D TEz/TMz scattering (plane wave source).           |
+| Electrostatic            | `Electrostatic_Solver/` | [`Electrostatic_Solver.py`](Electrostatic_Solver/Electrostatic_Solver.py)     | Static field problems (1‑D/2‑D).                      |
 
 ### Examples and outputs
 
