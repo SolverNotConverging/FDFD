@@ -18,6 +18,17 @@ jump directly to the solver that matches your problem.
 | `Periodic_2D/` | FDFD solver for 2‑D periodic waveguides (e.g. leaky-wave antennas).  Periodicity is enforced along *z*; materials may vary along *x* and *z*. |
 | `Periodic_3D/` | 3‑D periodic mode solver with Bloch-periodic boundary conditions along *z* and full-vector fields. |
 
+### Examples and personal scripts
+
+Example scripts now live next to each solver:
+
+- `Mode_Solver_1D/example_anisotropic_slab.py` and `Mode_Solver_1D/example_isotropic_slab.py`
+- `Mode_Solver_2D/example_ridge_waveguide.py` and `Mode_Solver_2D/example_ribbon_waveguide.py`
+- `Periodic_2D/example_field_visualization.py` and `Periodic_2D/example_freq_sweep.py`
+- `Periodic_3D/example_field_visualization.py` and `Periodic_3D/example_freq_sweep.py`
+
+Personal field-visualisation and frequency-sweep scripts were moved to `personal_use/` and are gitignored. Run them from inside that folder; they import the solvers from the main directories.
+
 ### Photonic crystal analysis
 
 | Folder | Description |

@@ -1,0 +1,17 @@
+from FDFD_1D_Mode_Solver import FDFDModeSolver
+
+# Isotropic slab waveguide
+x_range = 10e-3
+Nx = 1000
+frequency = 20e9
+num_modes = 6
+
+solver = FDFDModeSolver(frequency, x_range, Nx, num_modes)
+
+core_start = Nx // 2 - 60
+core_stop = Nx // 2 + 60
+solver.add_object(11.5, 1, (core_start, core_stop))
+
+solver.add_UPML(pml_width=100, n=3, sigma_max=8, direction="both")
+solver.solve()
+solver.visualize_with_gui()

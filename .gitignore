@@ -210,5 +210,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Personal use scripts/data
+personal_use/
+**/example_outputs/
 
 
