@@ -1,4 +1,4 @@
-from Band_Diagram import BandDiagramSolver2D
+from Band_Diagram_Solver import BandDiagramSolver2D
 
 solver = BandDiagramSolver2D(a=1.0, Nx=40, background_er=10.2)
 solver.add_circular_inclusion(radius=0.4, er=1.0)
