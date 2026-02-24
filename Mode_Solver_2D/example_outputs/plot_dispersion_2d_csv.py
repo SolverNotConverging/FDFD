@@ -1,12 +1,10 @@
 """Plot 2D modal dispersion CSV outputs.
 
-Usage:
-  python plot_dispersion_2d_csv.py /path/to/2D_modes_dispersion.csv
+Run this file directly in PyCharm. Adjust `csv_path` if needed.
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -44,14 +42,8 @@ def plot_2d_dispersion(csv_path: Path) -> None:
     print(f"Plot saved to {out_path}")
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        raise SystemExit("Usage: python plot_dispersion_2d_csv.py /path/to/2D_modes_dispersion.csv")
-    csv_path = Path(sys.argv[1]).expanduser().resolve()
-    if not csv_path.exists():
-        raise SystemExit(f"CSV not found: {csv_path}")
-    plot_2d_dispersion(csv_path)
-
-
 if __name__ == "__main__":
-    main()
+    csv_path = Path(__file__).resolve().parent / "2D_modes_dispersion.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+    plot_2d_dispersion(csv_path)
