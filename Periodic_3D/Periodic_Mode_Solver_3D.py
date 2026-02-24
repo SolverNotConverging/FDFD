@@ -197,11 +197,11 @@ class Periodic_3D_Mode_Solver:
     def plot_field_plane(self, axis, index, mode_index=0, field='Ex'):
         field_data = np.abs(self.fields[field][mode_index])
         if axis == 'x':
-            plt.imshow(field_data[:, :, index], cmap='hot')
+            plt.imshow(field_data[:, :, index], cmap='hot', origin='lower')
         elif axis == 'y':
-            plt.imshow(field_data[:, index, :], cmap='hot')
+            plt.imshow(field_data[:, index, :], cmap='hot', origin='lower')
         elif axis == 'z':
-            plt.imshow(field_data[index, :, :], cmap='hot')
+            plt.imshow(field_data[index, :, :], cmap='hot', origin='lower')
         plt.colorbar()
         plt.title(f'{field} at {axis}={index} | Mode {mode_index}')
         plt.show()
@@ -403,7 +403,7 @@ class Periodic_3D_Mode_Solver:
 
         for title, data2d, ax in panels:
             imdata = data2d.T if orient_T else data2d
-            im = ax.imshow(imdata, cmap='viridis', extent=extent, aspect='auto')
+            im = ax.imshow(imdata, cmap='viridis', origin='lower', extent=extent, aspect='auto')
             ax.set_title(title)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)

@@ -111,12 +111,12 @@ class FDFDModeSolver:
         if direction in ("y-", "y", "both"):
             for i in range(pml_width):
                 prof = sigma_max * ((pml_width - i) / pml_width) ** n
-                sigma_y[-i - 1, :] = prof  # bottom
+                sigma_y[i, :] = prof  # bottom
 
         if direction in ("y+", "y", "both"):
             for i in range(pml_width):
                 prof = sigma_max * ((pml_width - i) / pml_width) ** n
-                sigma_y[i, :] = prof  # top
+                sigma_y[-i - 1, :] = prof  # top
 
         # --- stretch variables (κ = 1 everywhere) ------------------------------
         eps0 = 8.854187817e-12  # F m⁻¹
@@ -307,9 +307,9 @@ class FDFDModeSolver:
         for i, field_name in enumerate(selected_fields):
             field_data, title = field_map[field_name]
             ax = axes[i]
-            im = ax.imshow(np.abs(field_data), cmap='viridis',
+            im = ax.imshow(np.abs(field_data), cmap='viridis', origin='lower',
                            extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3])
-            ax.imshow(np.abs(self.epsilon['xx']), cmap='inferno',
+            ax.imshow(np.abs(self.epsilon['xx']), cmap='inferno', origin='lower',
                       extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
                       vmax=20, alpha=0.2)
             ax.set_title(title)
@@ -366,10 +366,10 @@ class FDFDModeSolver:
 
             # Plot and keep last image for colorbar
             for i, ax in enumerate(axes.flat):
-                im = ax.imshow(np.abs(fields[i]), cmap='viridis',
+                im = ax.imshow(np.abs(fields[i]), cmap='viridis', origin='lower',
                                extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
                                vmin=0, vmax=1)
-                ax.imshow(np.abs(self.epsilon['zz']), cmap='inferno',
+                ax.imshow(np.abs(self.epsilon['zz']), cmap='inferno', origin='lower',
                           extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
                           vmax=20, alpha=0.2)
                 ax.set_title(titles[i])
