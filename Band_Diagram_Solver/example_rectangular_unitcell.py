@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from Band_Diagram import BandDiagramSolver2D
+from Band_Diagram_Solver import BandDiagramSolver2D
 
 
 solver = BandDiagramSolver2D(a=1.0, b=1.4, Nx=48, Ny=64, background_er=11.9)
