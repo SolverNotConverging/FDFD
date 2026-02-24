@@ -241,28 +241,38 @@ class ModeSolver1D:
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         import matplotlib.pyplot as plt
         import numpy as np
+        import sys
 
         root = tk.Tk()
         root.title("FDFD 1D Mode Visualizer")
+        if sys.platform == "darwin":
+            root.tk.call("tk", "scaling", 1.0)
 
-        # Mode selector
-        mode_var = tk.IntVar(value=1)
-        mode_menu = ttk.Combobox(
-            root,
-            textvariable=mode_var,
-            values=list(range(1, self.num_modes + 1)),
-            state="readonly",
-            width=5,
-        )
-        mode_menu.grid(row=0, column=1, padx=10, pady=5, sticky="w")
-        ttk.Label(root, text="Select mode:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-
-        # Info label for α and β
-        info_label = ttk.Label(root, text="", font=("Segoe UI", 10, "bold"))
-        info_label.grid(row=1, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+        def _configure_window():
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            w = int(sw * 0.9)
+            h = int(sh * 0.85)
+            root.geometry(f"{w}x{h}")
+            root.minsize(900, 600)
+            return w, h
 
         # Set up figure
-        fig, axes = plt.subplots(2, 3, figsize=(15, 8), dpi=110, sharex=True)
+        win_w, win_h = _configure_window()
+        dpi = 110
+        fig_w = max(8.0, (win_w / dpi) * 0.95)
+        fig_h = max(5.5, (win_h / dpi) * 0.7)
+        fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
+        gs = fig.add_gridspec(4, 3, height_ratios=[0.08, 1.0, 0.08, 1.0], hspace=0.5, wspace=0.3)
+        header_te_ax = fig.add_subplot(gs[0, :])
+        header_te_ax.axis("off")
+        header_tm_ax = fig.add_subplot(gs[2, :])
+        header_tm_ax.axis("off")
+
+        axes = np.empty((2, 3), dtype=object)
+        for c in range(3):
+            axes[0, c] = fig.add_subplot(gs[1, c])
+            axes[1, c] = fig.add_subplot(gs[3, c])
         field_map = [("TE", ["Ey", "Hx", "Hz"]), ("TM", ["Hy", "Ex", "Ez"])]
         lines = []
 
@@ -270,24 +280,50 @@ class ModeSolver1D:
             for c, comp in enumerate(comps):
                 ax = axes[r, c]
                 ax.set_ylabel(comp)
-                ax.set_title(f"{pol}: {comp}")
+                ax.set_title(f"{pol}: {comp}", pad=2)
                 ax.grid(True)
                 line, = ax.plot([], [], lw=2)
                 lines.append(line)
 
         for ax in axes[-1, :]:
             ax.set_xlabel("x (mm)")
-        fig.tight_layout()
 
-        canvas = FigureCanvasTkAgg(fig, master=root)
+        # Row info headers (separate header rows)
+        te_info = header_te_ax.text(0.0, 0.5, "", fontsize=10, fontweight="bold", ha="left", va="center")
+        tm_info = header_tm_ax.text(0.0, 0.5, "", fontsize=10, fontweight="bold", ha="left", va="center")
+
+        plot_frame = tk.Frame(root)
+        plot_frame.grid(row=0, column=0, sticky="nsew")
+
+        controls_frame = tk.Frame(root)
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=10)
+
+        # Mode selector (bottom)
+        mode_var = tk.IntVar(value=1)
+        ttk.Label(controls_frame, text="Select mode:").grid(row=0, column=0, padx=10, sticky="w")
+        mode_menu = ttk.Combobox(
+            controls_frame,
+            textvariable=mode_var,
+            values=list(range(1, self.num_modes + 1)),
+            state="readonly",
+            width=5,
+        )
+        mode_menu.grid(row=0, column=1, padx=10, sticky="w")
+
+        quit_button = tk.Button(controls_frame, text="Quit", command=root.destroy)
+        quit_button.grid(row=0, column=2, padx=10, sticky="e")
+
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas.draw()
-        canvas.get_tk_widget().grid(row=2, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # Allow dynamic resizing
         root.columnconfigure(0, weight=1)
-        root.columnconfigure(1, weight=1)
-        root.columnconfigure(2, weight=1)
-        root.rowconfigure(2, weight=1)
+        root.rowconfigure(0, weight=1)
+        controls_frame.columnconfigure(0, weight=0)
+        controls_frame.columnconfigure(1, weight=0)
+        controls_frame.columnconfigure(2, weight=1)
+
 
         def update_plots(event=None):
             idx = int(mode_var.get()) - 1
@@ -319,12 +355,13 @@ class ModeSolver1D:
                 ax.relim()
                 ax.autoscale_view()
 
-            # Update info label with β, α values
-            info_label.config(text=(
-                f"Mode {idx + 1}:    "
-                f"TE → β = {self.beta_TE[idx]:.4g}, α = {self.alpha_TE[idx]:.4g}| "
-                f"TM → β = {self.beta_TM[idx]:.4g}, α = {self.alpha_TM[idx]:.4g}"
-            ))
+            # Update row headers with β, α values
+            te_info.set_text(
+                f"Mode {idx + 1}  |  TE → β = {self.beta_TE[idx]:.4g}, α = {self.alpha_TE[idx]:.4g}"
+            )
+            tm_info.set_text(
+                f"Mode {idx + 1}  |  TM → β = {self.beta_TM[idx]:.4g}, α = {self.alpha_TM[idx]:.4g}"
+            )
 
             canvas.draw_idle()
 

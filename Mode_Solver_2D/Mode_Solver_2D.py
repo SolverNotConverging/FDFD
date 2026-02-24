@@ -331,6 +331,7 @@ class ModeSolver2D:
         """Visualize field components with a dropdown menu for mode selection."""
         Nx, Ny = self.Nx, self.Ny
         colorbar = [None]  # To track and remove old colorbar
+        import sys
 
         def plot_mode(selected_mode):
             mode = int(selected_mode) - 1
@@ -394,19 +395,45 @@ class ModeSolver2D:
         # Tkinter GUI setup
         root = tk.Tk()
         root.title("Field Visualization")
+        if sys.platform == "darwin":
+            root.tk.call("tk", "scaling", 1.0)
 
-        fig, axes = plt.subplots(2, 3, figsize=(12, 6))
-        canvas = FigureCanvasTkAgg(fig, master=root)
+        def _configure_window():
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+            w = int(sw * 0.9)
+            h = int(sh * 0.85)
+            root.geometry(f"{w}x{h}")
+            root.minsize(900, 600)
+            return w, h
+
+        plot_frame = tk.Frame(root)
+        plot_frame.grid(row=0, column=0, sticky="nsew")
+
+        controls_frame = tk.Frame(root)
+        controls_frame.grid(row=1, column=0, sticky="ew", pady=10)
+
+        win_w, win_h = _configure_window()
+        dpi = 100
+        fig_w = max(8.0, (win_w / dpi) * 0.95)
+        fig_h = max(5.0, (win_h / dpi) * 0.7)
+        fig, axes = plt.subplots(2, 3, figsize=(fig_w, fig_h), dpi=dpi)
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas_widget = canvas.get_tk_widget()
         canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         mode_var = tk.StringVar(value="1")
-        mode_menu = ttk.Combobox(root, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
-        mode_menu.pack(side=tk.LEFT, padx=10, pady=10)
+        mode_menu = ttk.Combobox(controls_frame, textvariable=mode_var, values=list(range(1, self.num_modes + 1)))
+        mode_menu.grid(row=0, column=0, padx=10, sticky="w")
         mode_menu.bind("<<ComboboxSelected>>", lambda event: plot_mode(mode_var.get()))
 
-        quit_button = tk.Button(root, text="Quit", command=root.destroy)
-        quit_button.pack(side=tk.RIGHT, padx=10, pady=10)
+        quit_button = tk.Button(controls_frame, text="Quit", command=root.destroy)
+        quit_button.grid(row=0, column=1, padx=10, sticky="e")
+
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        controls_frame.columnconfigure(0, weight=0)
+        controls_frame.columnconfigure(1, weight=1)
 
         plot_mode(mode_var.get())
         root.mainloop()
