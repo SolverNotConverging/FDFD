@@ -24,11 +24,9 @@ for m in range(num_modes):
 for f in freqs:
     solver = ModeSolver1D(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
 
-    core_start = Nx // 2 - 100
-    core_stop = Nx // 2 + 100
-    solver.add_object(11.5, 1, (core_start, core_stop))
+    solver.add_object(10.2, 1, (3e-3, 4.27e-3))
+    solver.add_pec((2.9e-3, 3e-3))
 
-    solver.add_UPML(pml_width=100, n=3, sigma_max=8, direction="both")
     solver.solve()
 
     # Append all modes
