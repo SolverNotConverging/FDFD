@@ -22,7 +22,7 @@ Main Class
 
 .. code-block:: python
 
-   ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True)
+   ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True, guess=None)
 
 Parameters:
 
@@ -31,6 +31,7 @@ Parameters:
 * ``Nx``, ``Ny``: grid cells in ``x`` and ``y``.
 * ``num_modes``: number of modes to retain.
 * ``mode_filter``: whether to request extra candidates and filter likely spurious PEC-localized modes.
+* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses ``-max(abs(eps_r_xx), abs(eps_r_yy), abs(eps_r_zz), abs(mu_r_xx), abs(mu_r_yy), abs(mu_r_zz))`` from the current material tensors.
 
 Material And Boundary API
 -------------------------
@@ -56,7 +57,9 @@ Solve API
 
 .. code-block:: python
 
-   solve(sigma=-13, extra_modes=8, max_pec_neighbor_energy_fraction=0.35)
+   solve(sigma=None, extra_modes=8, max_pec_neighbor_energy_fraction=0.35)
+
+``sigma`` overrides the constructor ``guess`` for that solve. If both are ``None``, the automatic material-magnitude target is recomputed before calling ``eigs``.
 
 After ``solve()``, outputs include:
 

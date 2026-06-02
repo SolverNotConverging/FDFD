@@ -10,7 +10,7 @@ from scipy.sparse.linalg import eigs
 class ModeSolver1D:
     """1D FDFD eigen-mode solver for slab waveguides."""
 
-    def __init__(self, frequency, x_range, Nx, num_modes, guess=-15):
+    def __init__(self, frequency, x_range, Nx, num_modes, guess=None):
         self.frequency = frequency
         self.x_range = x_range
         self.Nx = int(Nx)
@@ -38,7 +38,32 @@ class ModeSolver1D:
 
         self.num_modes = int(num_modes)
         self.guess = guess
+        self._auto_guess = guess is None
+        if self._auto_guess:
+            self.guess = self._default_guess()
         self._invalidate_solution()
+
+    @staticmethod
+    def _max_magnitude(arr):
+        values = np.abs(np.asarray(arr))
+        finite_values = values[np.isfinite(values)]
+        if finite_values.size == 0:
+            return 0.0
+        return np.max(finite_values)
+
+    def _default_guess(self):
+        return -max(
+            self._max_magnitude(arr)
+            for arr in [self.eps_r_xx, self.eps_r_yy, self.eps_r_zz,
+                        self.mu_r_xx, self.mu_r_yy, self.mu_r_zz]
+        )
+
+    def _resolve_eigs_guess(self, sigma):
+        if sigma is not None:
+            return sigma
+        if self._auto_guess:
+            self.guess = self._default_guess()
+        return self.guess
 
     def _invalidate_solution(self):
         self.eigenvalues_TE = None
@@ -293,8 +318,7 @@ class ModeSolver1D:
 
     def solve(self, sigma=None):
         """Solve TE and TM slab modes and recover field components."""
-        if sigma is None:
-            sigma = self.guess
+        sigma = self._resolve_eigs_guess(sigma)
 
         (
             eps_r_xx,

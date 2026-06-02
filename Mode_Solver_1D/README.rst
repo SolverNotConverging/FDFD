@@ -23,7 +23,7 @@ Main Class
 
 .. code-block:: python
 
-   ModeSolver1D(frequency, x_range, Nx, num_modes, guess=-15)
+   ModeSolver1D(frequency, x_range, Nx, num_modes, guess=None)
 
 Parameters:
 
@@ -31,7 +31,7 @@ Parameters:
 * ``x_range``: physical domain width in metres.
 * ``Nx``: number of grid cells.
 * ``num_modes``: number of TE and TM modes to request.
-* ``guess``: default shift-invert target passed to ``scipy.sparse.linalg.eigs``.
+* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses ``-max(abs(eps_r_xx), abs(eps_r_yy), abs(eps_r_zz), abs(mu_r_xx), abs(mu_r_yy), abs(mu_r_zz))`` from the current material tensors.
 
 Material And Boundary API
 -------------------------
@@ -59,6 +59,8 @@ Solve API
 .. code-block:: python
 
    solve(sigma=None)
+
+``sigma`` overrides the constructor ``guess`` for that solve. If both are ``None``, the automatic material-magnitude target is recomputed before calling ``eigs``.
 
 After ``solve()``, the main outputs are:
 
