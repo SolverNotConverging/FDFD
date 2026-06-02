@@ -11,7 +11,7 @@ from scipy.sparse.linalg import eigs
 class ModeSolver2D:
     """2D vector FDFD mode solver on an (Nx, Ny) Yee-style grid."""
 
-    def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True):
+    def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True, guess=None):
         self.frequency = frequency
         self.x_range = x_range
         self.y_range = y_range
@@ -43,15 +43,33 @@ class ModeSolver2D:
 
         self.num_modes = int(num_modes)
         self.mode_filter = bool(mode_filter)
-        self.eigenvalues = None
-        self.eigenvectors = None
-        self.neff = None
-        self.propagation_constant = None
-        self.attenuation_constant = None
-        self.spurious_scores = None
-        self.accepted_candidate_indices = None
-        self.rejected_candidate_indices = None
-        self.unselected_candidate_indices = None
+        self.guess = guess
+        self._auto_guess = guess is None
+        if self._auto_guess:
+            self.guess = self._default_guess()
+        self._invalidate_solution()
+
+    @staticmethod
+    def _max_magnitude(arr):
+        values = np.abs(np.asarray(arr))
+        finite_values = values[np.isfinite(values)]
+        if finite_values.size == 0:
+            return 0.0
+        return np.max(finite_values)
+
+    def _default_guess(self):
+        return -max(
+            self._max_magnitude(arr)
+            for arr in [self.eps_r_xx, self.eps_r_yy, self.eps_r_zz,
+                        self.mu_r_xx, self.mu_r_yy, self.mu_r_zz]
+        )
+
+    def _resolve_eigs_guess(self, sigma):
+        if sigma is not None:
+            return sigma
+        if self._auto_guess:
+            self.guess = self._default_guess()
+        return self.guess
 
     def _invalidate_solution(self):
         self.eigenvalues = None
@@ -347,8 +365,10 @@ class ModeSolver2D:
         self.Hy[pmc_yy_mask.ravel(order="F"), :] = 0.0
         self.Hz[pmc_zz_mask.ravel(order="F"), :] = 0.0
 
-    def solve(self, sigma=-13, extra_modes=8, max_pec_neighbor_energy_fraction=0.35):
+    def solve(self, sigma=None, extra_modes=8, max_pec_neighbor_energy_fraction=0.35):
         """Solve for transverse modes and recover all six field components."""
+        sigma = self._resolve_eigs_guess(sigma)
+
         (
             eps_r_xx,
             eps_r_yy,
