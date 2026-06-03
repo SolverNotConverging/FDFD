@@ -188,19 +188,19 @@ class ModeSolver1D:
             self._component_array("pmc", comp)[sl_x] = True
         self._invalidate_solution()
 
-    def add_pml(self, pml_width=50, n=3, sigma_max=25, direction="both"):
+    def add_pml(self, pml_width=50, n=3, sigma_max=25, direction="all"):
         """Add a simple uniaxial PML by stretching epsilon and mu tensors."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
-        if direction not in ("x-", "x+", "x", "top", "bottom", "both"):
-            raise ValueError("direction must be one of 'x-', 'x+', 'x', 'top', 'bottom', or 'both'.")
+        if direction not in ("x-", "x+", "x", "top", "bottom", "all"):
+            raise ValueError("direction must be one of 'x-', 'x+', 'x', 'top', 'bottom', or 'all'.")
 
         sigma_x = np.zeros(self.Nx, dtype=float)
-        if direction in ("x-", "x", "top", "both"):
+        if direction in ("x-", "x", "top", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[i] = sigma_max * ((pml_width - i) / pml_width) ** n
-        if direction in ("x+", "x", "bottom", "both"):
+        if direction in ("x+", "x", "bottom", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
 
@@ -216,7 +216,7 @@ class ModeSolver1D:
         self.mu_r_zz *= Sx
         self._invalidate_solution()
 
-    def add_UPML(self, pml_width=50, n=3, sigma_max=25, direction="both"):
+    def add_UPML(self, pml_width=50, n=3, sigma_max=25, direction="all"):
         """Backward-compatible alias for add_pml()."""
         self.add_pml(pml_width=pml_width, n=n, sigma_max=sigma_max, direction=direction)
 

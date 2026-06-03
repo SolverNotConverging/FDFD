@@ -13,7 +13,7 @@ The solver supports:
 * Diagonal-anisotropic relative ``epsilon`` and ``mu`` tensors.
 * PEC and PMC masks for selected Yee-grid components.
 * Component masks generated from cell-centred PEC/PMC regions.
-* Simple uniaxial PML in ``x``, ``y``, or both directions.
+* Simple uniaxial PML in ``x``, ``y``, or all boundaries.
 * Impedance sheets normal to ``x`` or ``y``.
 * Optional filtering of PEC-neighbour-dominated spurious candidates.
 
@@ -41,8 +41,8 @@ Material And Boundary API
    add_rectangle(epsilon, mu, x_range, y_range)
    add_pec(x_range, y_range, components=None)
    add_pmc(x_range, y_range, components=None)
-   add_pml(pml_width=50, n=3, sigma_max=5, direction="both")
-   add_UPML(pml_width=50, n=3, sigma_max=5, direction="both")
+   add_pml(pml_width=50, n=3, sigma_max=5, direction="all")
+   add_UPML(pml_width=50, n=3, sigma_max=5, direction="all")
    add_impedance_surface(Zs, position, orientation="x", thickness_cells=1, eps_components=("xx", "yy", "zz"))
 
 Notes:
@@ -50,7 +50,7 @@ Notes:
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * Region bounds can be integer grid indices or physical coordinates in metres.
 * PEC/PMC ``components=None`` treats the region as cell-centred and expands it to component-specific Yee masks.
-* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"both"``.
+* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"all"``.
 
 Solve API
 ---------

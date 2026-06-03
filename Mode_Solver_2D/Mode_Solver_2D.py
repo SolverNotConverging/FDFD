@@ -4,6 +4,7 @@ from tkinter import ttk
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.patches import Rectangle
 from scipy.sparse import bmat, diags, eye, kron
 from scipy.sparse.linalg import eigs
 
@@ -40,6 +41,8 @@ class ModeSolver2D:
         self.pmc_xx_mask = np.zeros(shape, dtype=bool)
         self.pmc_yy_mask = np.zeros(shape, dtype=bool)
         self.pmc_zz_mask = np.zeros(shape, dtype=bool)
+        self._pec_regions = []
+        self._pmc_regions = []
 
         self.num_modes = int(num_modes)
         self.mode_filter = bool(mode_filter)
@@ -178,6 +181,7 @@ class ModeSolver2D:
         Pass components=(...) to constrain selected electric components directly.
         """
         sl_x, sl_y = self._region_slices(x_range, y_range)
+        self._pec_regions.append((sl_x, sl_y))
         cell_mask = np.zeros((self.Nx, self.Ny), dtype=bool)
         cell_mask[sl_x, sl_y] = True
         if components is None:
@@ -198,6 +202,7 @@ class ModeSolver2D:
         constrain selected magnetic components directly.
         """
         sl_x, sl_y = self._region_slices(x_range, y_range)
+        self._pmc_regions.append((sl_x, sl_y))
         cell_mask = np.zeros((self.Nx, self.Ny), dtype=bool)
         cell_mask[sl_x, sl_y] = True
         if components is None:
@@ -225,27 +230,27 @@ class ModeSolver2D:
         zz_mask = xx_mask | yy_mask
         return xx_mask, yy_mask, zz_mask
 
-    def add_pml(self, pml_width=50, n=3, sigma_max=5, direction="both"):
+    def add_pml(self, pml_width=50, n=3, sigma_max=5, direction="all"):
         """Add a simple uniaxial PML by stretching epsilon and mu tensors."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
-        if direction not in ("x-", "x+", "x", "y-", "y+", "y", "both"):
-            raise ValueError("direction must be one of 'x-', 'x+', 'x', 'y-', 'y+', 'y', or 'both'.")
+        if direction not in ("x-", "x+", "x", "y-", "y+", "y", "all"):
+            raise ValueError("direction must be one of 'x-', 'x+', 'x', 'y-', 'y+', 'y', or 'all'.")
 
         sigma_x = np.zeros((self.Nx, self.Ny), dtype=float)
         sigma_y = np.zeros((self.Nx, self.Ny), dtype=float)
 
-        if direction in ("x-", "x", "both"):
+        if direction in ("x-", "x", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[i, :] = sigma_max * ((pml_width - i) / pml_width) ** n
-        if direction in ("x+", "x", "both"):
+        if direction in ("x+", "x", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1, :] = sigma_max * ((pml_width - i) / pml_width) ** n
-        if direction in ("y-", "y", "both"):
+        if direction in ("y-", "y", "all"):
             for i in range(min(pml_width, self.Ny)):
                 sigma_y[:, i] = sigma_max * ((pml_width - i) / pml_width) ** n
-        if direction in ("y+", "y", "both"):
+        if direction in ("y+", "y", "all"):
             for i in range(min(pml_width, self.Ny)):
                 sigma_y[:, -i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
 
@@ -262,7 +267,7 @@ class ModeSolver2D:
         self.mu_r_zz *= Sx * Sy
         self._invalidate_solution()
 
-    def add_UPML(self, pml_width=50, n=3, sigma_max=5, direction="both"):
+    def add_UPML(self, pml_width=50, n=3, sigma_max=5, direction="all"):
         """Backward-compatible alias for add_pml()."""
         self.add_pml(pml_width=pml_width, n=n, sigma_max=sigma_max, direction=direction)
 
@@ -538,6 +543,31 @@ class ModeSolver2D:
     def _field_array(self, field, mode):
         return field[:, mode].reshape((self.Nx, self.Ny), order="F")
 
+    def _add_boundary_background(self, ax):
+        for sl_x, sl_y in self._pec_regions:
+            self._add_boundary_rectangle(ax, sl_x, sl_y, label="PEC")
+        for sl_x, sl_y in self._pmc_regions:
+            self._add_boundary_rectangle(ax, sl_x, sl_y, label="PMC")
+
+    def _add_boundary_rectangle(self, ax, sl_x, sl_y, label):
+        x0 = sl_x.start * self.dx * 1e3
+        x1 = sl_x.stop * self.dx * 1e3
+        y0 = sl_y.start * self.dy * 1e3
+        y1 = sl_y.stop * self.dy * 1e3
+        ax.add_patch(
+            Rectangle(
+                (x0, y0),
+                x1 - x0,
+                y1 - y0,
+                facecolor="yellow",
+                edgecolor="goldenrod",
+                linewidth=1.0,
+                alpha=0.35,
+                label=label,
+                zorder=0,
+            )
+        )
+
     def visualize(self, mode=1, **kwargs):
         """Visualize selected field components for a given one-based mode index."""
         if self.eigenvalues is None:
@@ -575,19 +605,14 @@ class ModeSolver2D:
             if norm > 0:
                 field_data = field_data / norm
             ax = axes[i]
+            self._add_boundary_background(ax)
             last_image = ax.imshow(
                 np.abs(field_data).T,
                 cmap="viridis",
                 origin="lower",
                 extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-            )
-            ax.imshow(
-                np.abs(self.eps_r_xx).T,
-                cmap="inferno",
-                origin="lower",
-                extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-                vmax=20,
-                alpha=0.2,
+                alpha=0.9,
+                zorder=1,
             )
             ax.set_title(title)
             ax.set_xlabel("x (mm)")
@@ -645,6 +670,7 @@ class ModeSolver2D:
             for i, ax in enumerate(axes.flat):
                 norm = e_norm if i < 3 else h_norm
                 field = data[i] / norm if norm > 0 else data[i]
+                self._add_boundary_background(ax)
                 ax.imshow(
                     np.abs(field).T,
                     cmap="viridis",
@@ -652,14 +678,8 @@ class ModeSolver2D:
                     extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
                     vmin=0,
                     vmax=1,
-                )
-                ax.imshow(
-                    np.abs(self.eps_r_zz).T,
-                    cmap="inferno",
-                    origin="lower",
-                    extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-                    vmax=20,
-                    alpha=0.2,
+                    alpha=0.9,
+                    zorder=1,
                 )
                 ax.set_title(titles[i])
                 ax.set_xlabel("x (mm)")

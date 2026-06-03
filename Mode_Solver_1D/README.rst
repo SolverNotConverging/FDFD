@@ -41,8 +41,8 @@ Material And Boundary API
    add_layer(epsilon, mu, x_range)
    add_pec(x_range, components=None)
    add_pmc(x_range, components=None)
-   add_pml(pml_width=50, n=3, sigma_max=25, direction="both")
-   add_UPML(pml_width=50, n=3, sigma_max=25, direction="both")
+   add_pml(pml_width=50, n=3, sigma_max=25, direction="all")
+   add_UPML(pml_width=50, n=3, sigma_max=25, direction="all")
    add_impedance_surface(Zs, position, thickness_cells=1, eps_components=("xx", "yy", "zz"))
 
 Notes:
@@ -51,7 +51,7 @@ Notes:
 * ``x_range`` accepts grid-index pairs or physical coordinate pairs in metres.
 * PEC/PMC ``components`` can be ``"xx"``, ``"yy"``, ``"zz"`` or an iterable of those names. ``None`` applies all three.
 * ``add_UPML`` is a compatibility alias for ``add_pml``.
-* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"top"``, ``"bottom"``, or ``"both"``.
+* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"top"``, ``"bottom"``, or ``"all"``.
 
 Solve API
 ---------
