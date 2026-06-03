@@ -228,7 +228,7 @@ class PeriodicModeSolver2D:
         """Compatibility alias for add_pmc()."""
         self.add_pmc(x_range, z_range, components=components, mu=mu)
 
-    def add_pml(self, pml_width=20, n=3, sigma_max=5.0, direction="all"):
+    def add_pml(self, pml_width=30, n=3, sigma_max=5.0, direction="all"):
         """Add a simple x-directed uniaxial PML."""
         pml_width = int(pml_width)
         if pml_width <= 0:
@@ -254,13 +254,10 @@ class PeriodicModeSolver2D:
         self.mu_r_zz *= Sx
         self._invalidate_solution()
 
-    def add_UPML(self, pml_width=20, n=3, sigma_max=5.0, direction="all"):
+    def add_UPML(self, pml_width=30, n=3, sigma_max=5.0, direction="all"):
         """Compatibility alias for add_pml()."""
         self.add_pml(pml_width=pml_width, n=n, sigma_max=sigma_max, direction=direction)
 
-    def add_UMPL(self, pml_width=20, n=3, sigma_max=5.0, direction="all"):
-        """Compatibility alias for the common add_UPML typo."""
-        self.add_pml(pml_width=pml_width, n=n, sigma_max=sigma_max, direction=direction)
 
     def _flat(self, values):
         return values.ravel(order="F")
