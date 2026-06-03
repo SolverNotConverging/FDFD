@@ -32,7 +32,7 @@ with tqdm(total=len(frequencies), desc="Calculating frequencies") as pbar:
         )
 
         # Geometry
-        solver.add_object(10, 1, (60, 140), (70, 130))
+        solver.add_rectangle(10, 1, (60, 140), (70, 130))
         solver.solve()
 
         # Build the frequency row

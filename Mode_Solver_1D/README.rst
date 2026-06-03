@@ -38,7 +38,7 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_object(epsilon, mu, x_range)
+   add_layer(epsilon, mu, x_range)
    add_pec(x_range, components=None)
    add_pmc(x_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=25, direction="both")
@@ -90,7 +90,7 @@ Minimal Example
    from Mode_Solver_1D import ModeSolver1D
 
    solver = ModeSolver1D(frequency=30e9, x_range=10e-3, Nx=1000, num_modes=4)
-   solver.add_object(epsilon=10.2, mu=1.0, x_range=(3e-3, 4.27e-3))
+   solver.add_layer(epsilon=10.2, mu=1.0, x_range=(3e-3, 4.27e-3))
    solver.add_pec((2.9e-3, 3.0e-3))
    solver.solve()
 

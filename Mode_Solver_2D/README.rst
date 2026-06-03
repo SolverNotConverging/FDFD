@@ -38,7 +38,7 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_object(epsilon, mu, x_range, y_range)
+   add_rectangle(epsilon, mu, x_range, y_range)
    add_pec(x_range, y_range, components=None)
    add_pmc(x_range, y_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=5, direction="both")
@@ -87,8 +87,8 @@ Minimal Example
    from Mode_Solver_2D import ModeSolver2D
 
    solver = ModeSolver2D(30e9, 24e-3, 16e-3, 240, 160, num_modes=5)
-   solver.add_object(3.0, 1.0, (0, 240), (60, 80))
-   solver.add_object(12.0, 1.0, (100, 140), (80, 100))
+   solver.add_rectangle(3.0, 1.0, (0, 240), (60, 80))
+   solver.add_rectangle(12.0, 1.0, (100, 140), (80, 100))
    solver.add_UPML(pml_width=30, sigma_max=1, direction="x")
    solver.solve()
 
@@ -99,5 +99,5 @@ Examples
 --------
 
 * ``example_ridge_dielectric_waveguide.py``
-* ``example_rectangular_dielectric_waveguide.py``
+* ``example_microstrip.py``
 * ``Modal_2D_Dispersion.py``
