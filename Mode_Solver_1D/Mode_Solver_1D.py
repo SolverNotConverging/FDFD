@@ -156,7 +156,7 @@ class ModeSolver1D:
                 return self.pmc_zz_mask
         raise ValueError(f"Unknown {prefix} component {component!r}.")
 
-    def add_object(self, epsilon, mu, x_range):
+    def add_layer(self, epsilon, mu, x_range):
         """Add an isotropic or diagonal-anisotropic material region."""
         sl_x = self._region_slice(x_range)
         epsilon = self._normalise_three("epsilon", epsilon)
