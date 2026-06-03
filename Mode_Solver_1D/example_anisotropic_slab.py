@@ -12,6 +12,6 @@ core_start = Nx // 2 - 100
 core_stop = Nx // 2 + 100
 solver.add_layer([12.0, 9.5, 8.5], 1, (core_start, core_stop))
 
-solver.add_UPML(pml_width=80, n=3, sigma_max=10, direction="both")
+solver.add_UPML(pml_width=80, n=3, sigma_max=10, direction="all")
 solver.solve()
 solver.visualize_with_gui()

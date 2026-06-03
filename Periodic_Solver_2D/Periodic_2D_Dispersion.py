@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from Periodic_Solver_2D import PeriodicTMModeSolver
+from Periodic_Solver_2D import PeriodicModeSolver2D
 
 x_range = 10e-3
 z_range = 8e-3
@@ -29,23 +29,23 @@ for mode in range(1, num_modes + 1):
 for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
-    solver = PeriodicTMModeSolver(freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
+    solver = PeriodicModeSolver2D("TM", freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
                                   num_modes=num_modes, guess=sigma_guess, ncv=None)
 
-    solver.add_object(-1e8, 1, x_indices=[25], z_indices=range(0, 10))
-    solver.add_object(-1e8, 1, x_indices=[9], z_indices=range(0, Nz))
+    solver.add_pec((25, 26), (0, 10))
+    solver.add_pec((9, 10), (0, Nz))
 
-    # Dielectric loading (two regions)
-    solver.add_object(8, 1, x_indices=range(10, 25), z_indices=range(Nz))
+    # Dielectric loading
+    solver.add_rectangle(8, 1, (10, 25), (0, Nz))
 
-    solver.add_UPML(pml_width=30, n=3, sigma_max=5, direction="top")
+    solver.add_pml(pml_width=30, n=3, sigma_max=5, direction="x+")
 
     try:
         solver.solve()
         for mode in range(num_modes):
-            gamma = solver.gammas[mode]
-            data[f"Alpha_Mode_{mode + 1}"].append(gamma.real)
-            data[f"Beta_Mode_{mode + 1}"].append(gamma.imag)
+            neff = solver.neff[mode]
+            data[f"Alpha_Mode_{mode + 1}"].append(neff.real)
+            data[f"Beta_Mode_{mode + 1}"].append(neff.imag)
     except Exception as exc:
         print(f"[WARN] eigs failed at {f / 1e9:.2f} GHz: {exc}")
         for mode in range(num_modes):
