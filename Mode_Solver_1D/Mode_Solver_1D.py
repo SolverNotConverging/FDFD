@@ -3,40 +3,55 @@ from tkinter import ttk
 
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from scipy.sparse import diags
+from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import eigs
 
 
 class ModeSolver1D:
-    """1D FDFD eigen-mode solver for slab waveguides."""
+    """1D FDFD mode solver on a true staggered Yee grid."""
 
     def __init__(self, frequency, x_range, Nx, num_modes, guess=None):
         self.frequency = frequency
         self.x_range = x_range
         self.Nx = int(Nx)
+        if self.Nx <= 0:
+            raise ValueError("Nx must be positive.")
+
         self.dx = x_range / self.Nx
-        self.epsilon0 = 8.85e-12
-        self.mu0 = 1.26e-6
+        self.epsilon0 = 8.854187817e-12
+        self.mu0 = 4e-7 * np.pi
         self.c = 1 / np.sqrt(self.epsilon0 * self.mu0)
         self.k_0 = 2 * np.pi * frequency / self.c
         self.dx_normalized = self.k_0 * self.dx
 
-        shape = (self.Nx,)
-        self.eps_r_xx = np.ones(shape, dtype=complex)
-        self.eps_r_yy = np.ones(shape, dtype=complex)
-        self.eps_r_zz = np.ones(shape, dtype=complex)
-        self.mu_r_xx = np.ones(shape, dtype=complex)
-        self.mu_r_yy = np.ones(shape, dtype=complex)
-        self.mu_r_zz = np.ones(shape, dtype=complex)
+        self.shape_cell = (self.Nx,)
+        self.shape_node = (self.Nx + 1,)
 
-        self.pec_xx_mask = np.zeros(shape, dtype=bool)
-        self.pec_yy_mask = np.zeros(shape, dtype=bool)
-        self.pec_zz_mask = np.zeros(shape, dtype=bool)
-        self.pmc_xx_mask = np.zeros(shape, dtype=bool)
-        self.pmc_yy_mask = np.zeros(shape, dtype=bool)
-        self.pmc_zz_mask = np.zeros(shape, dtype=bool)
+        self.cell_eps_r_xx = np.ones(self.shape_cell, dtype=complex)
+        self.cell_eps_r_yy = np.ones(self.shape_cell, dtype=complex)
+        self.cell_eps_r_zz = np.ones(self.shape_cell, dtype=complex)
+        self.cell_mu_r_xx = np.ones(self.shape_cell, dtype=complex)
+        self.cell_mu_r_yy = np.ones(self.shape_cell, dtype=complex)
+        self.cell_mu_r_zz = np.ones(self.shape_cell, dtype=complex)
+        self.material_no_average_mask = np.zeros(self.shape_cell, dtype=bool)
+
+        self.eps_r_xx = np.ones(self.shape_cell, dtype=complex)
+        self.eps_r_yy = np.ones(self.shape_node, dtype=complex)
+        self.eps_r_zz = np.ones(self.shape_node, dtype=complex)
+        self.mu_r_xx = np.ones(self.shape_node, dtype=complex)
+        self.mu_r_yy = np.ones(self.shape_cell, dtype=complex)
+        self.mu_r_zz = np.ones(self.shape_cell, dtype=complex)
+
+        self.pec_xx_mask = np.zeros(self.shape_cell, dtype=bool)
+        self.pec_yy_mask = np.zeros(self.shape_node, dtype=bool)
+        self.pec_zz_mask = np.zeros(self.shape_node, dtype=bool)
+        self.pmc_xx_mask = np.zeros(self.shape_node, dtype=bool)
+        self.pmc_yy_mask = np.zeros(self.shape_cell, dtype=bool)
+        self.pmc_zz_mask = np.zeros(self.shape_cell, dtype=bool)
 
         self.num_modes = int(num_modes)
+        if self.num_modes <= 0:
+            raise ValueError("num_modes must be positive.")
         self.guess = guess
         self._auto_guess = guess is None
         if self._auto_guess:
@@ -54,8 +69,14 @@ class ModeSolver1D:
     def _default_guess(self):
         return -max(
             self._max_magnitude(arr)
-            for arr in [self.eps_r_xx, self.eps_r_yy, self.eps_r_zz,
-                        self.mu_r_xx, self.mu_r_yy, self.mu_r_zz]
+            for arr in (
+                self.cell_eps_r_xx,
+                self.cell_eps_r_yy,
+                self.cell_eps_r_zz,
+                self.cell_mu_r_xx,
+                self.cell_mu_r_yy,
+                self.cell_mu_r_zz,
+            )
         )
 
     def _resolve_eigs_guess(self, sigma):
@@ -76,14 +97,6 @@ class ModeSolver1D:
         self.propagation_constant_TM = None
         self.attenuation_constant_TE = None
         self.attenuation_constant_TM = None
-
-        # Backward-compatible aliases for older example scripts.
-        self.beta_TE = None
-        self.beta_TM = None
-        self.alpha_TE = None
-        self.alpha_TM = None
-        self.fields = {}
-
         for name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
             if hasattr(self, name):
                 delattr(self, name)
@@ -125,100 +138,115 @@ class ModeSolver1D:
             raise ValueError("Region is out of bounds of the simulation grid.")
         return slice(x0, x1)
 
-    def _component_array(self, prefix, component):
+    def _cell_material_array(self, prefix, component):
         if prefix == "eps":
-            if component == "xx":
-                return self.eps_r_xx
-            if component == "yy":
-                return self.eps_r_yy
-            if component == "zz":
-                return self.eps_r_zz
+            return {"xx": self.cell_eps_r_xx, "yy": self.cell_eps_r_yy, "zz": self.cell_eps_r_zz}[component]
         if prefix == "mu":
-            if component == "xx":
-                return self.mu_r_xx
-            if component == "yy":
-                return self.mu_r_yy
-            if component == "zz":
-                return self.mu_r_zz
-        if prefix == "pec":
-            if component == "xx":
-                return self.pec_xx_mask
-            if component == "yy":
-                return self.pec_yy_mask
-            if component == "zz":
-                return self.pec_zz_mask
-        if prefix == "pmc":
-            if component == "xx":
-                return self.pmc_xx_mask
-            if component == "yy":
-                return self.pmc_yy_mask
-            if component == "zz":
-                return self.pmc_zz_mask
+            return {"xx": self.cell_mu_r_xx, "yy": self.cell_mu_r_yy, "zz": self.cell_mu_r_zz}[component]
         raise ValueError(f"Unknown {prefix} component {component!r}.")
 
-    def add_layer(self, epsilon, mu, x_range):
-        """Add an isotropic or diagonal-anisotropic material region."""
+    def _component_mask(self, prefix, component):
+        if prefix == "pec":
+            return {"xx": self.pec_xx_mask, "yy": self.pec_yy_mask, "zz": self.pec_zz_mask}[component]
+        if prefix == "pmc":
+            return {"xx": self.pmc_xx_mask, "yy": self.pmc_yy_mask, "zz": self.pmc_zz_mask}[component]
+        raise ValueError(f"Unknown {prefix} component {component!r}.")
+
+    def add_layer(self, epsilon, mu, x_range, *, average=True):
+        """Add an isotropic or diagonal-anisotropic material region on the cell grid."""
         sl_x = self._region_slice(x_range)
         epsilon = self._normalise_three("epsilon", epsilon)
         mu = self._normalise_three("mu", mu)
 
-        self.eps_r_xx[sl_x] = epsilon[0]
-        self.eps_r_yy[sl_x] = epsilon[1]
-        self.eps_r_zz[sl_x] = epsilon[2]
-        self.mu_r_xx[sl_x] = mu[0]
-        self.mu_r_yy[sl_x] = mu[1]
-        self.mu_r_zz[sl_x] = mu[2]
+        self.cell_eps_r_xx[sl_x] = epsilon[0]
+        self.cell_eps_r_yy[sl_x] = epsilon[1]
+        self.cell_eps_r_zz[sl_x] = epsilon[2]
+        self.cell_mu_r_xx[sl_x] = mu[0]
+        self.cell_mu_r_yy[sl_x] = mu[1]
+        self.cell_mu_r_zz[sl_x] = mu[2]
+        self.material_no_average_mask[sl_x] = not average
+        self.update_component_materials()
         self._invalidate_solution()
 
     def add_pec(self, x_range, components=None):
-        """Add a PEC region for selected electric-field components."""
+        """Add a PEC cell region and expand it onto surrounding electric components."""
         sl_x = self._region_slice(x_range)
-        if components is None:
-            components = ("xx", "yy", "zz")
-        for comp in self._validate_components(components):
-            self._component_array("pec", comp)[sl_x] = True
+        cell_mask = np.zeros(self.shape_cell, dtype=bool)
+        cell_mask[sl_x] = True
+        xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="electric")
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+            if comp in selected:
+                self._component_mask("pec", comp)[:] |= mask
+        self._effective_materials_and_masks()
         self._invalidate_solution()
 
     def add_pmc(self, x_range, components=None):
-        """Add a PMC region for selected magnetic-field components."""
+        """Add a PMC cell region and expand it onto surrounding magnetic components."""
         sl_x = self._region_slice(x_range)
-        if components is None:
-            components = ("xx", "yy", "zz")
-        for comp in self._validate_components(components):
-            self._component_array("pmc", comp)[sl_x] = True
+        cell_mask = np.zeros(self.shape_cell, dtype=bool)
+        cell_mask[sl_x] = True
+        xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="magnetic")
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+            if comp in selected:
+                self._component_mask("pmc", comp)[:] |= mask
+        self._effective_materials_and_masks()
         self._invalidate_solution()
 
+    def component_masks_from_cell_mask(self, cell_mask, field="electric"):
+        mask = np.asarray(cell_mask, dtype=bool)
+        if mask.shape != self.shape_cell:
+            raise ValueError(f"cell_mask must have shape {self.shape_cell}.")
+        ii = np.nonzero(mask)[0]
+
+        if field == "electric":
+            xx_mask = mask.copy()
+            yy_mask = np.zeros(self.shape_node, dtype=bool)
+            zz_mask = np.zeros(self.shape_node, dtype=bool)
+            yy_mask[ii] = True
+            yy_mask[ii + 1] = True
+            zz_mask[ii] = True
+            zz_mask[ii + 1] = True
+            return xx_mask, yy_mask, zz_mask
+
+        if field == "magnetic":
+            xx_mask = np.zeros(self.shape_node, dtype=bool)
+            yy_mask = mask.copy()
+            zz_mask = mask.copy()
+            xx_mask[ii] = True
+            xx_mask[ii + 1] = True
+            return xx_mask, yy_mask, zz_mask
+
+        raise ValueError("field must be 'electric' or 'magnetic'.")
+
     def add_pml(self, pml_width=50, n=3, sigma_max=25, direction="all"):
-        """Add a simple uniaxial PML by stretching epsilon and mu tensors."""
+        """Add a simple uniaxial PML by stretching cell-centered epsilon and mu tensors."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
-        if direction not in ("x-", "x+", "x", "top", "bottom", "all"):
-            raise ValueError("direction must be one of 'x-', 'x+', 'x', 'top', 'bottom', or 'all'.")
+        if direction not in ("x-", "x+", "x", "all"):
+            raise ValueError("direction must be one of 'x-', 'x+', 'x', or 'all'.")
 
         sigma_x = np.zeros(self.Nx, dtype=float)
-        if direction in ("x-", "x", "top", "all"):
+        if direction in ("x-", "x", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[i] = sigma_max * ((pml_width - i) / pml_width) ** n
-        if direction in ("x+", "x", "bottom", "all"):
+        if direction in ("x+", "x", "all"):
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
 
-        eps0 = 8.854187817e-12
         omega = 2 * np.pi * self.frequency
-        Sx = 1.0 + 1j * sigma_x / (eps0 * omega)
+        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * omega)
 
-        self.eps_r_xx *= 1 / Sx
-        self.eps_r_yy *= Sx
-        self.eps_r_zz *= Sx
-        self.mu_r_xx *= 1 / Sx
-        self.mu_r_yy *= Sx
-        self.mu_r_zz *= Sx
+        self.cell_eps_r_xx *= 1 / Sx
+        self.cell_eps_r_yy *= Sx
+        self.cell_eps_r_zz *= Sx
+        self.cell_mu_r_xx *= 1 / Sx
+        self.cell_mu_r_yy *= Sx
+        self.cell_mu_r_zz *= Sx
+        self.update_component_materials()
         self._invalidate_solution()
-
-    def add_UPML(self, pml_width=50, n=3, sigma_max=25, direction="all"):
-        """Backward-compatible alias for add_pml()."""
-        self.add_pml(pml_width=pml_width, n=n, sigma_max=sigma_max, direction=direction)
 
     def add_impedance_surface(
             self,
@@ -233,78 +261,146 @@ class ModeSolver1D:
             raise ValueError("thickness_cells must be positive.")
 
         idx = self._bound_to_index(position)
-        x_range = (idx, idx + thickness_cells)
-        sl_x = self._region_slice(x_range)
+        sl_x = self._region_slice((idx, idx + thickness_cells))
         thickness = thickness_cells * self.dx
 
-        eps0 = 8.854187817e-12
-        delta_eps = -1j / (2 * np.pi * self.frequency * eps0 * thickness * Zs)
+        delta_eps = -1j / (2 * np.pi * self.frequency * self.epsilon0 * thickness * Zs)
         for comp in self._validate_components(eps_components):
-            self._component_array("eps", comp)[sl_x] += delta_eps
+            self._cell_material_array("eps", comp)[sl_x] += delta_eps
+        self.update_component_materials()
         self._invalidate_solution()
 
+    @staticmethod
+    def _average_to_node(values, no_average_mask=None):
+        out = np.zeros(values.size + 1, dtype=complex)
+        counts = np.zeros(values.size + 1, dtype=float)
+        out[:-1] += values
+        counts[:-1] += 1
+        out[1:] += values
+        counts[1:] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii = np.nonzero(no_average_mask)[0]
+            out[ii] = values[ii]
+            out[ii + 1] = values[ii]
+        return out
+
+    def _material_on_fields(self, eps_r_xx, eps_r_yy, eps_r_zz, mu_r_xx, mu_r_yy, mu_r_zz, no_average_mask):
+        return {
+            "eps_xx": eps_r_xx.copy(),
+            "eps_yy": self._average_to_node(eps_r_yy, no_average_mask),
+            "eps_zz": self._average_to_node(eps_r_zz, no_average_mask),
+            "mu_xx": self._average_to_node(mu_r_xx, no_average_mask),
+            "mu_yy": mu_r_yy.copy(),
+            "mu_zz": mu_r_zz.copy(),
+        }
+
+    def _set_component_materials(self, materials):
+        self.eps_r_xx = materials["eps_xx"].copy()
+        self.eps_r_yy = materials["eps_yy"].copy()
+        self.eps_r_zz = materials["eps_zz"].copy()
+        self.mu_r_xx = materials["mu_xx"].copy()
+        self.mu_r_yy = materials["mu_yy"].copy()
+        self.mu_r_zz = materials["mu_zz"].copy()
+
+    def update_component_materials(self):
+        materials = self._material_on_fields(
+            self.cell_eps_r_xx,
+            self.cell_eps_r_yy,
+            self.cell_eps_r_zz,
+            self.cell_mu_r_xx,
+            self.cell_mu_r_yy,
+            self.cell_mu_r_zz,
+            self.material_no_average_mask,
+        )
+        self._set_component_materials(materials)
+        return materials
+
     def _yeeder1d(self):
-        """Generate derivative matrices on a 1D Yee-style grid."""
-        values = np.ones(self.Nx)
-        D = diags([-values, values], [0, 1], shape=(self.Nx, self.Nx), format="csr")
-        DEX = D / self.dx_normalized
-        DHX = -DEX.conj().T
-        return DEX, DHX
+        """Generate rectangular derivative matrices between node and cell locations."""
+        rows = []
+        cols = []
+        data = []
+        for i in range(self.Nx):
+            rows.extend((i, i))
+            cols.extend((i + 1, i))
+            data.extend((1.0 / self.dx_normalized, -1.0 / self.dx_normalized))
+        D_e_to_h = coo_matrix((data, (rows, cols)), shape=(self.Nx, self.Nx + 1)).tocsr()
+        D_h_to_e = -D_e_to_h.conj().T
+        self.DEX = D_e_to_h
+        self.DHX = D_h_to_e
+        return D_e_to_h, D_h_to_e
 
     def _effective_materials_and_masks(self):
-        eps_r_xx = self.eps_r_xx.copy()
-        eps_r_yy = self.eps_r_yy.copy()
-        eps_r_zz = self.eps_r_zz.copy()
-        mu_r_xx = self.mu_r_xx.copy()
-        mu_r_yy = self.mu_r_yy.copy()
-        mu_r_zz = self.mu_r_zz.copy()
+        eps_r_xx = self.cell_eps_r_xx.copy()
+        eps_r_yy = self.cell_eps_r_yy.copy()
+        eps_r_zz = self.cell_eps_r_zz.copy()
+        mu_r_xx = self.cell_mu_r_xx.copy()
+        mu_r_yy = self.cell_mu_r_yy.copy()
+        mu_r_zz = self.cell_mu_r_zz.copy()
+        no_average_mask = self.material_no_average_mask.copy()
 
-        pec_xx_mask = self.pec_xx_mask | ~np.isfinite(eps_r_xx)
-        pec_yy_mask = self.pec_yy_mask | ~np.isfinite(eps_r_yy)
-        pec_zz_mask = self.pec_zz_mask | ~np.isfinite(eps_r_zz)
-        pmc_xx_mask = self.pmc_xx_mask | ~np.isfinite(mu_r_xx)
-        pmc_yy_mask = self.pmc_yy_mask | ~np.isfinite(mu_r_yy)
-        pmc_zz_mask = self.pmc_zz_mask | ~np.isfinite(mu_r_zz)
+        pec_xx_mask = self.pec_xx_mask.copy()
+        pec_yy_mask = self.pec_yy_mask.copy()
+        pec_zz_mask = self.pec_zz_mask.copy()
+        pmc_xx_mask = self.pmc_xx_mask.copy()
+        pmc_yy_mask = self.pmc_yy_mask.copy()
+        pmc_zz_mask = self.pmc_zz_mask.copy()
 
-        eps_r_xx[pec_xx_mask] = 1.0 + 0j
-        eps_r_yy[pec_yy_mask] = 1.0 + 0j
-        eps_r_zz[pec_zz_mask] = 1.0 + 0j
-        mu_r_xx[pmc_xx_mask] = 1.0 + 0j
-        mu_r_yy[pmc_yy_mask] = 1.0 + 0j
-        mu_r_zz[pmc_zz_mask] = 1.0 + 0j
+        electric_targets = {"xx": pec_xx_mask, "yy": pec_yy_mask, "zz": pec_zz_mask}
+        magnetic_targets = {"xx": pmc_xx_mask, "yy": pmc_yy_mask, "zz": pmc_zz_mask}
+        mask_index = {"xx": 0, "yy": 1, "zz": 2}
+        for component, values in (("xx", eps_r_xx), ("yy", eps_r_yy), ("zz", eps_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                masks = self.component_masks_from_cell_mask(bad_cells, field="electric")
+                electric_targets[component][:] |= masks[mask_index[component]]
+                values[bad_cells] = 1.0 + 0j
 
-        return (
+        for component, values in (("xx", mu_r_xx), ("yy", mu_r_yy), ("zz", mu_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                masks = self.component_masks_from_cell_mask(bad_cells, field="magnetic")
+                magnetic_targets[component][:] |= masks[mask_index[component]]
+                values[bad_cells] = 1.0 + 0j
+
+        materials = self._material_on_fields(
             eps_r_xx,
             eps_r_yy,
             eps_r_zz,
             mu_r_xx,
             mu_r_yy,
             mu_r_zz,
-            pec_xx_mask,
-            pec_yy_mask,
-            pec_zz_mask,
-            pmc_xx_mask,
-            pmc_yy_mask,
-            pmc_zz_mask,
+            no_average_mask,
         )
+        materials["eps_xx"][pec_xx_mask] = 1.0 + 0j
+        materials["eps_yy"][pec_yy_mask] = 1.0 + 0j
+        materials["eps_zz"][pec_zz_mask] = 1.0 + 0j
+        materials["mu_xx"][pmc_xx_mask] = 1.0 + 0j
+        materials["mu_yy"][pmc_yy_mask] = 1.0 + 0j
+        materials["mu_zz"][pmc_zz_mask] = 1.0 + 0j
+        self._set_component_materials(materials)
+
+        return materials, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask
+
+    @staticmethod
+    def _diag(values):
+        return diags(np.asarray(values).ravel(), format="csr")
 
     def _inverse_diag_on_free(self, values, constrained_mask):
         inverse = np.zeros_like(values, dtype=complex)
         inverse[~constrained_mask] = 1.0 / values[~constrained_mask]
-        return diags(inverse)
+        return diags(inverse, format="csr")
 
-    def _solve_reduced(self, Omega, free_mask, sigma):
+    def _solve_reduced(self, Omega, free_mask, full_size, sigma):
         Omega = Omega[free_mask, :][:, free_mask]
         if Omega.shape[0] <= self.num_modes:
-            raise ValueError(
-                f"Not enough unconstrained DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes."
-            )
+            raise ValueError(f"Not enough unconstrained DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes.")
         eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma)
         order = np.argsort(np.real(eigenvalues))
         eigenvalues = eigenvalues[order]
         eigenvectors_reduced = eigenvectors_reduced[:, order]
-
-        eigenvectors = np.zeros((self.Nx, self.num_modes), dtype=complex)
+        eigenvectors = np.zeros((full_size, self.num_modes), dtype=complex)
         eigenvectors[free_mask, :] = eigenvectors_reduced
         return eigenvalues, eigenvectors
 
@@ -317,39 +413,29 @@ class ModeSolver1D:
         self.Hz[pmc_zz_mask, :] = 0.0
 
     def solve(self, sigma=None):
-        """Solve TE and TM slab modes and recover field components."""
+        """Solve TE and TM slab modes and recover staggered field components."""
         sigma = self._resolve_eigs_guess(sigma)
+        materials, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask = (
+            self._effective_materials_and_masks()
+        )
 
-        (
-            eps_r_xx,
-            eps_r_yy,
-            eps_r_zz,
-            mu_r_xx,
-            mu_r_yy,
-            mu_r_zz,
-            pec_xx_mask,
-            pec_yy_mask,
-            pec_zz_mask,
-            pmc_xx_mask,
-            pmc_yy_mask,
-            pmc_zz_mask,
-        ) = self._effective_materials_and_masks()
+        D_e_to_h, D_h_to_e = self._yeeder1d()
+        eps_xx_diag = self._diag(materials["eps_xx"])
+        eps_yy_diag = self._diag(materials["eps_yy"])
+        mu_xx_diag = self._diag(materials["mu_xx"])
+        mu_yy_diag = self._diag(materials["mu_yy"])
+        eps_zz_inv = self._inverse_diag_on_free(materials["eps_zz"], pec_zz_mask)
+        mu_zz_inv = self._inverse_diag_on_free(materials["mu_zz"], pmc_zz_mask)
 
-        DEX, DHX = self._yeeder1d()
-        eps_r_xx_diag = diags(eps_r_xx)
-        eps_r_yy_diag = diags(eps_r_yy)
-        mu_r_xx_diag = diags(mu_r_xx)
-        mu_r_yy_diag = diags(mu_r_yy)
-        eps_r_zz_inv = self._inverse_diag_on_free(eps_r_zz, pec_zz_mask)
-        mu_r_zz_inv = self._inverse_diag_on_free(mu_r_zz, pmc_zz_mask)
+        Omega_TE = -mu_xx_diag @ (D_h_to_e @ mu_zz_inv @ D_e_to_h + eps_yy_diag)
+        Omega_TM = -eps_xx_diag @ (D_e_to_h @ eps_zz_inv @ D_h_to_e + mu_yy_diag)
 
-        Omega_TE = -mu_r_xx_diag @ (DHX @ mu_r_zz_inv @ DEX + eps_r_yy_diag)
-        Omega_TM = -eps_r_xx_diag @ (DEX @ eps_r_zz_inv @ DHX + mu_r_yy_diag)
-
-        free_te = ~pec_yy_mask
-        free_tm = ~pmc_yy_mask
-        self.eigenvalues_TE, self.eigenvectors_TE = self._solve_reduced(Omega_TE, free_te, sigma)
-        self.eigenvalues_TM, self.eigenvectors_TM = self._solve_reduced(Omega_TM, free_tm, sigma)
+        self.eigenvalues_TE, self.eigenvectors_TE = self._solve_reduced(
+            Omega_TE, ~pec_yy_mask, self.Nx + 1, sigma
+        )
+        self.eigenvalues_TM, self.eigenvectors_TM = self._solve_reduced(
+            Omega_TM, ~pmc_yy_mask, self.Nx, sigma
+        )
 
         self.neff_TE = self._passive_positive_neff(-self.eigenvalues_TE)
         self.neff_TM = self._passive_positive_neff(-self.eigenvalues_TM)
@@ -360,16 +446,14 @@ class ModeSolver1D:
 
         self.Ey = np.asarray(self.eigenvectors_TE, dtype=complex)
         self.Hy = np.asarray(self.eigenvectors_TM, dtype=complex)
-        self.Ex = np.zeros_like(self.Hy)
-        self.Ez = np.zeros_like(self.Hy)
         self.Hx = np.zeros_like(self.Ey)
-        self.Hz = np.zeros_like(self.Ey)
+        self.Hz = np.asarray(mu_zz_inv @ (D_e_to_h @ self.Ey), dtype=complex)
+        self.Ex = np.zeros_like(self.Hy)
+        self.Ez = np.asarray(eps_zz_inv @ (D_h_to_e @ self.Hy), dtype=complex)
 
         for mode in range(self.num_modes):
-            self.Hx[:, mode] = self.neff_TE[mode] * (1.0 / mu_r_xx) * self.Ey[:, mode]
-            self.Hz[:, mode] = np.asarray(mu_r_zz_inv @ (DEX @ self.Ey[:, mode])).ravel()
-            self.Ex[:, mode] = self.neff_TM[mode] * (1.0 / eps_r_xx) * self.Hy[:, mode]
-            self.Ez[:, mode] = np.asarray(eps_r_zz_inv @ (DHX @ self.Hy[:, mode])).ravel()
+            self.Hx[:, mode] = self.neff_TE[mode] * (1.0 / materials["mu_xx"]) * self.Ey[:, mode]
+            self.Ex[:, mode] = self.neff_TM[mode] * (1.0 / materials["eps_xx"]) * self.Hy[:, mode]
 
         self._zero_constrained_fields(
             pec_xx_mask,
@@ -380,25 +464,14 @@ class ModeSolver1D:
             pmc_zz_mask,
         )
 
-        self.fields = {
-            "TE": {"Ey": self.Ey, "Hx": self.Hx, "Hz": self.Hz},
-            "TM": {"Hy": self.Hy, "Ex": self.Ex, "Ez": self.Ez},
-        }
-
-        # Legacy names now expose the dimensionless effective-index pieces.
-        self.beta_TE = self.propagation_constant_TE
-        self.beta_TM = self.propagation_constant_TM
-        self.alpha_TE = self.attenuation_constant_TE
-        self.alpha_TM = self.attenuation_constant_TM
-
     def _has_lossy_material(self):
         for values in (
-                self.eps_r_xx,
-                self.eps_r_yy,
-                self.eps_r_zz,
-                self.mu_r_xx,
-                self.mu_r_yy,
-                self.mu_r_zz,
+                self.cell_eps_r_xx,
+                self.cell_eps_r_yy,
+                self.cell_eps_r_zz,
+                self.cell_mu_r_xx,
+                self.cell_mu_r_yy,
+                self.cell_mu_r_zz,
         ):
             finite = np.isfinite(values)
             if np.any(np.abs(np.imag(values[finite])) > 1e-14):
@@ -417,17 +490,13 @@ class ModeSolver1D:
             imag = np.zeros_like(imag)
         return real + 1j * imag
 
-    def visualize(self, mode=1, **kwargs):
-        """Visualize selected field components for a given one-based mode index."""
-        if not self.fields:
-            raise RuntimeError("solve() must be called before visualize().")
-        mode -= 1
-        if not (0 <= mode < self.num_modes):
-            raise ValueError("mode is out of range.")
+    def _field_x(self, field_name):
+        if field_name in ("Ey", "Ez", "Hx"):
+            return np.linspace(0, self.x_range * 1e3, self.Nx + 1)
+        return (np.arange(self.Nx) + 0.5) * self.dx * 1e3
 
-        import matplotlib.pyplot as plt
-
-        fields = {
+    def _component_fields_for_mode(self, mode):
+        return {
             "ey": (self.Ey[:, mode], "Ey", "TE"),
             "hx": (self.Hx[:, mode], "Hx", "TE"),
             "hz": (self.Hz[:, mode], "Hz", "TE"),
@@ -435,32 +504,50 @@ class ModeSolver1D:
             "ex": (self.Ex[:, mode], "Ex", "TM"),
             "ez": (self.Ez[:, mode], "Ez", "TM"),
         }
-        e_abs = np.sqrt(np.abs(self.Ey[:, mode]) ** 2 + np.abs(self.Ex[:, mode]) ** 2 + np.abs(self.Ez[:, mode]) ** 2)
-        h_abs = np.sqrt(np.abs(self.Hx[:, mode]) ** 2 + np.abs(self.Hy[:, mode]) ** 2 + np.abs(self.Hz[:, mode]) ** 2)
-        fields["eabs"] = (e_abs, "|E|", "E")
-        fields["habs"] = (h_abs, "|H|", "H")
+
+    def _field_to_cells(self, name, data):
+        if name in ("ey", "ez", "hx"):
+            return 0.5 * (data[:-1] + data[1:])
+        return data
+
+    def visualize(self, mode=1, **kwargs):
+        """Visualize selected field components for a given one-based mode index."""
+        if self.neff_TE is None:
+            raise RuntimeError("solve() must be called before visualize().")
+        mode -= 1
+        if not (0 <= mode < self.num_modes):
+            raise ValueError("mode is out of range.")
+
+        import matplotlib.pyplot as plt
+
+        fields = self._component_fields_for_mode(mode)
+        e_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("ey", "ex", "ez")))
+        h_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("hx", "hy", "hz")))
+        fields["eabs"] = (e_abs, "|E| cell-centered", "E")
+        fields["habs"] = (h_abs, "|H| cell-centered", "H")
 
         selected = [key for key in fields if kwargs.get(key)]
         if not selected:
             selected = ["ey", "hx", "hz", "hy", "ex", "ez"]
 
-        x = np.linspace(0, self.x_range * 1e3, self.Nx)
         ncols = min(3, len(selected))
         nrows = int(np.ceil(len(selected) / ncols))
         fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows), layout="compressed")
         axes = np.array(axes).reshape(-1)
-
-        material = np.real(self.eps_r_zz)
+        x_cell = (np.arange(self.Nx) + 0.5) * self.dx * 1e3
+        material = np.real(self.cell_eps_r_zz)
         material_norm = material / np.max(np.abs(material)) if np.max(np.abs(material)) > 0 else material
+
         for i, field_name in enumerate(selected):
             field_data, title, pol = fields[field_name]
             norm = np.max(np.abs(field_data))
             if norm > 0:
                 field_data = field_data / norm
+            x = x_cell if field_name in ("eabs", "habs") else self._field_x(title)
             ax = axes[i]
             ax.plot(x, np.real(field_data), label=f"Re({title})")
             ax.plot(x, np.abs(field_data), "--", label=f"|{title}|")
-            ax.plot(x, material_norm, color="0.75", alpha=0.6, label="eps_r_zz")
+            ax.plot(x_cell, material_norm, color="0.75", alpha=0.6, label="cell eps_r_zz")
             ax.set_title(f"{pol}: {title}")
             ax.set_xlabel("x (mm)")
             ax.grid(True)
@@ -478,63 +565,22 @@ class ModeSolver1D:
 
     def visualize_with_gui(self):
         """Launch an interactive Tk GUI to inspect mode profiles."""
-        if not self.fields:
+        if self.neff_TE is None:
             raise RuntimeError("solve() must be called before visualize_with_gui().")
 
         import matplotlib.pyplot as plt
-        import sys
 
         root = tk.Tk()
         root.title("FDFD 1D Mode Visualizer")
-        if sys.platform == "darwin":
-            root.tk.call("tk", "scaling", 1.0)
 
-        def _configure_window():
-            sw = root.winfo_screenwidth()
-            sh = root.winfo_screenheight()
-            w = int(sw * 0.9)
-            h = int(sh * 0.85)
-            root.geometry(f"{w}x{h}")
-            root.minsize(900, 600)
-            return w, h
-
-        win_w, win_h = _configure_window()
-        dpi = 110
-        fig_w = max(8.0, (win_w / dpi) * 0.95)
-        fig_h = max(5.5, (win_h / dpi) * 0.7)
-        fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
-        gs = fig.add_gridspec(4, 3, height_ratios=[0.08, 1.0, 0.08, 1.0], hspace=0.5, wspace=0.3)
-        header_te_ax = fig.add_subplot(gs[0, :])
-        header_te_ax.axis("off")
-        header_tm_ax = fig.add_subplot(gs[2, :])
-        header_tm_ax.axis("off")
-
-        axes = np.empty((2, 3), dtype=object)
-        for c in range(3):
-            axes[0, c] = fig.add_subplot(gs[1, c])
-            axes[1, c] = fig.add_subplot(gs[3, c])
-        field_map = [("TE", ["Ey", "Hx", "Hz"]), ("TM", ["Hy", "Ex", "Ez"])]
-        lines = []
-
-        for r, (pol, comps) in enumerate(field_map):
-            for c, comp in enumerate(comps):
-                ax = axes[r, c]
-                ax.set_ylabel(comp)
-                ax.set_title(f"{pol}: {comp}", pad=2)
-                ax.grid(True)
-                line, = ax.plot([], [], lw=2)
-                lines.append(line)
-
-        for ax in axes[-1, :]:
-            ax.set_xlabel("x (mm)")
-
-        te_info = header_te_ax.text(0.0, 0.5, "", fontsize=10, fontweight="bold", ha="left", va="center")
-        tm_info = header_tm_ax.text(0.0, 0.5, "", fontsize=10, fontweight="bold", ha="left", va="center")
-
+        fig, axes = plt.subplots(2, 3, figsize=(12, 7), dpi=100)
         plot_frame = tk.Frame(root)
         plot_frame.grid(row=0, column=0, sticky="nsew")
         controls_frame = tk.Frame(root)
         controls_frame.grid(row=1, column=0, sticky="ew", pady=10)
+
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         mode_var = tk.IntVar(value=1)
         ttk.Label(controls_frame, text="Select mode:").grid(row=0, column=0, padx=10, sticky="w")
@@ -548,49 +594,33 @@ class ModeSolver1D:
         mode_menu.grid(row=0, column=1, padx=10, sticky="w")
         tk.Button(controls_frame, text="Quit", command=root.destroy).grid(row=0, column=2, padx=10, sticky="e")
 
-        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        def update_plots(event=None):
+            mode = int(mode_var.get()) - 1
+            fields = self._component_fields_for_mode(mode)
+            for ax in axes.flat:
+                ax.clear()
+
+            for ax, key in zip(axes.flat, ("ey", "hx", "hz", "hy", "ex", "ez")):
+                data, title, pol = fields[key]
+                norm = np.max(np.abs(data))
+                data = data / norm if norm > 0 else data
+                ax.plot(self._field_x(title), np.real(data), label=f"Re({title})")
+                ax.plot(self._field_x(title), np.abs(data), "--", label=f"|{title}|")
+                ax.set_title(f"{pol}: {title}")
+                ax.set_xlabel("x (mm)")
+                ax.grid(True)
+                ax.legend(loc="best", fontsize=8)
+
+            fig.suptitle(
+                rf"Mode {mode + 1}: TE $n_{{eff}}$ = {self.neff_TE[mode]:.4g}, "
+                rf"TM $n_{{eff}}$ = {self.neff_TM[mode]:.4g}",
+                fontsize=14,
+            )
+            canvas.draw_idle()
 
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
-        controls_frame.columnconfigure(0, weight=0)
-        controls_frame.columnconfigure(1, weight=0)
         controls_frame.columnconfigure(2, weight=1)
-
-        def update_plots(event=None):
-            idx = int(mode_var.get()) - 1
-            x = np.linspace(0, self.x_range * 1e3, self.Nx)
-
-            Ey = self.fields["TE"]["Ey"][:, idx].copy()
-            Hx = self.fields["TE"]["Hx"][:, idx].copy()
-            Hz = self.fields["TE"]["Hz"][:, idx].copy()
-            Ey /= np.max(np.abs(Ey)) + 1e-12
-            Hmag = np.sqrt(np.abs(Hx) ** 2 + np.abs(Hz) ** 2)
-            norm_H = np.max(Hmag) + 1e-12
-            Hx /= norm_H
-            Hz /= norm_H
-
-            Hy = self.fields["TM"]["Hy"][:, idx].copy()
-            Ex = self.fields["TM"]["Ex"][:, idx].copy()
-            Ez = self.fields["TM"]["Ez"][:, idx].copy()
-            Hy /= np.max(np.abs(Hy)) + 1e-12
-            Emag = np.sqrt(np.abs(Ex) ** 2 + np.abs(Ez) ** 2)
-            norm_E = np.max(Emag) + 1e-12
-            Ex /= norm_E
-            Ez /= norm_E
-
-            values = [Ey.real, Hx.real, Hz.real, Hy.real, Ex.real, Ez.real]
-            for line, y in zip(lines, values):
-                line.set_data(x, y)
-                ax = line.axes
-                ax.relim()
-                ax.autoscale_view()
-
-            te_info.set_text(f"Mode {idx + 1}  |  TE n_eff = {self.neff_TE[idx]:.4g}")
-            tm_info.set_text(f"Mode {idx + 1}  |  TM n_eff = {self.neff_TM[idx]:.4g}")
-            canvas.draw_idle()
-
-        update_plots()
         mode_menu.bind("<<ComboboxSelected>>", update_plots)
+        update_plots()
         root.mainloop()

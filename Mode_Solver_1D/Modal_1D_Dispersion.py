@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from Mode_Solver_1D import ModeSolver1D  # Your custom solver
+from Mode_Solver_1D import ModeSolver1D
 
 # Parameters
 freqs = np.linspace(10e9, 100e9, 100)  # 10 GHz to 100 GHz
@@ -12,7 +12,6 @@ x_range = 10e-3
 Nx = 1000
 num_modes = 6
 
-# Initialize a dictionary to store mode data
 data = {"Frequency (GHz)": freqs * 1e-9}
 for m in range(num_modes):
     data[f"Beta_TE_{m + 1}"] = []
@@ -25,16 +24,23 @@ for f in freqs:
     solver = ModeSolver1D(frequency=f, x_range=x_range, Nx=Nx, num_modes=num_modes)
 
     solver.add_layer(10.2, 1, (3e-3, 4.27e-3))
-    solver.add_pec((2.9e-3, 3e-3))
+    solver.add_pmc((2.9e-3, 3e-3))
 
     solver.solve()
 
-    # Append all modes
     for m in range(num_modes):
-        data[f"Beta_TE_{m + 1}"].append(solver.beta_TE[m] if m < len(solver.beta_TE) else np.nan)
-        data[f"Alpha_TE_{m + 1}"].append(solver.alpha_TE[m] if m < len(solver.alpha_TE) else np.nan)
-        data[f"Beta_TM_{m + 1}"].append(solver.beta_TM[m] if m < len(solver.beta_TM) else np.nan)
-        data[f"Alpha_TM_{m + 1}"].append(solver.alpha_TM[m] if m < len(solver.alpha_TM) else np.nan)
+        data[f"Beta_TE_{m + 1}"].append(
+            solver.propagation_constant_TE[m] if m < len(solver.propagation_constant_TE) else np.nan
+        )
+        data[f"Alpha_TE_{m + 1}"].append(
+            solver.attenuation_constant_TE[m] if m < len(solver.attenuation_constant_TE) else np.nan
+        )
+        data[f"Beta_TM_{m + 1}"].append(
+            solver.propagation_constant_TM[m] if m < len(solver.propagation_constant_TM) else np.nan
+        )
+        data[f"Alpha_TM_{m + 1}"].append(
+            solver.attenuation_constant_TM[m] if m < len(solver.attenuation_constant_TM) else np.nan
+        )
 
 # Output folder
 output_dir = Path(__file__).resolve().parent / "example_outputs"

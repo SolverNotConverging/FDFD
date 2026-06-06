@@ -5,47 +5,76 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Rectangle
-from scipy.sparse import bmat, diags, eye, kron
+from scipy.sparse import bmat, coo_matrix, diags
 from scipy.sparse.linalg import eigs
 
 
 class ModeSolver2D:
-    """2D vector FDFD mode solver on an (Nx, Ny) Yee-style grid."""
+    """2D full-vector FDFD mode solver on a true staggered Yee grid."""
 
-    def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True, guess=None):
+    def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, guess=None):
         self.frequency = frequency
         self.x_range = x_range
         self.y_range = y_range
         self.Nx = int(Nx)
         self.Ny = int(Ny)
+        if self.Nx <= 0 or self.Ny <= 0:
+            raise ValueError("Nx and Ny must be positive.")
+
         self.dx = x_range / self.Nx
         self.dy = y_range / self.Ny
-        self.epsilon0 = 8.85e-12
-        self.mu0 = 1.26e-6
+        self.epsilon0 = 8.854187817e-12
+        self.mu0 = 4e-7 * np.pi
         self.c = 1 / np.sqrt(self.epsilon0 * self.mu0)
         self.k_0 = 2 * np.pi * frequency / self.c
         self.dx_normalized = self.k_0 * self.dx
         self.dy_normalized = self.k_0 * self.dy
 
-        shape = (self.Nx, self.Ny)
-        self.eps_r_xx = np.ones(shape, dtype=complex)
-        self.eps_r_yy = np.ones(shape, dtype=complex)
-        self.eps_r_zz = np.ones(shape, dtype=complex)
-        self.mu_r_xx = np.ones(shape, dtype=complex)
-        self.mu_r_yy = np.ones(shape, dtype=complex)
-        self.mu_r_zz = np.ones(shape, dtype=complex)
+        self.shape_cell = (self.Nx, self.Ny)
+        self.shape_ex = (self.Nx, self.Ny + 1)
+        self.shape_ey = (self.Nx + 1, self.Ny)
+        self.shape_ez = (self.Nx + 1, self.Ny + 1)
+        self.shape_hx = self.shape_ey
+        self.shape_hy = self.shape_ex
+        self.shape_hz = self.shape_cell
 
-        self.pec_xx_mask = np.zeros(shape, dtype=bool)
-        self.pec_yy_mask = np.zeros(shape, dtype=bool)
-        self.pec_zz_mask = np.zeros(shape, dtype=bool)
-        self.pmc_xx_mask = np.zeros(shape, dtype=bool)
-        self.pmc_yy_mask = np.zeros(shape, dtype=bool)
-        self.pmc_zz_mask = np.zeros(shape, dtype=bool)
+        self.n_ex = int(np.prod(self.shape_ex))
+        self.n_ey = int(np.prod(self.shape_ey))
+        self.n_ez = int(np.prod(self.shape_ez))
+        self.n_hx = self.n_ey
+        self.n_hy = self.n_ex
+        self.n_hz = self.Nx * self.Ny
+        self.n_e = self.n_ex + self.n_ey
+        self.n_h = self.n_hx + self.n_hy
+
+        shape = self.shape_cell
+        self.cell_eps_r_xx = np.ones(shape, dtype=complex)
+        self.cell_eps_r_yy = np.ones(shape, dtype=complex)
+        self.cell_eps_r_zz = np.ones(shape, dtype=complex)
+        self.cell_mu_r_xx = np.ones(shape, dtype=complex)
+        self.cell_mu_r_yy = np.ones(shape, dtype=complex)
+        self.cell_mu_r_zz = np.ones(shape, dtype=complex)
+        self.material_no_average_mask = np.zeros(shape, dtype=bool)
+
+        self.eps_r_xx = np.ones(self.shape_ex, dtype=complex)
+        self.eps_r_yy = np.ones(self.shape_ey, dtype=complex)
+        self.eps_r_zz = np.ones(self.shape_ez, dtype=complex)
+        self.mu_r_xx = np.ones(self.shape_hx, dtype=complex)
+        self.mu_r_yy = np.ones(self.shape_hy, dtype=complex)
+        self.mu_r_zz = np.ones(self.shape_hz, dtype=complex)
+
+        self.pec_xx_mask = np.zeros(self.shape_ex, dtype=bool)
+        self.pec_yy_mask = np.zeros(self.shape_ey, dtype=bool)
+        self.pec_zz_mask = np.zeros(self.shape_ez, dtype=bool)
+        self.pmc_xx_mask = np.zeros(self.shape_hx, dtype=bool)
+        self.pmc_yy_mask = np.zeros(self.shape_hy, dtype=bool)
+        self.pmc_zz_mask = np.zeros(self.shape_hz, dtype=bool)
         self._pec_regions = []
         self._pmc_regions = []
 
         self.num_modes = int(num_modes)
-        self.mode_filter = bool(mode_filter)
+        if self.num_modes <= 0:
+            raise ValueError("num_modes must be positive.")
         self.guess = guess
         self._auto_guess = guess is None
         if self._auto_guess:
@@ -63,8 +92,8 @@ class ModeSolver2D:
     def _default_guess(self):
         return -max(
             self._max_magnitude(arr)
-            for arr in [self.eps_r_xx, self.eps_r_yy, self.eps_r_zz,
-                        self.mu_r_xx, self.mu_r_yy, self.mu_r_zz]
+            for arr in [self.cell_eps_r_xx, self.cell_eps_r_yy, self.cell_eps_r_zz,
+                        self.cell_mu_r_xx, self.cell_mu_r_yy, self.cell_mu_r_zz]
         )
 
     def _resolve_eigs_guess(self, sigma):
@@ -80,10 +109,6 @@ class ModeSolver2D:
         self.neff = None
         self.propagation_constant = None
         self.attenuation_constant = None
-        self.spurious_scores = None
-        self.accepted_candidate_indices = None
-        self.rejected_candidate_indices = None
-        self.unselected_candidate_indices = None
         for name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
             if hasattr(self, name):
                 delattr(self, name)
@@ -128,118 +153,112 @@ class ModeSolver2D:
             raise ValueError("Region is out of bounds of the simulation grid.")
         return slice(x0, x1), slice(y0, y1)
 
-    def _component_array(self, prefix, component):
+    def _cell_material_array(self, prefix, component):
         if prefix == "eps":
-            if component == "xx":
-                return self.eps_r_xx
-            if component == "yy":
-                return self.eps_r_yy
-            if component == "zz":
-                return self.eps_r_zz
+            return {"xx": self.cell_eps_r_xx, "yy": self.cell_eps_r_yy, "zz": self.cell_eps_r_zz}[component]
         if prefix == "mu":
-            if component == "xx":
-                return self.mu_r_xx
-            if component == "yy":
-                return self.mu_r_yy
-            if component == "zz":
-                return self.mu_r_zz
-        if prefix == "pec":
-            if component == "xx":
-                return self.pec_xx_mask
-            if component == "yy":
-                return self.pec_yy_mask
-            if component == "zz":
-                return self.pec_zz_mask
-        if prefix == "pmc":
-            if component == "xx":
-                return self.pmc_xx_mask
-            if component == "yy":
-                return self.pmc_yy_mask
-            if component == "zz":
-                return self.pmc_zz_mask
+            return {"xx": self.cell_mu_r_xx, "yy": self.cell_mu_r_yy, "zz": self.cell_mu_r_zz}[component]
         raise ValueError(f"Unknown {prefix} component {component!r}.")
 
-    def add_rectangle(self, epsilon, mu, x_range, y_range):
-        """Add a rectangular isotropic or diagonal-anisotropic material region."""
+    def _component_array(self, prefix, component):
+        if prefix == "pec":
+            return {"xx": self.pec_xx_mask, "yy": self.pec_yy_mask, "zz": self.pec_zz_mask}[component]
+        if prefix == "pmc":
+            return {"xx": self.pmc_xx_mask, "yy": self.pmc_yy_mask, "zz": self.pmc_zz_mask}[component]
+        raise ValueError(f"Unknown {prefix} component {component!r}.")
+
+    def add_rectangle(self, epsilon, mu, x_range, y_range, *, average=True):
+        """Add a rectangular isotropic or diagonal-anisotropic material region on the cell grid."""
         sl_x, sl_y = self._region_slices(x_range, y_range)
         epsilon = self._normalise_three("epsilon", epsilon)
         mu = self._normalise_three("mu", mu)
 
-        self.eps_r_xx[sl_x, sl_y] = epsilon[0]
-        self.eps_r_yy[sl_x, sl_y] = epsilon[1]
-        self.eps_r_zz[sl_x, sl_y] = epsilon[2]
-        self.mu_r_xx[sl_x, sl_y] = mu[0]
-        self.mu_r_yy[sl_x, sl_y] = mu[1]
-        self.mu_r_zz[sl_x, sl_y] = mu[2]
+        self.cell_eps_r_xx[sl_x, sl_y] = epsilon[0]
+        self.cell_eps_r_yy[sl_x, sl_y] = epsilon[1]
+        self.cell_eps_r_zz[sl_x, sl_y] = epsilon[2]
+        self.cell_mu_r_xx[sl_x, sl_y] = mu[0]
+        self.cell_mu_r_yy[sl_x, sl_y] = mu[1]
+        self.cell_mu_r_zz[sl_x, sl_y] = mu[2]
+        if average:
+            self.material_no_average_mask[sl_x, sl_y] = False
+        else:
+            self.material_no_average_mask[sl_x, sl_y] = True
+        self.update_component_materials()
         self._invalidate_solution()
 
     def add_pec(self, x_range, y_range, components=None):
-        """Add a PEC region.
-
-        By default the region is interpreted as a cell-centered PEC object and
-        converted to component-specific Yee masks, matching the gprMax solver.
-        Pass components=(...) to constrain selected electric components directly.
-        """
+        """Add a PEC cell region and expand it onto surrounding Yee electric components."""
         sl_x, sl_y = self._region_slices(x_range, y_range)
         self._pec_regions.append((sl_x, sl_y))
-        cell_mask = np.zeros((self.Nx, self.Ny), dtype=bool)
+        cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x, sl_y] = True
-        if components is None:
-            xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask)
-            self.pec_xx_mask |= xx_mask
-            self.pec_yy_mask |= yy_mask
-            self.pec_zz_mask |= zz_mask
-        else:
-            for comp in self._validate_components(components):
-                self._component_array("pec", comp)[sl_x, sl_y] = True
+        xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="electric")
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+            if comp in selected:
+                self._component_array("pec", comp)[:] |= mask
+        self._effective_materials_and_masks()
         self._invalidate_solution()
 
     def add_pmc(self, x_range, y_range, components=None):
-        """Add a PMC region.
-
-        By default the region is interpreted as a cell-centered PMC object and
-        converted to component-specific Yee masks. Pass components=(...) to
-        constrain selected magnetic components directly.
-        """
+        """Add a PMC cell region and expand it onto surrounding Yee magnetic components."""
         sl_x, sl_y = self._region_slices(x_range, y_range)
         self._pmc_regions.append((sl_x, sl_y))
-        cell_mask = np.zeros((self.Nx, self.Ny), dtype=bool)
+        cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x, sl_y] = True
-        if components is None:
-            xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask)
-            self.pmc_xx_mask |= xx_mask
-            self.pmc_yy_mask |= yy_mask
-            self.pmc_zz_mask |= zz_mask
-        else:
-            for comp in self._validate_components(components):
-                self._component_array("pmc", comp)[sl_x, sl_y] = True
+        xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="magnetic")
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+            if comp in selected:
+                self._component_array("pmc", comp)[:] |= mask
+        self._effective_materials_and_masks()
         self._invalidate_solution()
 
-    @staticmethod
-    def component_masks_from_cell_mask(cell_mask):
+    def component_masks_from_cell_mask(self, cell_mask, field="electric"):
+        """Expand a cell mask to the component locations surrounding each marked cell."""
         mask = np.asarray(cell_mask, dtype=bool)
+        if mask.shape != self.shape_cell:
+            raise ValueError(f"cell_mask must have shape {self.shape_cell}.")
 
-        xx_mask = mask.copy()
-        xx_mask[:, 1:] |= mask[:, :-1] & ~mask[:, 1:]
-        xx_mask[:, :-1] |= mask[:, 1:] & ~mask[:, :-1]
+        if field == "electric":
+            xx_mask = np.zeros(self.shape_ex, dtype=bool)
+            yy_mask = np.zeros(self.shape_ey, dtype=bool)
+            zz_mask = np.zeros(self.shape_ez, dtype=bool)
+            ii, jj = np.nonzero(mask)
+            xx_mask[ii, jj] = True
+            xx_mask[ii, jj + 1] = True
+            yy_mask[ii, jj] = True
+            yy_mask[ii + 1, jj] = True
+            zz_mask[ii, jj] = True
+            zz_mask[ii + 1, jj] = True
+            zz_mask[ii, jj + 1] = True
+            zz_mask[ii + 1, jj + 1] = True
+            return xx_mask, yy_mask, zz_mask
 
-        yy_mask = mask.copy()
-        yy_mask[1:, :] |= mask[:-1, :] & ~mask[1:, :]
-        yy_mask[:-1, :] |= mask[1:, :] & ~mask[:-1, :]
+        if field == "magnetic":
+            xx_mask = np.zeros(self.shape_hx, dtype=bool)
+            yy_mask = np.zeros(self.shape_hy, dtype=bool)
+            zz_mask = np.zeros(self.shape_hz, dtype=bool)
+            ii, jj = np.nonzero(mask)
+            xx_mask[ii, jj] = True
+            xx_mask[ii + 1, jj] = True
+            yy_mask[ii, jj] = True
+            yy_mask[ii, jj + 1] = True
+            zz_mask[ii, jj] = True
+            return xx_mask, yy_mask, zz_mask
 
-        zz_mask = xx_mask | yy_mask
-        return xx_mask, yy_mask, zz_mask
+        raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_pml(self, pml_width=50, n=3, sigma_max=5, direction="all"):
-        """Add a simple uniaxial PML by stretching epsilon and mu tensors."""
+        """Add a simple uniaxial PML by stretching cell-centered epsilon and mu tensors."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
         if direction not in ("x-", "x+", "x", "y-", "y+", "y", "all"):
             raise ValueError("direction must be one of 'x-', 'x+', 'x', 'y-', 'y+', 'y', or 'all'.")
 
-        sigma_x = np.zeros((self.Nx, self.Ny), dtype=float)
-        sigma_y = np.zeros((self.Nx, self.Ny), dtype=float)
+        sigma_x = np.zeros(self.shape_cell, dtype=float)
+        sigma_y = np.zeros(self.shape_cell, dtype=float)
 
         if direction in ("x-", "x", "all"):
             for i in range(min(pml_width, self.Nx)):
@@ -248,23 +267,23 @@ class ModeSolver2D:
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1, :] = sigma_max * ((pml_width - i) / pml_width) ** n
         if direction in ("y-", "y", "all"):
-            for i in range(min(pml_width, self.Ny)):
-                sigma_y[:, i] = sigma_max * ((pml_width - i) / pml_width) ** n
+            for j in range(min(pml_width, self.Ny)):
+                sigma_y[:, j] = sigma_max * ((pml_width - j) / pml_width) ** n
         if direction in ("y+", "y", "all"):
-            for i in range(min(pml_width, self.Ny)):
-                sigma_y[:, -i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
+            for j in range(min(pml_width, self.Ny)):
+                sigma_y[:, -j - 1] = sigma_max * ((pml_width - j) / pml_width) ** n
 
-        eps0 = 8.854187817e-12
         omega = 2 * np.pi * self.frequency
-        Sx = 1.0 + 1j * sigma_x / (eps0 * omega)
-        Sy = 1.0 + 1j * sigma_y / (eps0 * omega)
+        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * omega)
+        Sy = 1.0 + 1j * sigma_y / (self.epsilon0 * omega)
 
-        self.eps_r_xx *= Sy / Sx
-        self.eps_r_yy *= Sx / Sy
-        self.eps_r_zz *= Sx * Sy
-        self.mu_r_xx *= Sy / Sx
-        self.mu_r_yy *= Sx / Sy
-        self.mu_r_zz *= Sx * Sy
+        self.cell_eps_r_xx *= Sy / Sx
+        self.cell_eps_r_yy *= Sx / Sy
+        self.cell_eps_r_zz *= Sx * Sy
+        self.cell_mu_r_xx *= Sy / Sx
+        self.cell_mu_r_yy *= Sx / Sy
+        self.cell_mu_r_zz *= Sx * Sy
+        self.update_component_materials()
         self._invalidate_solution()
 
     def add_UPML(self, pml_width=50, n=3, sigma_max=5, direction="all"):
@@ -298,116 +317,269 @@ class ModeSolver2D:
             thickness = thickness_cells * self.dy
 
         sl_x, sl_y = self._region_slices(x_range, y_range)
-        eps0 = 8.854187817e-12
-        delta_eps = -1j / (2 * np.pi * self.frequency * eps0 * thickness * Zs)
+        delta_eps = -1j / (2 * np.pi * self.frequency * self.epsilon0 * thickness * Zs)
         for comp in self._validate_components(eps_components):
-            self._component_array("eps", comp)[sl_x, sl_y] += delta_eps
+            self._cell_material_array("eps", comp)[sl_x, sl_y] += delta_eps
+        self.update_component_materials()
         self._invalidate_solution()
 
-    def _yeeder2d(self):
-        """Generate derivative matrices on a 2D Yee grid."""
-        def diff_operator(n):
-            values = np.ones(n)
-            return diags([-values, values], [0, 1], shape=(n, n)).tocsr()
+    @staticmethod
+    def _flat_index(i, j, nx):
+        return i + j * nx
 
-        Ix = eye(self.Nx, format="csr")
-        Iy = eye(self.Ny, format="csr")
-        self.DEX = kron(Iy, diff_operator(self.Nx), format="csr") / self.dx_normalized
-        self.DEY = kron(diff_operator(self.Ny), Ix, format="csr") / self.dy_normalized
-        self.DHX = -self.DEX.conj().T
-        self.DHY = -self.DEY.conj().T
-        return self.DEX, self.DEY, self.DHX, self.DHY
+    def _difference_matrix_x(self, in_shape, out_shape, scale, forward=True):
+        rows = []
+        cols = []
+        data = []
+        in_nx, _ = in_shape
+        out_nx, out_ny = out_shape
+        for j in range(out_ny):
+            for i in range(out_nx):
+                row = self._flat_index(i, j, out_nx)
+                entries = ((i + 1, j, 1.0), (i, j, -1.0)) if forward else ((i, j, 1.0), (i - 1, j, -1.0))
+                for ci, cj, value in entries:
+                    if 0 <= ci < in_shape[0] and 0 <= cj < in_shape[1]:
+                        rows.append(row)
+                        cols.append(self._flat_index(ci, cj, in_nx))
+                        data.append(value / scale)
+        return coo_matrix((data, (rows, cols)), shape=(out_nx * out_ny, in_shape[0] * in_shape[1])).tocsr()
+
+    def _difference_matrix_y(self, in_shape, out_shape, scale, forward=True):
+        rows = []
+        cols = []
+        data = []
+        in_nx, _ = in_shape
+        out_nx, out_ny = out_shape
+        for j in range(out_ny):
+            for i in range(out_nx):
+                row = self._flat_index(i, j, out_nx)
+                entries = ((i, j + 1, 1.0), (i, j, -1.0)) if forward else ((i, j, 1.0), (i, j - 1, -1.0))
+                for ci, cj, value in entries:
+                    if 0 <= ci < in_shape[0] and 0 <= cj < in_shape[1]:
+                        rows.append(row)
+                        cols.append(self._flat_index(ci, cj, in_nx))
+                        data.append(value / scale)
+        return coo_matrix((data, (rows, cols)), shape=(out_nx * out_ny, in_shape[0] * in_shape[1])).tocsr()
+
+    def _yeeder2d(self):
+        """Generate rectangular derivative matrices between true Yee component grids."""
+        dx = self.dx_normalized
+        dy = self.dy_normalized
+
+        self.DEX_EZ_TO_EX = self._difference_matrix_x(self.shape_ez, self.shape_ex, dx, forward=True)
+        self.DEY_EZ_TO_EY = self._difference_matrix_y(self.shape_ez, self.shape_ey, dy, forward=True)
+        self.DEX_EY_TO_HZ = self._difference_matrix_x(self.shape_ey, self.shape_hz, dx, forward=True)
+        self.DEY_EX_TO_HZ = self._difference_matrix_y(self.shape_ex, self.shape_hz, dy, forward=True)
+
+        self.DHX_HY_TO_EZ = -self.DEX_EZ_TO_EX.conj().T
+        self.DHY_HX_TO_EZ = -self.DEY_EZ_TO_EY.conj().T
+        self.DHX_HZ_TO_HX = -self.DEX_EY_TO_HZ.conj().T
+        self.DHY_HZ_TO_HY = -self.DEY_EX_TO_HZ.conj().T
+
+        self.DEX = self.DEX_EY_TO_HZ
+        self.DEY = self.DEY_EX_TO_HZ
+        self.DHX = self.DHX_HY_TO_EZ
+        self.DHY = self.DHY_HX_TO_EZ
+        return (
+            self.DEX_EZ_TO_EX,
+            self.DEY_EZ_TO_EY,
+            self.DEX_EY_TO_HZ,
+            self.DEY_EX_TO_HZ,
+            self.DHX_HY_TO_EZ,
+            self.DHY_HX_TO_EZ,
+            self.DHX_HZ_TO_HX,
+            self.DHY_HZ_TO_HY,
+        )
+
+    def _average_to_ex(self, values, no_average_mask=None):
+        out = np.zeros(self.shape_ex, dtype=complex)
+        counts = np.zeros(self.shape_ex, dtype=float)
+        out[:, :self.Ny] += values
+        counts[:, :self.Ny] += 1
+        out[:, 1:] += values
+        counts[:, 1:] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj = np.nonzero(no_average_mask)
+            out[ii, jj] = values[ii, jj]
+            out[ii, jj + 1] = values[ii, jj]
+        return out
+
+    def _average_to_ey(self, values, no_average_mask=None):
+        out = np.zeros(self.shape_ey, dtype=complex)
+        counts = np.zeros(self.shape_ey, dtype=float)
+        out[:self.Nx, :] += values
+        counts[:self.Nx, :] += 1
+        out[1:, :] += values
+        counts[1:, :] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj = np.nonzero(no_average_mask)
+            out[ii, jj] = values[ii, jj]
+            out[ii + 1, jj] = values[ii, jj]
+        return out
+
+    def _average_to_ez(self, values, no_average_mask=None):
+        out = np.zeros(self.shape_ez, dtype=complex)
+        counts = np.zeros(self.shape_ez, dtype=float)
+        out[:self.Nx, :self.Ny] += values
+        counts[:self.Nx, :self.Ny] += 1
+        out[1:, :self.Ny] += values
+        counts[1:, :self.Ny] += 1
+        out[:self.Nx, 1:] += values
+        counts[:self.Nx, 1:] += 1
+        out[1:, 1:] += values
+        counts[1:, 1:] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj = np.nonzero(no_average_mask)
+            out[ii, jj] = values[ii, jj]
+            out[ii + 1, jj] = values[ii, jj]
+            out[ii, jj + 1] = values[ii, jj]
+            out[ii + 1, jj + 1] = values[ii, jj]
+        return out
+
+    def _material_on_fields(self, eps_r_xx, eps_r_yy, eps_r_zz, mu_r_xx, mu_r_yy, mu_r_zz, no_average_mask):
+        return {
+            "eps_xx": self._average_to_ex(eps_r_xx, no_average_mask),
+            "eps_yy": self._average_to_ey(eps_r_yy, no_average_mask),
+            "eps_zz": self._average_to_ez(eps_r_zz, no_average_mask),
+            "mu_xx": self._average_to_ey(mu_r_xx, no_average_mask),
+            "mu_yy": self._average_to_ex(mu_r_yy, no_average_mask),
+            "mu_zz": mu_r_zz.copy(),
+        }
+
+    def _set_component_materials(self, materials):
+        self.eps_r_xx = materials["eps_xx"].copy()
+        self.eps_r_yy = materials["eps_yy"].copy()
+        self.eps_r_zz = materials["eps_zz"].copy()
+        self.mu_r_xx = materials["mu_xx"].copy()
+        self.mu_r_yy = materials["mu_yy"].copy()
+        self.mu_r_zz = materials["mu_zz"].copy()
+
+    def update_component_materials(self):
+        """Refresh component-location material tensors from the cell-centered source grid."""
+        materials = self._material_on_fields(
+            self.cell_eps_r_xx,
+            self.cell_eps_r_yy,
+            self.cell_eps_r_zz,
+            self.cell_mu_r_xx,
+            self.cell_mu_r_yy,
+            self.cell_mu_r_zz,
+            self.material_no_average_mask,
+        )
+        self._set_component_materials(materials)
+        return materials
 
     def _effective_materials_and_masks(self):
-        eps_r_xx = self.eps_r_xx.copy()
-        eps_r_yy = self.eps_r_yy.copy()
-        eps_r_zz = self.eps_r_zz.copy()
-        mu_r_xx = self.mu_r_xx.copy()
-        mu_r_yy = self.mu_r_yy.copy()
-        mu_r_zz = self.mu_r_zz.copy()
+        eps_r_xx = self.cell_eps_r_xx.copy()
+        eps_r_yy = self.cell_eps_r_yy.copy()
+        eps_r_zz = self.cell_eps_r_zz.copy()
+        mu_r_xx = self.cell_mu_r_xx.copy()
+        mu_r_yy = self.cell_mu_r_yy.copy()
+        mu_r_zz = self.cell_mu_r_zz.copy()
+        no_average_mask = self.material_no_average_mask.copy()
 
-        pec_xx_mask = self.pec_xx_mask | ~np.isfinite(eps_r_xx)
-        pec_yy_mask = self.pec_yy_mask | ~np.isfinite(eps_r_yy)
-        pec_zz_mask = self.pec_zz_mask | ~np.isfinite(eps_r_zz)
-        pmc_xx_mask = self.pmc_xx_mask | ~np.isfinite(mu_r_xx)
-        pmc_yy_mask = self.pmc_yy_mask | ~np.isfinite(mu_r_yy)
-        pmc_zz_mask = self.pmc_zz_mask | ~np.isfinite(mu_r_zz)
+        pec_xx_mask = self.pec_xx_mask.copy()
+        pec_yy_mask = self.pec_yy_mask.copy()
+        pec_zz_mask = self.pec_zz_mask.copy()
+        pmc_xx_mask = self.pmc_xx_mask.copy()
+        pmc_yy_mask = self.pmc_yy_mask.copy()
+        pmc_zz_mask = self.pmc_zz_mask.copy()
 
-        eps_r_xx[pec_xx_mask] = 1.0 + 0j
-        eps_r_yy[pec_yy_mask] = 1.0 + 0j
-        eps_r_zz[pec_zz_mask] = 1.0 + 0j
-        mu_r_xx[pmc_xx_mask] = 1.0 + 0j
-        mu_r_yy[pmc_yy_mask] = 1.0 + 0j
-        mu_r_zz[pmc_zz_mask] = 1.0 + 0j
+        electric_targets = {"xx": pec_xx_mask, "yy": pec_yy_mask, "zz": pec_zz_mask}
+        magnetic_targets = {"xx": pmc_xx_mask, "yy": pmc_yy_mask, "zz": pmc_zz_mask}
+        mask_index = {"xx": 0, "yy": 1, "zz": 2}
+        for component, values in (("xx", eps_r_xx), ("yy", eps_r_yy), ("zz", eps_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                masks = self.component_masks_from_cell_mask(bad_cells, field="electric")
+                electric_targets[component][:] |= masks[mask_index[component]]
+                values[bad_cells] = 1.0 + 0j
 
-        return (
+        for component, values in (("xx", mu_r_xx), ("yy", mu_r_yy), ("zz", mu_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                masks = self.component_masks_from_cell_mask(bad_cells, field="magnetic")
+                magnetic_targets[component][:] |= masks[mask_index[component]]
+                values[bad_cells] = 1.0 + 0j
+
+        materials = self._material_on_fields(
             eps_r_xx,
             eps_r_yy,
             eps_r_zz,
             mu_r_xx,
             mu_r_yy,
             mu_r_zz,
-            pec_xx_mask,
-            pec_yy_mask,
-            pec_zz_mask,
-            pmc_xx_mask,
-            pmc_yy_mask,
-            pmc_zz_mask,
+            no_average_mask,
         )
+        materials["eps_xx"][pec_xx_mask] = 1.0 + 0j
+        materials["eps_yy"][pec_yy_mask] = 1.0 + 0j
+        materials["eps_zz"][pec_zz_mask] = 1.0 + 0j
+        materials["mu_xx"][pmc_xx_mask] = 1.0 + 0j
+        materials["mu_yy"][pmc_yy_mask] = 1.0 + 0j
+        materials["mu_zz"][pmc_zz_mask] = 1.0 + 0j
+        self._set_component_materials(materials)
+
+        return materials, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask
 
     def _inverse_diag_on_free(self, values, constrained_mask):
         flat = values.ravel(order="F")
         constrained = constrained_mask.ravel(order="F")
         inverse = np.zeros_like(flat, dtype=complex)
         inverse[~constrained] = 1.0 / flat[~constrained]
-        return diags(inverse)
+        return diags(inverse, format="csr")
+
+    @staticmethod
+    def _diag(values):
+        return diags(values.ravel(order="F"), format="csr")
+
+    def _unflatten_modes(self, flat_modes, shape):
+        return np.asarray(flat_modes, dtype=complex).reshape((*shape, flat_modes.shape[1]), order="F")
 
     def _zero_constrained_fields(self, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask):
-        self.Ex[pec_xx_mask.ravel(order="F"), :] = 0.0
-        self.Ey[pec_yy_mask.ravel(order="F"), :] = 0.0
-        self.Ez[pec_zz_mask.ravel(order="F"), :] = 0.0
-        self.Hx[pmc_xx_mask.ravel(order="F"), :] = 0.0
-        self.Hy[pmc_yy_mask.ravel(order="F"), :] = 0.0
-        self.Hz[pmc_zz_mask.ravel(order="F"), :] = 0.0
+        self.Ex[pec_xx_mask, :] = 0.0
+        self.Ey[pec_yy_mask, :] = 0.0
+        self.Ez[pec_zz_mask, :] = 0.0
+        self.Hx[pmc_xx_mask, :] = 0.0
+        self.Hy[pmc_yy_mask, :] = 0.0
+        self.Hz[pmc_zz_mask, :] = 0.0
 
-    def solve(self, sigma=None, extra_modes=8, max_pec_neighbor_energy_fraction=0.35):
-        """Solve for transverse modes and recover all six field components."""
+    def solve(self, sigma=None):
+        """Solve for transverse modes and recover all six staggered field components."""
         sigma = self._resolve_eigs_guess(sigma)
+        materials, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask = (
+            self._effective_materials_and_masks()
+        )
+
+        eps_xx_diag = self._diag(materials["eps_xx"])
+        eps_yy_diag = self._diag(materials["eps_yy"])
+        mu_xx_diag = self._diag(materials["mu_xx"])
+        mu_yy_diag = self._diag(materials["mu_yy"])
+        eps_zz_inv = self._inverse_diag_on_free(materials["eps_zz"], pec_zz_mask)
+        mu_zz_inv = self._inverse_diag_on_free(materials["mu_zz"], pmc_zz_mask)
 
         (
-            eps_r_xx,
-            eps_r_yy,
-            eps_r_zz,
-            mu_r_xx,
-            mu_r_yy,
-            mu_r_zz,
-            pec_xx_mask,
-            pec_yy_mask,
-            pec_zz_mask,
-            pmc_xx_mask,
-            pmc_yy_mask,
-            pmc_zz_mask,
-        ) = self._effective_materials_and_masks()
+            d_ez_ex,
+            d_ez_ey,
+            d_ey_hz,
+            d_ex_hz,
+            d_hy_ez,
+            d_hx_ez,
+            d_hz_hx,
+            d_hz_hy,
+        ) = self._yeeder2d()
 
-        eps_r_xx_diag = diags(eps_r_xx.ravel(order="F"))
-        eps_r_yy_diag = diags(eps_r_yy.ravel(order="F"))
-        mu_r_xx_diag = diags(mu_r_xx.ravel(order="F"))
-        mu_r_yy_diag = diags(mu_r_yy.ravel(order="F"))
-
-        DEX, DEY, DHX, DHY = self._yeeder2d()
-        eps_r_zz_inv = self._inverse_diag_on_free(eps_r_zz, pec_zz_mask)
-        mu_r_zz_inv = self._inverse_diag_on_free(mu_r_zz, pmc_zz_mask)
-
-        P11 = DEX @ eps_r_zz_inv @ DHY
-        P12 = -(DEX @ eps_r_zz_inv @ DHX + mu_r_yy_diag)
-        P21 = DEY @ eps_r_zz_inv @ DHY + mu_r_xx_diag
-        P22 = -DEY @ eps_r_zz_inv @ DHX
+        P11 = d_ez_ex @ eps_zz_inv @ d_hx_ez
+        P12 = -(d_ez_ex @ eps_zz_inv @ d_hy_ez + mu_yy_diag)
+        P21 = d_ez_ey @ eps_zz_inv @ d_hx_ez + mu_xx_diag
+        P22 = -d_ez_ey @ eps_zz_inv @ d_hy_ez
         P = bmat([[P11, P12], [P21, P22]], format="csr")
 
-        Q11 = DHX @ mu_r_zz_inv @ DEY
-        Q12 = -(DHX @ mu_r_zz_inv @ DEX + eps_r_yy_diag)
-        Q21 = DHY @ mu_r_zz_inv @ DEY + eps_r_xx_diag
-        Q22 = -DHY @ mu_r_zz_inv @ DEX
+        Q11 = d_hz_hx @ mu_zz_inv @ d_ex_hz
+        Q12 = -(d_hz_hx @ mu_zz_inv @ d_ey_hz + eps_yy_diag)
+        Q21 = d_hz_hy @ mu_zz_inv @ d_ex_hz + eps_xx_diag
+        Q22 = -d_hz_hy @ mu_zz_inv @ d_ey_hz
         Q = bmat([[Q11, Q12], [Q21, Q22]], format="csr")
 
         free_ex = ~pec_xx_mask.ravel(order="F")
@@ -426,102 +598,49 @@ class ModeSolver2D:
                 f"Not enough unconstrained electric DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes."
             )
 
-        candidate_modes = self.num_modes + max(0, int(extra_modes)) if self.mode_filter else self.num_modes
-        candidate_modes = min(candidate_modes, Omega.shape[0] - 1)
-        if candidate_modes < self.num_modes:
-            raise ValueError(
-                f"Not enough unconstrained electric DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes."
-            )
-
-        eigenvalues, eigenvectors_reduced = eigs(Omega, k=candidate_modes, sigma=sigma)
-        eigenvectors = np.zeros((2 * self.Nx * self.Ny, candidate_modes), dtype=complex)
+        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma)
+        eigenvectors = np.zeros((self.n_e, self.num_modes), dtype=complex)
         eigenvectors[free_exy, :] = eigenvectors_reduced
 
         order = np.argsort(np.real(eigenvalues))
-        eigenvalues = eigenvalues[order]
-        eigenvectors = eigenvectors[:, order]
-        if self.mode_filter:
-            keep_indices = self._select_physical_candidates(
-                eigenvectors,
-                self.num_modes,
-                max_pec_neighbor_energy_fraction,
-                pec_xx_mask,
-                pec_yy_mask,
-            )
-        else:
-            keep_indices = np.arange(self.num_modes)
-            self.spurious_scores = np.zeros(candidate_modes, dtype=np.float64)
-            self.accepted_candidate_indices = keep_indices.copy()
-            self.rejected_candidate_indices = np.array([], dtype=int)
-            self.unselected_candidate_indices = np.array([], dtype=int)
-
-        self.eigenvalues = eigenvalues[keep_indices]
-        Exy = eigenvectors[:, keep_indices]
-        self.eigenvectors = Exy
+        self.eigenvalues = eigenvalues[order]
+        Exy_flat = eigenvectors[:, order]
+        self.eigenvectors = Exy_flat
         self.neff = self._passive_positive_neff(-self.eigenvalues)
         self.propagation_constant = np.real(self.neff)
         self.attenuation_constant = np.imag(self.neff)
 
-        eigenvalues_inv = diags(np.sqrt(self.eigenvalues)).power(-1)
-        self.Ex = np.asarray(Exy[: self.Nx * self.Ny, :], dtype=complex)
-        self.Ey = np.asarray(Exy[self.Nx * self.Ny:, :], dtype=complex)
+        sqrt_eigenvalues = np.sqrt(self.eigenvalues)
+        if np.any(np.abs(sqrt_eigenvalues) < 1e-300):
+            raise ValueError("Encountered a near-zero eigenvalue while reconstructing magnetic fields.")
+        eigenvalues_inv = diags(1.0 / sqrt_eigenvalues, format="csr")
 
-        Hxy_reduced = Q_reduced @ Exy @ eigenvalues_inv
-        Hxy = np.zeros((2 * self.Nx * self.Ny, self.num_modes), dtype=complex)
-        Hxy[free_hxy, :] = Hxy_reduced
-        self.Hx = np.asarray(Hxy[: self.Nx * self.Ny, :], dtype=complex)
-        self.Hy = np.asarray(Hxy[self.Nx * self.Ny:, :], dtype=complex)
-        self.Ez = np.asarray(eps_r_zz_inv @ (DHX @ self.Hy - DHY @ self.Hx), dtype=complex)
-        self.Hz = np.asarray(mu_r_zz_inv @ (DEX @ self.Ey - DEY @ self.Ex), dtype=complex)
+        ex_flat = np.asarray(Exy_flat[:self.n_ex, :], dtype=complex)
+        ey_flat = np.asarray(Exy_flat[self.n_ex:, :], dtype=complex)
+        Hxy_reduced = Q_reduced @ Exy_flat @ eigenvalues_inv
+        Hxy_flat = np.zeros((self.n_h, self.num_modes), dtype=complex)
+        Hxy_flat[free_hxy, :] = Hxy_reduced
+        hx_flat = np.asarray(Hxy_flat[:self.n_hx, :], dtype=complex)
+        hy_flat = np.asarray(Hxy_flat[self.n_hx:, :], dtype=complex)
+        ez_flat = np.asarray(eps_zz_inv @ (d_hy_ez @ hy_flat - d_hx_ez @ hx_flat), dtype=complex)
+        hz_flat = np.asarray(mu_zz_inv @ (d_ey_hz @ ey_flat - d_ex_hz @ ex_flat), dtype=complex)
+
+        self.Ex = self._unflatten_modes(ex_flat, self.shape_ex)
+        self.Ey = self._unflatten_modes(ey_flat, self.shape_ey)
+        self.Ez = self._unflatten_modes(ez_flat, self.shape_ez)
+        self.Hx = self._unflatten_modes(hx_flat, self.shape_hx)
+        self.Hy = self._unflatten_modes(hy_flat, self.shape_hy)
+        self.Hz = self._unflatten_modes(hz_flat, self.shape_hz)
         self._zero_constrained_fields(pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask)
-
-    def _select_physical_candidates(self, eigenvectors, num_modes, max_pec_neighbor_energy_fraction, pec_xx_mask, pec_yy_mask):
-        scores = self._pec_neighbor_energy_scores(eigenvectors, pec_xx_mask, pec_yy_mask)
-        candidate_indices = np.arange(eigenvectors.shape[1])
-        accepted = candidate_indices[scores <= max_pec_neighbor_energy_fraction]
-        rejected = candidate_indices[scores > max_pec_neighbor_energy_fraction]
-        if accepted.size < num_modes:
-            rejected_by_score = rejected[np.argsort(scores[rejected])]
-            accepted = np.concatenate((accepted, rejected_by_score[:num_modes - accepted.size]))
-        keep_indices = np.sort(accepted[:num_modes])
-        self.spurious_scores = scores
-        self.accepted_candidate_indices = keep_indices.copy()
-        self.rejected_candidate_indices = rejected.copy()
-        self.unselected_candidate_indices = np.setdiff1d(candidate_indices, keep_indices, assume_unique=True)
-        return keep_indices
-
-    def _pec_neighbor_energy_scores(self, eigenvectors, pec_xx_mask, pec_yy_mask):
-        ex = eigenvectors[: self.Nx * self.Ny, :]
-        ey = eigenvectors[self.Nx * self.Ny:, :]
-        total_energy = np.sum(np.abs(ex) ** 2, axis=0) + np.sum(np.abs(ey) ** 2, axis=0)
-        near_xx = self._dilate_mask(pec_xx_mask).ravel(order="F")
-        near_yy = self._dilate_mask(pec_yy_mask).ravel(order="F")
-        pec_neighbor_energy = np.sum(np.abs(ex[near_xx, :]) ** 2, axis=0)
-        pec_neighbor_energy += np.sum(np.abs(ey[near_yy, :]) ** 2, axis=0)
-        scores = np.zeros(eigenvectors.shape[1], dtype=np.float64)
-        valid = total_energy > 1e-300
-        scores[valid] = np.real(pec_neighbor_energy[valid] / total_energy[valid])
-        scores[~valid] = np.inf
-        return scores
-
-    @staticmethod
-    def _dilate_mask(mask):
-        mask = np.asarray(mask, dtype=bool)
-        dilated = mask.copy()
-        dilated[1:, :] |= mask[:-1, :]
-        dilated[:-1, :] |= mask[1:, :]
-        dilated[:, 1:] |= mask[:, :-1]
-        dilated[:, :-1] |= mask[:, 1:]
-        return dilated
 
     def _has_lossy_material(self):
         for values in (
-                self.eps_r_xx,
-                self.eps_r_yy,
-                self.eps_r_zz,
-                self.mu_r_xx,
-                self.mu_r_yy,
-                self.mu_r_zz,
+                self.cell_eps_r_xx,
+                self.cell_eps_r_yy,
+                self.cell_eps_r_zz,
+                self.cell_mu_r_xx,
+                self.cell_mu_r_yy,
+                self.cell_mu_r_zz,
         ):
             finite = np.isfinite(values)
             if np.any(np.abs(np.imag(values[finite])) > 1e-14):
@@ -541,7 +660,18 @@ class ModeSolver2D:
         return real + 1j * imag
 
     def _field_array(self, field, mode):
-        return field[:, mode].reshape((self.Nx, self.Ny), order="F")
+        return field[:, :, mode]
+
+    def _center_to_cells(self, name, data):
+        if name in ("ex", "hy"):
+            return 0.5 * (data[:, :self.Ny] + data[:, 1:])
+        if name in ("ey", "hx"):
+            return 0.5 * (data[:self.Nx, :] + data[1:, :])
+        if name == "ez":
+            return 0.25 * (data[:self.Nx, :self.Ny] + data[1:, :self.Ny] + data[:self.Nx, 1:] + data[1:, 1:])
+        if name == "hz":
+            return data
+        raise ValueError(f"Unknown field name {name!r}.")
 
     def _add_boundary_background(self, ax):
         for sl_x, sl_y in self._pec_regions:
@@ -568,6 +698,16 @@ class ModeSolver2D:
             )
         )
 
+    def _component_fields_for_mode(self, mode):
+        return {
+            "ex": (self._field_array(self.Ex, mode), "Ex"),
+            "ey": (self._field_array(self.Ey, mode), "Ey"),
+            "ez": (self._field_array(self.Ez, mode), "Ez"),
+            "hx": (self._field_array(self.Hx, mode), "Hx"),
+            "hy": (self._field_array(self.Hy, mode), "Hy"),
+            "hz": (self._field_array(self.Hz, mode), "Hz"),
+        }
+
     def visualize(self, mode=1, **kwargs):
         """Visualize selected field components for a given one-based mode index."""
         if self.eigenvalues is None:
@@ -576,18 +716,11 @@ class ModeSolver2D:
         if not (0 <= mode < self.num_modes):
             raise ValueError("mode is out of range.")
 
-        fields = {
-            "ex": (self._field_array(self.Ex, mode), "Ex"),
-            "ey": (self._field_array(self.Ey, mode), "Ey"),
-            "ez": (self._field_array(self.Ez, mode), "Ez"),
-            "hx": (self._field_array(self.Hx, mode), "Hx"),
-            "hy": (self._field_array(self.Hy, mode), "Hy"),
-            "hz": (self._field_array(self.Hz, mode), "Hz"),
-        }
-        e_abs = np.sqrt(sum(np.abs(fields[key][0]) ** 2 for key in ("ex", "ey", "ez")))
-        h_abs = np.sqrt(sum(np.abs(fields[key][0]) ** 2 for key in ("hx", "hy", "hz")))
-        fields["eabs"] = (e_abs, "|E|")
-        fields["habs"] = (h_abs, "|H|")
+        fields = self._component_fields_for_mode(mode)
+        e_abs = np.sqrt(sum(np.abs(self._center_to_cells(key, fields[key][0])) ** 2 for key in ("ex", "ey", "ez")))
+        h_abs = np.sqrt(sum(np.abs(self._center_to_cells(key, fields[key][0])) ** 2 for key in ("hx", "hy", "hz")))
+        fields["eabs"] = (e_abs, "|E| cell-centered")
+        fields["habs"] = (h_abs, "|H| cell-centered")
 
         selected = [key for key in fields if kwargs.get(key)]
         if not selected:
@@ -621,10 +754,7 @@ class ModeSolver2D:
         for j in range(len(selected), len(axes)):
             fig.delaxes(axes[j])
 
-        fig.suptitle(
-            rf"Mode {mode + 1}: $n_{{eff}}$ = {self.neff[mode]:.4g}",
-            fontsize=16,
-        )
+        fig.suptitle(rf"Mode {mode + 1}: $n_{{eff}}$ = {self.neff[mode]:.4g}", fontsize=16)
         if last_image is not None:
             fig.colorbar(last_image, ax=axes[:len(selected)], location="right", shrink=1, pad=0.02)
         plt.show()
@@ -704,6 +834,3 @@ class ModeSolver2D:
         controls_frame.columnconfigure(1, weight=1)
         plot_mode(mode_var.get())
         root.mainloop()
-
-
-
