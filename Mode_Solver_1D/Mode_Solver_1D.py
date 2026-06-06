@@ -48,6 +48,8 @@ class ModeSolver1D:
         self.pmc_xx_mask = np.zeros(self.shape_node, dtype=bool)
         self.pmc_yy_mask = np.zeros(self.shape_cell, dtype=bool)
         self.pmc_zz_mask = np.zeros(self.shape_cell, dtype=bool)
+        self._pec_regions = []
+        self._pmc_regions = []
 
         self.num_modes = int(num_modes)
         if self.num_modes <= 0:
@@ -125,6 +127,33 @@ class ModeSolver1D:
             return int(round(float(value) / self.dx))
         raise ValueError("Region bounds must be int grid indices or float physical positions in metres.")
 
+    def _coordinate_to_length(self, value):
+        if isinstance(value, (int, np.integer)):
+            return int(value) * self.dx
+        if isinstance(value, (float, np.floating)):
+            return float(value)
+        raise ValueError("Coordinates must be int grid indices or float physical positions in metres.")
+
+    def _range_to_lengths(self, x_range):
+        try:
+            x0, x1 = x_range
+        except (TypeError, ValueError):
+            raise ValueError("x_range must be a (min, max) pair.")
+        x0 = self._coordinate_to_length(x0)
+        x1 = self._coordinate_to_length(x1)
+        if x1 <= x0:
+            raise ValueError("x_range must satisfy max > min.")
+        if x0 < 0 or x1 > self.x_range:
+            raise ValueError("Region is out of bounds of the simulation grid.")
+        return x0, x1
+
+    @staticmethod
+    def _validate_subpixels(subpixels):
+        subpixels = int(subpixels)
+        if subpixels <= 0:
+            raise ValueError("subpixels must be positive.")
+        return subpixels
+
     def _region_slice(self, x_range):
         try:
             x0 = self._bound_to_index(x_range[0])
@@ -152,25 +181,48 @@ class ModeSolver1D:
             return {"xx": self.pmc_xx_mask, "yy": self.pmc_yy_mask, "zz": self.pmc_zz_mask}[component]
         raise ValueError(f"Unknown {prefix} component {component!r}.")
 
-    def add_layer(self, epsilon, mu, x_range, *, average=True):
-        """Add an isotropic or diagonal-anisotropic material region on the cell grid."""
-        sl_x = self._region_slice(x_range)
+    def _apply_fractional_material(self, epsilon, mu, fraction, sl_x):
         epsilon = self._normalise_three("epsilon", epsilon)
         mu = self._normalise_three("mu", mu)
+        fraction = np.asarray(fraction, dtype=float)
+        if fraction.shape != self.cell_eps_r_xx[sl_x].shape:
+            raise ValueError("fraction shape does not match target cell region.")
 
-        self.cell_eps_r_xx[sl_x] = epsilon[0]
-        self.cell_eps_r_yy[sl_x] = epsilon[1]
-        self.cell_eps_r_zz[sl_x] = epsilon[2]
-        self.cell_mu_r_xx[sl_x] = mu[0]
-        self.cell_mu_r_yy[sl_x] = mu[1]
-        self.cell_mu_r_zz[sl_x] = mu[2]
-        self.material_no_average_mask[sl_x] = not average
+        covered = fraction > 0.0
+        if not np.any(covered):
+            return
+
+        for component, value in zip(("xx", "yy", "zz"), epsilon):
+            target = self._cell_material_array("eps", component)[sl_x]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+        for component, value in zip(("xx", "yy", "zz"), mu):
+            target = self._cell_material_array("mu", component)[sl_x]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+
+        local_no_average = self.material_no_average_mask[sl_x]
+        local_no_average[covered] = False
         self.update_component_materials()
         self._invalidate_solution()
+
+    def add_layer(self, epsilon, mu, x_range, *, subpixels=100):
+        """Add a subpixel-smoothed isotropic or diagonal-anisotropic material layer."""
+        x_min, x_max = self._range_to_lengths(x_range)
+        subpixels = self._validate_subpixels(subpixels)
+        x0 = max(0, int(np.floor(x_min / self.dx)))
+        x1 = min(self.Nx, int(np.ceil(x_max / self.dx)))
+        if x0 >= x1:
+            return
+
+        indices = np.arange(x0, x1, dtype=float)
+        offsets = (np.arange(subpixels, dtype=float) + 0.5) / subpixels
+        samples = (indices[:, None] + offsets[None, :]) * self.dx
+        fraction = ((samples >= x_min) & (samples <= x_max)).mean(axis=1)
+        self._apply_fractional_material(epsilon, mu, fraction, slice(x0, x1))
 
     def add_pec(self, x_range, components=None):
         """Add a PEC cell region and expand it onto surrounding electric components."""
         sl_x = self._region_slice(x_range)
+        self._pec_regions.append(sl_x)
         cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x] = True
         xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="electric")
@@ -184,6 +236,7 @@ class ModeSolver1D:
     def add_pmc(self, x_range, components=None):
         """Add a PMC cell region and expand it onto surrounding magnetic components."""
         sl_x = self._region_slice(x_range)
+        self._pmc_regions.append(sl_x)
         cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x] = True
         xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="magnetic")
@@ -412,6 +465,28 @@ class ModeSolver1D:
         self.Hy[pmc_yy_mask, :] = 0.0
         self.Hz[pmc_zz_mask, :] = 0.0
 
+    @staticmethod
+    def _most_real_phase(*fields):
+        values = np.concatenate([np.asarray(field).ravel() for field in fields])
+        finite = np.isfinite(values)
+        values = values[finite]
+        if values.size == 0 or np.max(np.abs(values)) == 0:
+            return 1.0 + 0j
+        return np.exp(-0.5j * np.angle(np.sum(values ** 2)))
+
+    def _rotate_modes_to_most_real(self):
+        for mode in range(self.num_modes):
+            te_phase = self._most_real_phase(self.Ey[:, mode], self.Hx[:, mode], self.Hz[:, mode])
+            tm_phase = self._most_real_phase(self.Hy[:, mode], self.Ex[:, mode], self.Ez[:, mode])
+            self.Ey[:, mode] *= te_phase
+            self.Hx[:, mode] *= te_phase
+            self.Hz[:, mode] *= te_phase
+            self.eigenvectors_TE[:, mode] *= te_phase
+            self.Hy[:, mode] *= tm_phase
+            self.Ex[:, mode] *= tm_phase
+            self.Ez[:, mode] *= tm_phase
+            self.eigenvectors_TM[:, mode] *= tm_phase
+
     def solve(self, sigma=None):
         """Solve TE and TM slab modes and recover staggered field components."""
         sigma = self._resolve_eigs_guess(sigma)
@@ -463,6 +538,7 @@ class ModeSolver1D:
             pmc_yy_mask,
             pmc_zz_mask,
         )
+        self._rotate_modes_to_most_real()
 
     def _has_lossy_material(self):
         for values in (
@@ -510,6 +586,73 @@ class ModeSolver1D:
             return 0.5 * (data[:-1] + data[1:])
         return data
 
+    def _material_background_for_field(self, name):
+        if name == "ex":
+            return self.cell_eps_r_xx
+        if name == "ey":
+            return self.cell_eps_r_yy
+        if name == "ez":
+            return self.cell_eps_r_zz
+        if name == "hx":
+            return self.cell_mu_r_xx
+        if name == "hy":
+            return self.cell_mu_r_yy
+        if name == "hz":
+            return self.cell_mu_r_zz
+        if name == "eabs":
+            return (self.cell_eps_r_xx + self.cell_eps_r_yy + self.cell_eps_r_zz) / 3.0
+        if name == "habs":
+            return (self.cell_mu_r_xx + self.cell_mu_r_yy + self.cell_mu_r_zz) / 3.0
+        raise ValueError(f"Unknown field name {name!r}.")
+
+    def _add_layer_background(self, ax, field_name):
+        material = np.abs(self._material_background_for_field(field_name))[None, :]
+        ax.imshow(
+            material,
+            cmap="inferno",
+            origin="lower",
+            aspect="auto",
+            extent=[0, self.x_range * 1e3, -1.0, 1.0],
+            alpha=0.5,
+            zorder=0,
+        )
+        for sl_x in self._pec_regions:
+            ax.axvspan(sl_x.start * self.dx * 1e3, sl_x.stop * self.dx * 1e3, color="yellow", alpha=0.5, zorder=1)
+        for sl_x in self._pmc_regions:
+            ax.axvspan(sl_x.start * self.dx * 1e3, sl_x.stop * self.dx * 1e3, color="blue", alpha=0.5, zorder=1)
+        ax.set_xlim(0, self.x_range * 1e3)
+        ax.set_ylim(-1.0, 1.0)
+
+    @staticmethod
+    def _show_layer_background(field_name):
+        return field_name not in ("hx", "hz", "hy")
+
+    def _plot_field_profile(self, ax, field_name, field_data, title, pol, norm=None):
+        if norm is None:
+            norm = np.max(np.abs(field_data))
+        field = field_data / norm if norm > 0 else field_data
+        x = (np.arange(self.Nx) + 0.5) * self.dx * 1e3 if field_name in ("eabs", "habs") else self._field_x(title)
+        ax.set_xlim(0, self.x_range * 1e3)
+        ax.set_ylim(-1.0, 1.0)
+        if self._show_layer_background(field_name):
+            self._add_layer_background(ax, field_name)
+        ax.plot(x, np.real(field), label=f"Re({title})", zorder=3)
+        ax.plot(x, np.abs(field), "--", label=f"|{title}|", zorder=3)
+        ax.set_ylim(-1.0, 1.0)
+        ax.set_title(f"{pol}: {title}")
+        ax.set_xlabel("x (mm)")
+        ax.grid(True, zorder=4)
+        ax.legend(loc="best", fontsize=8)
+
+    def _field_group_norms(self, fields):
+        e_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("ey", "ex", "ez")))
+        h_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("hx", "hy", "hz")))
+        return np.max(e_abs), np.max(h_abs), e_abs, h_abs
+
+    @staticmethod
+    def _norm_for_field(field_name, e_norm, h_norm):
+        return e_norm if field_name in ("ex", "ey", "ez", "eabs") else h_norm
+
     def visualize(self, mode=1, **kwargs):
         """Visualize selected field components for a given one-based mode index."""
         if self.neff_TE is None:
@@ -521,8 +664,7 @@ class ModeSolver1D:
         import matplotlib.pyplot as plt
 
         fields = self._component_fields_for_mode(mode)
-        e_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("ey", "ex", "ez")))
-        h_abs = np.sqrt(sum(np.abs(self._field_to_cells(key, fields[key][0])) ** 2 for key in ("hx", "hy", "hz")))
+        e_norm, h_norm, e_abs, h_abs = self._field_group_norms(fields)
         fields["eabs"] = (e_abs, "|E| cell-centered", "E")
         fields["habs"] = (h_abs, "|H| cell-centered", "H")
 
@@ -534,24 +676,12 @@ class ModeSolver1D:
         nrows = int(np.ceil(len(selected) / ncols))
         fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows), layout="compressed")
         axes = np.array(axes).reshape(-1)
-        x_cell = (np.arange(self.Nx) + 0.5) * self.dx * 1e3
-        material = np.real(self.cell_eps_r_zz)
-        material_norm = material / np.max(np.abs(material)) if np.max(np.abs(material)) > 0 else material
 
         for i, field_name in enumerate(selected):
             field_data, title, pol = fields[field_name]
-            norm = np.max(np.abs(field_data))
-            if norm > 0:
-                field_data = field_data / norm
-            x = x_cell if field_name in ("eabs", "habs") else self._field_x(title)
             ax = axes[i]
-            ax.plot(x, np.real(field_data), label=f"Re({title})")
-            ax.plot(x, np.abs(field_data), "--", label=f"|{title}|")
-            ax.plot(x_cell, material_norm, color="0.75", alpha=0.6, label="cell eps_r_zz")
-            ax.set_title(f"{pol}: {title}")
-            ax.set_xlabel("x (mm)")
-            ax.grid(True)
-            ax.legend(loc="best", fontsize=8)
+            norm = self._norm_for_field(field_name, e_norm, h_norm)
+            self._plot_field_profile(ax, field_name, field_data, title, pol, norm=norm)
 
         for j in range(len(selected), len(axes)):
             fig.delaxes(axes[j])
@@ -573,7 +703,7 @@ class ModeSolver1D:
         root = tk.Tk()
         root.title("FDFD 1D Mode Visualizer")
 
-        fig, axes = plt.subplots(2, 3, figsize=(12, 7), dpi=100)
+        fig, axes = plt.subplots(2, 3, figsize=(12, 10), dpi=100)
         plot_frame = tk.Frame(root)
         plot_frame.grid(row=0, column=0, sticky="nsew")
         controls_frame = tk.Frame(root)
@@ -597,19 +727,14 @@ class ModeSolver1D:
         def update_plots(event=None):
             mode = int(mode_var.get()) - 1
             fields = self._component_fields_for_mode(mode)
+            e_norm, h_norm, _, _ = self._field_group_norms(fields)
             for ax in axes.flat:
                 ax.clear()
 
             for ax, key in zip(axes.flat, ("ey", "hx", "hz", "hy", "ex", "ez")):
                 data, title, pol = fields[key]
-                norm = np.max(np.abs(data))
-                data = data / norm if norm > 0 else data
-                ax.plot(self._field_x(title), np.real(data), label=f"Re({title})")
-                ax.plot(self._field_x(title), np.abs(data), "--", label=f"|{title}|")
-                ax.set_title(f"{pol}: {title}")
-                ax.set_xlabel("x (mm)")
-                ax.grid(True)
-                ax.legend(loc="best", fontsize=8)
+                norm = self._norm_for_field(key, e_norm, h_norm)
+                self._plot_field_profile(ax, key, data, title, pol, norm=norm)
 
             fig.suptitle(
                 rf"Mode {mode + 1}: TE $n_{{eff}}$ = {self.neff_TE[mode]:.4g}, "
