@@ -10,8 +10,6 @@ num_modes = 6
 
 solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
 
-# Signal strip, dielectric substrate, and ground plane.
-
 solver.add_circle(6, 1, (5e-3, 5e-3), 3e-3)
 
 solver.solve()
