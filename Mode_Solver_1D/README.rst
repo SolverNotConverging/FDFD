@@ -1,22 +1,38 @@
 Mode Solver 1D
 ==============
 
-``ModeSolver1D`` solves one-dimensional slab-waveguide eigenmodes on a Yee-style finite-difference grid. It computes separate TE and TM scalar eigenproblems and reconstructs the available transverse and longitudinal field components.
+``ModeSolver1D`` solves one-dimensional slab-waveguide eigenmodes on a true staggered Yee grid. The structure varies along ``x`` and is uniform along the propagation direction.
 
 What It Solves
 --------------
 
-Use this solver for structures that vary along one transverse coordinate ``x`` and are uniform along the propagation direction. Typical examples are grounded slabs, dielectric slabs, impedance-loaded sheets, and quick modal dispersion sweeps.
+Use this solver for dielectric slabs, grounded slabs, impedance-loaded sheets, and quick modal dispersion sweeps.
 
 The solver supports:
 
-* TE modes with primary field ``Ey`` and reconstructed ``Hx`` and ``Hz``.
-* TM modes with primary field ``Hy`` and reconstructed ``Ex`` and ``Ez``.
+* TE modes with primary ``Ey`` and reconstructed ``Hx`` and ``Hz``.
+* TM modes with primary ``Hy`` and reconstructed ``Ex`` and ``Ez``.
 * Isotropic or diagonal-anisotropic relative ``epsilon`` and ``mu``.
-* PEC masks for electric-field components.
-* PMC masks for magnetic-field components.
+* Cell-centred PEC and PMC regions expanded to component-specific Yee masks.
 * Simple uniaxial PML stretching at the left and/or right boundary.
 * Electric impedance-sheet perturbations.
+
+Grid Layout
+-----------
+
+The source material grid has shape ``(Nx,)`` and is cell-centred.
+
+After ``solve()``, fields are stored on their native staggered locations:
+
+* ``Ex``, ``Hy``, ``Hz``: cell-centred arrays with shape ``(Nx, num_modes)``.
+* ``Ey``, ``Ez``, ``Hx``: node arrays with shape ``(Nx + 1, num_modes)``.
+
+Component-location material arrays use the same locations:
+
+* ``eps_r_xx``: shape ``(Nx,)``.
+* ``eps_r_yy`` and ``eps_r_zz``: shape ``(Nx + 1,)``.
+* ``mu_r_xx``: shape ``(Nx + 1,)``.
+* ``mu_r_yy`` and ``mu_r_zz``: shape ``(Nx,)``.
 
 Main Class
 ----------
@@ -31,27 +47,28 @@ Parameters:
 * ``x_range``: physical domain width in metres.
 * ``Nx``: number of grid cells.
 * ``num_modes``: number of TE and TM modes to request.
-* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses ``-max(abs(eps_r_xx), abs(eps_r_yy), abs(eps_r_zz), abs(mu_r_xx), abs(mu_r_yy), abs(mu_r_zz))`` from the current material tensors.
+* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses the maximum magnitude of the cell-centred material tensors.
 
 Material And Boundary API
 -------------------------
 
 .. code-block:: python
 
-   add_layer(epsilon, mu, x_range)
+   add_layer(epsilon, mu, x_range, average=True)
    add_pec(x_range, components=None)
    add_pmc(x_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=25, direction="all")
-   add_UPML(pml_width=50, n=3, sigma_max=25, direction="all")
    add_impedance_surface(Zs, position, thickness_cells=1, eps_components=("xx", "yy", "zz"))
 
 Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * ``x_range`` accepts grid-index pairs or physical coordinate pairs in metres.
-* PEC/PMC ``components`` can be ``"xx"``, ``"yy"``, ``"zz"`` or an iterable of those names. ``None`` applies all three.
-* ``add_UPML`` is a compatibility alias for ``add_pml``.
-* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"top"``, ``"bottom"``, or ``"all"``.
+* ``add_layer`` writes to cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``.
+* With ``average=True``, node material values are averaged from neighbouring cells.
+* With ``average=False``, the cell material is stamped onto all surrounding Yee component material locations.
+* ``components`` can be ``"xx"``, ``"yy"``, ``"zz"`` or an iterable of those names. ``None`` applies all three.
+* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
 
 Solve API
 ---------
@@ -67,10 +84,7 @@ After ``solve()``, the main outputs are:
 * ``neff_TE`` and ``neff_TM``: complex effective indices for TE and TM modes.
 * ``propagation_constant_TE`` and ``propagation_constant_TM``: real parts of ``neff``.
 * ``attenuation_constant_TE`` and ``attenuation_constant_TM``: imaginary parts of ``neff``.
-* ``Ey``, ``Hx``, ``Hz``, ``Hy``, ``Ex``, ``Ez``: field arrays with shape ``(Nx, num_modes)``.
-* ``fields``: nested compatibility dictionary with ``fields["TE"]`` and ``fields["TM"]``.
-
-``beta_TE``, ``beta_TM``, ``alpha_TE``, and ``alpha_TM`` remain as legacy aliases for effective-index real and imaginary parts.
+* ``Ey``, ``Hx``, ``Hz``, ``Hy``, ``Ex``, ``Ez``: fields on native staggered locations.
 
 Visualization
 -------------

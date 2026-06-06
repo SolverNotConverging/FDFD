@@ -15,14 +15,14 @@ The solver supports:
 * Component masks generated from cell-centred PEC/PMC regions.
 * Simple uniaxial PML in ``x``, ``y``, or all boundaries.
 * Impedance sheets normal to ``x`` or ``y``.
-* Optional filtering of PEC-neighbour-dominated spurious candidates.
+* True staggered Yee-grid field storage and rectangular curl operators.
 
 Main Class
 ----------
 
 .. code-block:: python
 
-   ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes, mode_filter=True, guess=None)
+   ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes, guess=None)
 
 Parameters:
 
@@ -30,15 +30,14 @@ Parameters:
 * ``x_range``, ``y_range``: physical cross-section spans in metres.
 * ``Nx``, ``Ny``: grid cells in ``x`` and ``y``.
 * ``num_modes``: number of modes to retain.
-* ``mode_filter``: whether to request extra candidates and filter likely spurious PEC-localized modes.
-* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses ``-max(abs(eps_r_xx), abs(eps_r_yy), abs(eps_r_zz), abs(mu_r_xx), abs(mu_r_yy), abs(mu_r_zz))`` from the current material tensors.
+* ``guess``: shift-invert target passed to ``scipy.sparse.linalg.eigs`` when ``solve(sigma=None)`` is used. If ``None``, the solver uses ``-max(abs(cell_eps_r_xx), abs(cell_eps_r_yy), abs(cell_eps_r_zz), abs(cell_mu_r_xx), abs(cell_mu_r_yy), abs(cell_mu_r_zz))`` from the current cell-centred material tensors.
 
 Material And Boundary API
 -------------------------
 
 .. code-block:: python
 
-   add_rectangle(epsilon, mu, x_range, y_range)
+   add_rectangle(epsilon, mu, x_range, y_range, average=True)
    add_pec(x_range, y_range, components=None)
    add_pmc(x_range, y_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=5, direction="all")
@@ -49,6 +48,10 @@ Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * Region bounds can be integer grid indices or physical coordinates in metres.
+* ``add_rectangle`` writes material to cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``.
+* The solver interpolates source materials onto component-location arrays named ``eps_r_*`` and ``mu_r_*``.
+* With ``average=True``, component materials are averaged from neighbouring cells.
+* With ``average=False``, the cell material is stamped directly onto all surrounding Yee component material locations.
 * PEC/PMC ``components=None`` treats the region as cell-centred and expands it to component-specific Yee masks.
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"all"``.
 
@@ -57,7 +60,7 @@ Solve API
 
 .. code-block:: python
 
-   solve(sigma=None, extra_modes=8, max_pec_neighbor_energy_fraction=0.35)
+   solve(sigma=None)
 
 ``sigma`` overrides the constructor ``guess`` for that solve. If both are ``None``, the automatic material-magnitude target is recomputed before calling ``eigs``.
 
@@ -66,8 +69,10 @@ After ``solve()``, outputs include:
 * ``neff``: complex effective index for each selected mode.
 * ``propagation_constant`` and ``attenuation_constant``: real and imaginary parts of ``neff``.
 * ``eigenvalues`` and ``eigenvectors``: selected sparse eigensystem outputs.
-* ``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, ``Hz``: flattened field arrays of shape ``(Nx * Ny, num_modes)``.
-* ``spurious_scores`` and candidate-index arrays when filtering is enabled.
+* ``Ex`` and ``Hy``: staggered field arrays of shape ``(Nx, Ny + 1, num_modes)``.
+* ``Ey`` and ``Hx``: staggered field arrays of shape ``(Nx + 1, Ny, num_modes)``.
+* ``Ez``: staggered field array of shape ``(Nx + 1, Ny + 1, num_modes)``.
+* ``Hz``: cell-centred field array of shape ``(Nx, Ny, num_modes)``.
 
 Visualization
 -------------
