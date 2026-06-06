@@ -54,7 +54,7 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_layer(epsilon, mu, x_range, average=True)
+   add_layer(epsilon, mu, x_range, subpixels=8)
    add_pec(x_range, components=None)
    add_pmc(x_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=25, direction="all")
@@ -64,9 +64,7 @@ Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * ``x_range`` accepts grid-index pairs or physical coordinate pairs in metres.
-* ``add_layer`` writes to cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``.
-* With ``average=True``, node material values are averaged from neighbouring cells.
-* With ``average=False``, the cell material is stamped onto all surrounding Yee component material locations.
+* ``add_layer`` computes fractional per-cell coverage on a ``subpixels`` sample grid, blends into cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``, then refreshes the Yee-grid component arrays.
 * ``components`` can be ``"xx"``, ``"yy"``, ``"zz"`` or an iterable of those names. ``None`` applies all three.
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
 
@@ -94,7 +92,7 @@ Visualization
    visualize(mode=1, ey=True, hz=True)
    visualize_with_gui()
 
-``visualize`` plots selected 1D field profiles. If no fields are selected, it plots all TE and TM components. ``visualize_with_gui`` opens an interactive mode selector.
+``visualize`` plots selected 1D field profiles. If no fields are selected, it plots all TE and TM components. Field plots include inferno material-layer backgrounds and yellow/blue PEC/PMC layer overlays. ``visualize_with_gui`` opens an interactive mode selector.
 
 Minimal Example
 ---------------

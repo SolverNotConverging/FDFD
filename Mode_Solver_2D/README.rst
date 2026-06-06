@@ -37,7 +37,9 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_rectangle(epsilon, mu, x_range, y_range, average=True)
+   add_rectangle(epsilon, mu, x_range, y_range, subpixels=8)
+   add_circle(epsilon, mu, center, r1, r2=None, subpixels=8)
+   add_triangle(epsilon, mu, p1, p2, p3, subpixels=8)
    add_pec(x_range, y_range, components=None)
    add_pmc(x_range, y_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=5, direction="all")
@@ -48,10 +50,10 @@ Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * Region bounds can be integer grid indices or physical coordinates in metres.
-* ``add_rectangle`` writes material to cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``.
+* ``add_rectangle``, ``add_circle``, and ``add_triangle`` first compute fractional per-cell coverage on a ``subpixels`` by ``subpixels`` grid, blend the material into cell-centred source arrays named ``cell_eps_r_*`` and ``cell_mu_r_*``, then refresh the Yee-grid component arrays.
+* ``add_circle`` accepts ``r1`` as the outer radius and optional ``r2`` as the inner radius for annuli. Float radii are metres; integer radii are cell counts.
+* Shape points and centres can be integer grid coordinates or physical coordinates in metres.
 * The solver interpolates source materials onto component-location arrays named ``eps_r_*`` and ``mu_r_*``.
-* With ``average=True``, component materials are averaged from neighbouring cells.
-* With ``average=False``, the cell material is stamped directly onto all surrounding Yee component material locations.
 * PEC/PMC ``components=None`` treats the region as cell-centred and expands it to component-specific Yee masks.
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"all"``.
 

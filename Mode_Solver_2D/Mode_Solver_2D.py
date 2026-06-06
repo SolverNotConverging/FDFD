@@ -138,6 +138,49 @@ class ModeSolver2D:
             return int(round(float(value) / step))
         raise ValueError("Region bounds must be int grid indices or float physical positions in metres.")
 
+    def _coordinate_to_length(self, value, axis):
+        if isinstance(value, (int, np.integer)):
+            step = self.dx if axis == "x" else self.dy
+            return int(value) * step
+        if isinstance(value, (float, np.floating)):
+            return float(value)
+        raise ValueError("Coordinates must be int grid indices or float physical positions in metres.")
+
+    def _point_to_lengths(self, name, point):
+        try:
+            x, y = point
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be an (x, y) pair.")
+        return self._coordinate_to_length(x, "x"), self._coordinate_to_length(y, "y")
+
+    def _range_to_lengths(self, name, values, axis):
+        try:
+            start, stop = values
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be a (min, max) pair.")
+        start = self._coordinate_to_length(start, axis)
+        stop = self._coordinate_to_length(stop, axis)
+        if stop <= start:
+            raise ValueError(f"{name} must satisfy max > min.")
+        limit = self.x_range if axis == "x" else self.y_range
+        if start < 0 or stop > limit:
+            raise ValueError(f"{name} is out of bounds of the simulation grid.")
+        return start, stop
+
+    def _radius_to_length(self, name, radius):
+        if isinstance(radius, (int, np.integer)):
+            return int(radius) * min(self.dx, self.dy)
+        if isinstance(radius, (float, np.floating)):
+            return float(radius)
+        raise ValueError(f"{name} must be an int number of cells or a float physical radius in metres.")
+
+    @staticmethod
+    def _validate_subpixels(subpixels):
+        subpixels = int(subpixels)
+        if subpixels <= 0:
+            raise ValueError("subpixels must be positive.")
+        return subpixels
+
     def _region_slices(self, x_range, y_range):
         try:
             x0 = self._bound_to_index(x_range[0], "x")
@@ -167,24 +210,133 @@ class ModeSolver2D:
             return {"xx": self.pmc_xx_mask, "yy": self.pmc_yy_mask, "zz": self.pmc_zz_mask}[component]
         raise ValueError(f"Unknown {prefix} component {component!r}.")
 
-    def add_rectangle(self, epsilon, mu, x_range, y_range, *, average=True):
-        """Add a rectangular isotropic or diagonal-anisotropic material region on the cell grid."""
-        sl_x, sl_y = self._region_slices(x_range, y_range)
+    def _subpixel_axis(self, start, stop, step, subpixels):
+        indices = np.arange(start, stop, dtype=float)
+        offsets = (np.arange(subpixels, dtype=float) + 0.5) / subpixels
+        return (indices[:, None] + offsets[None, :]) * step
+
+    def _clipped_cell_bbox(self, xmin, xmax, ymin, ymax):
+        x0 = max(0, int(np.floor(xmin / self.dx)))
+        x1 = min(self.Nx, int(np.ceil(xmax / self.dx)))
+        y0 = max(0, int(np.floor(ymin / self.dy)))
+        y1 = min(self.Ny, int(np.ceil(ymax / self.dy)))
+        return x0, x1, y0, y1
+
+    def _apply_fractional_material(self, epsilon, mu, fraction, sl_x, sl_y):
         epsilon = self._normalise_three("epsilon", epsilon)
         mu = self._normalise_three("mu", mu)
+        fraction = np.asarray(fraction, dtype=float)
+        if fraction.shape != self.cell_eps_r_xx[sl_x, sl_y].shape:
+            raise ValueError("fraction shape does not match target cell region.")
 
-        self.cell_eps_r_xx[sl_x, sl_y] = epsilon[0]
-        self.cell_eps_r_yy[sl_x, sl_y] = epsilon[1]
-        self.cell_eps_r_zz[sl_x, sl_y] = epsilon[2]
-        self.cell_mu_r_xx[sl_x, sl_y] = mu[0]
-        self.cell_mu_r_yy[sl_x, sl_y] = mu[1]
-        self.cell_mu_r_zz[sl_x, sl_y] = mu[2]
-        if average:
-            self.material_no_average_mask[sl_x, sl_y] = False
-        else:
-            self.material_no_average_mask[sl_x, sl_y] = True
+        covered = fraction > 0.0
+        if not np.any(covered):
+            return
+
+        for component, value in zip(("xx", "yy", "zz"), epsilon):
+            target = self._cell_material_array("eps", component)[sl_x, sl_y]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+        for component, value in zip(("xx", "yy", "zz"), mu):
+            target = self._cell_material_array("mu", component)[sl_x, sl_y]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+
+        local_no_average = self.material_no_average_mask[sl_x, sl_y]
+        local_no_average[covered] = False
         self.update_component_materials()
         self._invalidate_solution()
+
+    def add_rectangle(self, epsilon, mu, x_range, y_range, *, subpixels=8):
+        """
+        Add a rectangular isotropic or diagonal-anisotropic material region on the cell grid.
+
+        Boundaries are converted to fractional per-cell fill ratios before the
+        material is averaged to Yee-grid locations.
+        """
+        x_min, x_max = self._range_to_lengths("x_range", x_range, "x")
+        y_min, y_max = self._range_to_lengths("y_range", y_range, "y")
+        subpixels = self._validate_subpixels(subpixels)
+        x0, x1, y0, y1 = self._clipped_cell_bbox(x_min, x_max, y_min, y_max)
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        xs = self._subpixel_axis(x0, x1, self.dx, subpixels)
+        ys = self._subpixel_axis(y0, y1, self.dy, subpixels)
+        x_inside = (xs >= x_min) & (xs <= x_max)
+        y_inside = (ys >= y_min) & (ys <= y_max)
+        fraction = (x_inside[:, :, None, None] & y_inside[None, None, :, :]).mean(axis=(1, 3))
+        self._apply_fractional_material(epsilon, mu, fraction, slice(x0, x1), slice(y0, y1))
+
+    def add_circle(self, epsilon, mu, center, r1, r2=None, *, subpixels=8):
+        """
+        Add a subpixel-smoothed circular or annular material region.
+
+        ``center`` may be integer grid coordinates or physical coordinates in metres.
+        Float radii are interpreted as metres; integer radii are interpreted as cells.
+        ``r1`` is the outer radius and optional ``r2`` is the inner radius.
+        """
+        cx, cy = self._point_to_lengths("center", center)
+        r1 = self._radius_to_length("r1", r1)
+        r2 = 0.0 if r2 is None else self._radius_to_length("r2", r2)
+        subpixels = self._validate_subpixels(subpixels)
+
+        if r1 <= 0:
+            raise ValueError("r1 must be positive.")
+        if r2 < 0 or r2 >= r1:
+            raise ValueError("r2 must be non-negative and smaller than r1.")
+
+        x0, x1, y0, y1 = self._clipped_cell_bbox(cx - r1, cx + r1, cy - r1, cy + r1)
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        xs = self._subpixel_axis(x0, x1, self.dx, subpixels)
+        ys = self._subpixel_axis(y0, y1, self.dy, subpixels)
+        radius_squared = (xs[:, :, None, None] - cx) ** 2 + (ys[None, None, :, :] - cy) ** 2
+        mask = radius_squared <= r1 ** 2
+        if r2 > 0:
+            mask &= radius_squared >= r2 ** 2
+        fraction = mask.mean(axis=(1, 3))
+        self._apply_fractional_material(epsilon, mu, fraction, slice(x0, x1), slice(y0, y1))
+
+    @staticmethod
+    def _points_in_triangle(x, y, p1, p2, p3):
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+        d1 = (x - x2) * (y1 - y2) - (x1 - x2) * (y - y2)
+        d2 = (x - x3) * (y2 - y3) - (x2 - x3) * (y - y3)
+        d3 = (x - x1) * (y3 - y1) - (x3 - x1) * (y - y1)
+        has_negative = (d1 < 0) | (d2 < 0) | (d3 < 0)
+        has_positive = (d1 > 0) | (d2 > 0) | (d3 > 0)
+        return ~(has_negative & has_positive)
+
+    def add_triangle(self, epsilon, mu, p1, p2, p3, *, subpixels=8):
+        """
+        Add a subpixel-smoothed triangular material region.
+
+        Points may be integer grid coordinates or physical coordinates in metres.
+        Coverage is first averaged on a per-cell subpixel grid, then interpolated
+        to the staggered Yee material arrays.
+        """
+        p1 = self._point_to_lengths("p1", p1)
+        p2 = self._point_to_lengths("p2", p2)
+        p3 = self._point_to_lengths("p3", p3)
+        subpixels = self._validate_subpixels(subpixels)
+
+        area2 = (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1])
+        if abs(area2) <= 1e-30:
+            raise ValueError("Triangle points must not be collinear.")
+
+        xs_points = (p1[0], p2[0], p3[0])
+        ys_points = (p1[1], p2[1], p3[1])
+        x0, x1, y0, y1 = self._clipped_cell_bbox(min(xs_points), max(xs_points), min(ys_points), max(ys_points))
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        xs = self._subpixel_axis(x0, x1, self.dx, subpixels)
+        ys = self._subpixel_axis(y0, y1, self.dy, subpixels)
+        mask = self._points_in_triangle(xs[:, :, None, None], ys[None, None, :, :], p1, p2, p3)
+        fraction = mask.mean(axis=(1, 3))
+        self._apply_fractional_material(epsilon, mu, fraction, slice(x0, x1), slice(y0, y1))
 
     def add_pec(self, x_range, y_range, components=None):
         """Add a PEC cell region and expand it onto surrounding Yee electric components."""
@@ -545,6 +697,33 @@ class ModeSolver2D:
         self.Hy[pmc_yy_mask, :] = 0.0
         self.Hz[pmc_zz_mask, :] = 0.0
 
+    @staticmethod
+    def _most_real_phase(*fields):
+        values = np.concatenate([np.asarray(field).ravel() for field in fields])
+        finite = np.isfinite(values)
+        values = values[finite]
+        if values.size == 0 or np.max(np.abs(values)) == 0:
+            return 1.0 + 0j
+        return np.exp(-0.5j * np.angle(np.sum(values ** 2)))
+
+    def _rotate_modes_to_most_real(self):
+        for mode in range(self.num_modes):
+            phase = self._most_real_phase(
+                self.Ex[:, :, mode],
+                self.Ey[:, :, mode],
+                self.Ez[:, :, mode],
+                self.Hx[:, :, mode],
+                self.Hy[:, :, mode],
+                self.Hz[:, :, mode],
+            )
+            self.Ex[:, :, mode] *= phase
+            self.Ey[:, :, mode] *= phase
+            self.Ez[:, :, mode] *= phase
+            self.Hx[:, :, mode] *= phase
+            self.Hy[:, :, mode] *= phase
+            self.Hz[:, :, mode] *= phase
+            self.eigenvectors[:, mode] *= phase
+
     def solve(self, sigma=None):
         """Solve for transverse modes and recover all six staggered field components."""
         sigma = self._resolve_eigs_guess(sigma)
@@ -632,6 +811,7 @@ class ModeSolver2D:
         self.Hy = self._unflatten_modes(hy_flat, self.shape_hy)
         self.Hz = self._unflatten_modes(hz_flat, self.shape_hz)
         self._zero_constrained_fields(pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask)
+        self._rotate_modes_to_most_real()
 
     def _has_lossy_material(self):
         for values in (
@@ -673,6 +853,36 @@ class ModeSolver2D:
             return data
         raise ValueError(f"Unknown field name {name!r}.")
 
+    def _material_background_for_field(self, name):
+        if name == "ex":
+            return self.eps_r_xx
+        if name == "ey":
+            return self.eps_r_yy
+        if name == "ez":
+            return self.eps_r_zz
+        if name == "hx":
+            return self.mu_r_xx
+        if name == "hy":
+            return self.mu_r_yy
+        if name == "hz":
+            return self.mu_r_zz
+        if name == "eabs":
+            return (self.cell_eps_r_xx + self.cell_eps_r_yy + self.cell_eps_r_zz) / 3.0
+        if name == "habs":
+            return (self.cell_mu_r_xx + self.cell_mu_r_yy + self.cell_mu_r_zz) / 3.0
+        raise ValueError(f"Unknown field name {name!r}.")
+
+    def _plot_material_background(self, ax, field_name):
+        material = np.abs(self._material_background_for_field(field_name))
+        ax.imshow(
+            material.T,
+            cmap="inferno",
+            origin="lower",
+            extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+            alpha=0.5,
+            zorder=0,
+        )
+
     def _add_boundary_background(self, ax):
         for sl_x, sl_y in self._pec_regions:
             self._add_boundary_rectangle(ax, sl_x, sl_y, label="PEC")
@@ -684,19 +894,42 @@ class ModeSolver2D:
         x1 = sl_x.stop * self.dx * 1e3
         y0 = sl_y.start * self.dy * 1e3
         y1 = sl_y.stop * self.dy * 1e3
+        facecolor = "yellow" if label == "PEC" else "blue"
+        edgecolor = "goldenrod" if label == "PEC" else "navy"
         ax.add_patch(
             Rectangle(
                 (x0, y0),
                 x1 - x0,
                 y1 - y0,
-                facecolor="yellow",
-                edgecolor="goldenrod",
+                facecolor=facecolor,
+                edgecolor=edgecolor,
                 linewidth=1.0,
-                alpha=0.35,
+                alpha=0.5,
                 label=label,
-                zorder=0,
+                zorder=1,
             )
         )
+
+    def _plot_field_subplot(self, ax, field_name, field_data, title, norm=None):
+        self._plot_material_background(ax, field_name)
+        self._add_boundary_background(ax)
+        if norm is None:
+            norm = np.max(np.abs(field_data))
+        field = field_data / norm if norm > 0 else field_data
+        image = ax.imshow(
+            np.abs(field).T,
+            cmap="viridis",
+            origin="lower",
+            extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
+            vmin=0 if norm is not None else None,
+            vmax=1 if norm is not None else None,
+            alpha=0.9,
+            zorder=2,
+        )
+        ax.set_title(title)
+        ax.set_xlabel("x (mm)")
+        ax.set_ylabel("y (mm)")
+        return image
 
     def _component_fields_for_mode(self, mode):
         return {
@@ -734,22 +967,8 @@ class ModeSolver2D:
         last_image = None
         for i, field_name in enumerate(selected):
             field_data, title = fields[field_name]
-            norm = np.max(np.abs(field_data))
-            if norm > 0:
-                field_data = field_data / norm
             ax = axes[i]
-            self._add_boundary_background(ax)
-            last_image = ax.imshow(
-                np.abs(field_data).T,
-                cmap="viridis",
-                origin="lower",
-                extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-                alpha=0.9,
-                zorder=1,
-            )
-            ax.set_title(title)
-            ax.set_xlabel("x (mm)")
-            ax.set_ylabel("y (mm)")
+            last_image = self._plot_field_subplot(ax, field_name, field_data, title)
 
         for j in range(len(selected), len(axes)):
             fig.delaxes(axes[j])
@@ -779,17 +998,10 @@ class ModeSolver2D:
 
         def plot_mode(selected_mode):
             mode = int(selected_mode) - 1
-            data = [
-                self._field_array(self.Ex, mode),
-                self._field_array(self.Ey, mode),
-                self._field_array(self.Ez, mode),
-                self._field_array(self.Hx, mode),
-                self._field_array(self.Hy, mode),
-                self._field_array(self.Hz, mode),
-            ]
-            titles = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-            e_norm = max(np.max(np.abs(field)) for field in data[:3])
-            h_norm = max(np.max(np.abs(field)) for field in data[3:])
+            fields = self._component_fields_for_mode(mode)
+            order = ("ex", "ey", "ez", "hx", "hy", "hz")
+            e_norm = max(np.max(np.abs(fields[name][0])) for name in order[:3])
+            h_norm = max(np.max(np.abs(fields[name][0])) for name in order[3:])
 
             for ax in axes.flat:
                 ax.clear()
@@ -798,22 +1010,10 @@ class ModeSolver2D:
                 colorbar[0] = None
 
             for i, ax in enumerate(axes.flat):
+                field_name = order[i]
+                field_data, title = fields[field_name]
                 norm = e_norm if i < 3 else h_norm
-                field = data[i] / norm if norm > 0 else data[i]
-                self._add_boundary_background(ax)
-                ax.imshow(
-                    np.abs(field).T,
-                    cmap="viridis",
-                    origin="lower",
-                    extent=[0, self.x_range * 1e3, 0, self.y_range * 1e3],
-                    vmin=0,
-                    vmax=1,
-                    alpha=0.9,
-                    zorder=1,
-                )
-                ax.set_title(titles[i])
-                ax.set_xlabel("x (mm)")
-                ax.set_ylabel("y (mm)")
+                self._plot_field_subplot(ax, field_name, field_data, title, norm=norm)
 
             fig.subplots_adjust(right=0.86)
             cbar_ax = fig.add_axes([0.87, 0.15, 0.02, 0.7])
