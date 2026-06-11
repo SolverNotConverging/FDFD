@@ -10,15 +10,15 @@ x_range = 10e-3
 z_range = 8e-3
 Nx = 200
 Nz = 80
-f_start = 20e9
-f_stop = 35e9
+f_start = 15e9
+f_stop = 25e9
 f_step = 0.2e9
 frequencies = np.arange(f_start, f_stop + f_step, f_step)
 num_modes = 4
 
 
 def guess_func(f):
-    return 0
+    return 5
 
 
 data = {"Frequency (Hz)": frequencies}
@@ -29,14 +29,23 @@ for mode in range(1, num_modes + 1):
 for f in tqdm(frequencies, desc="Frequency sweep"):
     sigma_guess = guess_func(f) if guess_func else 0
 
-    solver = PeriodicModeSolver2D("TM", freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
-                                  num_modes=num_modes, guess=sigma_guess, ncv=None)
+    solver = PeriodicModeSolver2D(
+        "TM",
+        freq=f,
+        x_range=x_range,
+        z_range=z_range,
+        Nx=Nx,
+        Nz=Nz,
+        num_modes=num_modes,
+        guess=sigma_guess,
+        ncv=None,
+    )
 
-    solver.add_pec((25, 26), (0, 10))
-    solver.add_pec((9, 10), (0, Nz))
 
+    solver.add_rectangle(1e8, 1, (2.3e-3, 2.4e-3), (0, 1e-3))
+    solver.add_rectangle(1e8, 1, (0.9e-3, 1e-3), (0, Nz))
     # Dielectric loading
-    solver.add_rectangle(8, 1, (10, 25), (0, Nz))
+    solver.add_rectangle(10.2, 1, (1e-3, 2.3e-3), (0, Nz))
 
     solver.add_pml(pml_width=30, n=3, sigma_max=5, direction="x+")
 

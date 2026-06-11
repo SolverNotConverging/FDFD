@@ -1,7 +1,10 @@
 Periodic Solver 2D
 ==================
 
-``PeriodicModeSolver2D`` solves two-dimensional Bloch-periodic TE or TM modes. The grid spans transverse ``x`` and periodic ``z`` and stores material tensors with shape ``(Nx, Nz)``.
+``PeriodicModeSolver2D`` solves two-dimensional Bloch-periodic TE or TM modes
+on a compact Yee grid. The grid spans transverse ``x`` and periodic ``z``.
+User-defined materials live on cell centers with shape ``(Nx, Nz)`` and are
+interpolated to the actual Yee component locations before solving.
 
 Main Class
 ----------
@@ -16,8 +19,7 @@ Main Class
        Nx,
        Nz,
        num_modes,
-       mode_filter=True,
-       guess=0,
+       guess=5,
        tol=0,
        ncv=None,
    )
@@ -29,28 +31,51 @@ Parameters:
 * ``x_range``, ``z_range``: physical unit-cell spans in metres.
 * ``Nx``, ``Nz``: grid cells in transverse and periodic directions.
 * ``num_modes``: number of modes requested.
-* ``mode_filter``: reserved for API consistency with ``ModeSolver2D``.
-* ``guess``: shift target for the sparse eigensolver.
+* ``guess``: shift target for the sparse eigensolver. A nonzero shift is
+  recommended for PEC/PML problems.
 * ``tol`` and ``ncv``: optional eigensolver controls.
+
+Yee Layout
+----------
+
+The periodic ``z`` direction uses only ``Nz`` unique samples. The duplicated
+``z = L`` node is not stored; derivative and averaging operators wrap from
+``Nz - 1`` to ``0``.
+
+TM fields:
+
+* ``Ex``: shape ``(Nx, Nz, num_modes)``.
+* ``Ez``: shape ``(Nx + 1, Nz, num_modes)``.
+* ``Hy``: shape ``(Nx, Nz, num_modes)``.
+
+TE fields:
+
+* ``Ey``: shape ``(Nx + 1, Nz, num_modes)``.
+* ``Hx``: shape ``(Nx + 1, Nz, num_modes)``.
+* ``Hz``: shape ``(Nx, Nz, num_modes)``.
 
 Material And Boundary API
 -------------------------
 
 .. code-block:: python
 
-   add_rectangle(epsilon, mu, x_range, z_range)
-   add_pec(x_range, z_range, components=None, epsilon=1e8)
-   add_pmc(x_range, z_range, components=None, mu=1e8)
-   add_pml(pml_width=20, n=3, sigma_max=5.0, direction="all")
-   add_UPML(pml_width=20, n=3, sigma_max=5.0, direction="all")
+   add_rectangle(epsilon, mu, x_range, z_range, subpixels=8)
+   add_pec(x_range, z_range, components=None)
+   add_pmc(x_range, z_range, components=None)
+   add_pml(pml_width=30, n=3, sigma_max=5.0, direction="all")
+   add_UPML(pml_width=30, n=3, sigma_max=5.0, direction="all")
 
 Notes:
 
-* ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
+* ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as
+  ``(xx, yy, zz)``.
 * Region bounds accept grid-index pairs or physical coordinate pairs in metres.
-* ``add_pec`` applies a large-permittivity material penalty instead of eliminating DOFs.
-* ``add_pmc`` applies a large-permeability material penalty instead of eliminating DOFs.
-* ``components`` can select tensor components; ``None`` applies all three.
+* ``add_rectangle`` first computes fractional per-cell coverage on a
+  ``subpixels`` by ``subpixels`` grid, blends into cell-centred material arrays,
+  then refreshes the component-location ``eps_r_*`` and ``mu_r_*`` arrays.
+* ``add_pec`` and ``add_pmc`` are cell-based and expand the selected region to
+  component-specific Yee masks.
+* ``components=None`` applies PEC or PMC to all tensor components.
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
 
 Solve API
@@ -60,16 +85,19 @@ Solve API
 
    solve(guess=None, tol=None, ncv=None)
 
-``guess``, ``tol``, and ``ncv`` override the instance eigensolver settings for that call. If omitted, the constructor values are used.
+``guess``, ``tol``, and ``ncv`` override the instance eigensolver settings for
+that call. If omitted, the constructor values are used.
 
 After solving, common outputs are:
 
 * ``neff``: complex propagation constants normalized by ``k0``.
-* ``propagation_constant``: imaginary part of ``neff`` under the existing plotting convention.
-* ``attenuation_constant``: real part of ``neff`` under the existing plotting convention.
+* ``propagation_constant``: imaginary part of ``neff`` under the existing
+  plotting convention.
+* ``attenuation_constant``: real part of ``neff`` under the existing plotting
+  convention.
 * ``eigenvalues`` and ``eigenvectors``: sparse eigensolver outputs.
-* ``Ex`` and ``Hy`` for ``"TM"`` polarization.
-* ``Hx`` and ``Ey`` for ``"TE"`` polarization.
+* ``Ex``, ``Ez``, and ``Hy`` for ``"TM"`` polarization.
+* ``Ey``, ``Hx``, and ``Hz`` for ``"TE"`` polarization.
 
 Visualization
 -------------
@@ -78,8 +106,8 @@ Visualization
 
    visualize_with_gui()
 
-The GUI displays the material map and the active field components for the selected polarization and mode.
-PEC/PMC penalty regions are excluded from the material colormap and drawn as yellow rectangles so their large values do not dominate the plot scale.
+The GUI displays the material map and the active staggered field components for
+the selected polarization and mode.
 
 Minimal Example
 ---------------
@@ -96,7 +124,7 @@ Minimal Example
        Nx=200,
        Nz=80,
        num_modes=6,
-       guess=0,
+       guess=5,
    )
 
    solver.add_rectangle(8.0, 1.0, (10, 25), (0, 80))
