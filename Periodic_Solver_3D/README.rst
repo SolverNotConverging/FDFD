@@ -6,7 +6,7 @@ Periodic Solver 3D
 What It Solves
 --------------
 
-The solver builds sparse finite-difference operators on a 3D grid, applies periodicity along the unit-cell direction, and solves a generalized eigenproblem for modal propagation constants. It can reconstruct and store volumetric field arrays for plotting and export.
+The solver builds sparse finite-difference operators on a 3D Yee grid, applies periodicity along the unit-cell direction, and solves a generalized eigenproblem for modal propagation constants. It can reconstruct and store volumetric field arrays for plotting and export.
 
 Main Class
 ----------
@@ -29,13 +29,18 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_object(er, mr, x_slice, y_slice, z_slice)
+   add_block(er, mr, x_range, y_range, z_range, subpixels=8)
+   add_pec(x_range, y_range, z_range, components=None, epsilon=1e8)
+   add_pmc(x_range, y_range, z_range, components=None, mu=1e8)
    add_UPML(sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3)
 
 Notes:
 
 * ``er`` and ``mr`` can be scalar or anisotropic material values accepted by the implementation.
-* Geometry regions are supplied as Python slices for ``x``, ``y``, and ``z``.
+* Geometry is assigned on a cell material grid with shape ``(Nx, Ny, Nz)`` and averaged onto Yee component locations internally.
+* Geometry regions are supplied as ``(min, max)`` pairs using integer grid indices or float physical positions in metres. Python slices are also accepted for index-based regions.
+* ``add_block`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
+* ``add_pec`` and ``add_pmc`` apply large material penalties and prevent averaging across those cells.
 * ``add_UPML`` accepts side labels such as ``'+y'`` to absorb selected faces.
 
 Solve And Field Storage
@@ -80,7 +85,7 @@ Minimal Example
        tol=0.1,
    )
 
-   solver.add_object(6.0, 1.0, slice(6, 18), slice(13, 19), slice(0, 16))
+   solver.add_block(6.0, 1.0, (6, 18), (13, 19), (0, 16), subpixels=8)
    solver.add_UPML(['+y'], width=6, max_loss=5)
    solver.solve()
    solver.visualize_with_gui()
