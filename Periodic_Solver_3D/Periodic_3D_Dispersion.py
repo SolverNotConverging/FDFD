@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 import numpy as np
 from tqdm import tqdm
@@ -19,6 +20,8 @@ f_step = 1e9
 frequencies = np.arange(f_start, f_stop + f_step, f_step)
 num_modes = 2
 tol = 1e-2
+ncv = 30
+max_restarts = 8
 
 
 def guess_func(f):
@@ -30,13 +33,15 @@ def guess_func(f):
 output_dir = Path(__file__).resolve().parent / "example_outputs"
 output_dir.mkdir(parents=True, exist_ok=True)
 
+last_gamma = None
 for f in tqdm(frequencies, desc="Frequency sweep"):
-    sigma_guess = guess_func(f) if guess_func else 0
+    k0 = 2 * np.pi * f / 3e8
+    sigma_guess = last_gamma * k0 if last_gamma is not None else guess_func(f) if guess_func else 0
 
     solver = PeriodicModeSolver3D(Nx=Nx, Ny=Ny, Nz=Nz,
                                      x_range=x_range, y_range=y_range, z_range=z_range,
                                      freq=f, num_modes=num_modes, sigma_guess=sigma_guess,
-                                     tol=tol, ncv=None)
+                                     tol=tol, ncv=ncv)
 
     solver.add_pec(slice(0, 3), slice(Ny - 8, Ny - 7), slice(0, Nz))
     solver.add_pec(slice(5, 8), slice(Ny - 8, Ny - 7), slice(0, Nz))
@@ -45,8 +50,12 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     solver.add_UPML(['+y'], width=8, max_loss=10, n=3)
 
     try:
-        solver.solve()
+        start = time.perf_counter()
+        solver.solve(method="refined", max_restarts=max_restarts)
+        elapsed = time.perf_counter() - start
         solver.save_results(output_dir / f"{f / 1e9:.0f}_GHz.npz")
+        last_gamma = solver.gammas[0]
         print(f"{f / 1e9:.1f} GHz: beta={solver.gammas[0].real}, alpha={solver.gammas[0].imag}")
+        print(f"  residuals={solver.refined_residuals}, restarts={solver.refined_restarts}, elapsed={elapsed:.2f}s")
     except Exception as exc:
-        print(f"[WARN] eigs failed at {f / 1e9:.2f} GHz: {exc}")
+        print(f"[WARN] refined solve failed at {f / 1e9:.2f} GHz: {exc}")

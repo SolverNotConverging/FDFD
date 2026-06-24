@@ -8,6 +8,11 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
 from scipy.sparse.linalg import eigs
 
+try:
+    from .refined_shift_invert_arnoldi import refined_shift_invert_arnoldi
+except ImportError:
+    from refined_shift_invert_arnoldi import refined_shift_invert_arnoldi
+
 
 class PeriodicModeSolver3D:
     def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess=None, tol=0, ncv=None):
@@ -470,7 +475,7 @@ class PeriodicModeSolver3D:
         return materials
 
     # --- Solver
-    def solve(self):
+    def _build_eigen_matrices(self):
         omega, epsilon0, mu0 = self.omega, self.epsilon0, self.mu0
 
         # Build diagonal sparse matrices
@@ -525,9 +530,57 @@ class PeriodicModeSolver3D:
             [None, None, zero_hy_hx, self.AZ_HY],
         ], format="csr")
 
-        # Solve
-        self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess, tol=self.tol,
-                                                   ncv=self.ncv)
+        return A, B
+
+    def solve(self, method="refined", sigma_guess=None, tol=None, ncv=None, max_restarts=12, random_seed=0):
+        """Solve periodic modes.
+
+        Args:
+            method (str): ``"eigs"`` for SciPy's shift-invert Arnoldi, or
+                ``"refined"`` for restarted shift-invert Arnoldi with refined
+                Ritz vectors from the current Krylov subspace.
+            sigma_guess (complex|None): optional shift override for this call.
+            tol (float|None): residual tolerance override.
+            ncv (int|None): Arnoldi subspace size override.
+            max_restarts (int): refined Arnoldi restart limit.
+            random_seed (int|None): seed for the refined solver start vector.
+        """
+        sigma_guess = self.sigma_guess if sigma_guess is None else sigma_guess
+        tol = self.tol if tol is None else tol
+        ncv = self.ncv if ncv is None else ncv
+
+        A, B = self._build_eigen_matrices()
+
+        if method == "eigs":
+            self.eigenvalues, self.eigenvectors = eigs(
+                A,
+                M=B,
+                k=self.num_modes,
+                sigma=sigma_guess,
+                tol=tol,
+                ncv=ncv,
+            )
+            order = np.argsort(np.abs(self.eigenvalues - sigma_guess))
+            self.eigenvalues = self.eigenvalues[order]
+            self.eigenvectors = self.eigenvectors[:, order]
+            self.refined_residuals = None
+            self.refined_restarts = None
+        elif method == "refined":
+            self.eigenvalues, self.eigenvectors, self.refined_residuals, self.refined_restarts = (
+                refined_shift_invert_arnoldi(
+                    A,
+                    B,
+                    sigma=sigma_guess,
+                    num_modes=self.num_modes,
+                    tol=tol,
+                    ncv=ncv,
+                    max_restarts=max_restarts,
+                    random_seed=random_seed,
+                )
+            )
+        else:
+            raise ValueError("method must be 'eigs' or 'refined'.")
+
         self.gammas = self.eigenvalues / self.k0
         self.store_fields()
 
@@ -826,6 +879,9 @@ class PeriodicModeSolver3D:
 
         if include_eigenvectors and self.eigenvectors is not None:
             out['eigenvectors'] = self.eigenvectors
+        if getattr(self, 'refined_residuals', None) is not None:
+            out['refined_residuals'] = self.refined_residuals
+            out['refined_restarts'] = np.int64(self.refined_restarts)
 
         return out
 
@@ -897,5 +953,11 @@ class PeriodicModeSolver3D:
                 inst.eigenvectors = d['eigenvectors']
             else:
                 inst.eigenvectors = None
+            if 'refined_residuals' in d.files:
+                inst.refined_residuals = d['refined_residuals']
+                inst.refined_restarts = int(d['refined_restarts'])
+            else:
+                inst.refined_residuals = None
+                inst.refined_restarts = None
 
         return inst
