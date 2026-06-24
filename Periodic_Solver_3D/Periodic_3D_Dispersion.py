@@ -38,10 +38,10 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
                                      freq=f, num_modes=num_modes, sigma_guess=sigma_guess,
                                      tol=tol, ncv=None)
 
-    solver.add_object(1e8, 1, slice(0, 3), slice(Ny - 8, Ny - 7), slice(0, Nz))
-    solver.add_object(1e8, 1, slice(5, 8), slice(Ny - 8, Ny - 7), slice(0, Nz))
-    solver.add_object(6, 1, slice(3, 17), slice(Ny - 7, Ny - 1), slice(0, Nz))
-    solver.add_object(1e8, 1, slice(0, Nx), slice(Ny - 1, Ny), slice(0, Nz))
+    solver.add_pec(slice(0, 3), slice(Ny - 8, Ny - 7), slice(0, Nz))
+    solver.add_pec(slice(5, 8), slice(Ny - 8, Ny - 7), slice(0, Nz))
+    solver.add_block(6, 1, slice(3, 17), slice(Ny - 7, Ny - 1), slice(0, Nz), subpixels=8)
+    solver.add_pec(slice(0, Nx), slice(Ny - 1, Ny), slice(0, Nz))
     solver.add_UPML(['+y'], width=8, max_loss=10, n=3)
 
     try:

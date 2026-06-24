@@ -5,27 +5,30 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from scipy.sparse import diags, kron, eye, bmat
+from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
 from scipy.sparse.linalg import eigs
 
 
 class PeriodicModeSolver3D:
     def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess=None, tol=0, ncv=None):
         # Store parameters
-        self.Nx = Nx
-        self.Ny = Ny
-        self.Nz = Nz
-        self.dx = x_range / Nx
-        self.dy = y_range / Ny
-        self.dz = z_range / Nz
-        self.N = Nx * Ny * Nz
+        self.Nx = int(Nx)
+        self.Ny = int(Ny)
+        self.Nz = int(Nz)
+        self.x_range = x_range
+        self.y_range = y_range
+        self.z_range = z_range
+        self.dx = x_range / self.Nx
+        self.dy = y_range / self.Ny
+        self.dz = z_range / self.Nz
+        self.N = self.Nx * self.Ny * self.Nz
 
         self.freq = freq
         self.omega = 2 * np.pi * freq
         self.k0 = self.omega / 3e8
         self.epsilon0 = 8.85e-12
         self.mu0 = 1.26e-6
-        self.num_modes = num_modes
+        self.num_modes = int(num_modes)
 
         if sigma_guess is not None:
             self.sigma_guess = sigma_guess
@@ -35,64 +38,300 @@ class PeriodicModeSolver3D:
         self.tol = tol
         self.ncv = ncv
 
-        # Grids
-        self.Ix, self.Iy, self.Iz = eye(Nx), eye(Ny), eye(Nz)
-        self.DEX = kron(kron(self.Iz, self.Iy), self.diff_operator(Nx)) / self.dx
-        self.DEY = kron(kron(self.Iz, self.diff_operator(Ny)), self.Ix) / self.dy
-        self.DEZ = kron(kron(self.diff_operator_pbc(Nz), self.Iy), self.Ix) / self.dz
-        self.DHX = -self.DEX.conj().T
-        self.DHY = -self.DEY.conj().T
-        self.DHZ = -self.DEZ.conj().T
+        self.shape_cell = (self.Nx, self.Ny, self.Nz)
+        self.shape_ex = (self.Nx, self.Ny + 1, self.Nz)
+        self.shape_ey = (self.Nx + 1, self.Ny, self.Nz)
+        self.shape_ez = (self.Nx + 1, self.Ny + 1, self.Nz)
+        self.shape_hx = self.shape_ey
+        self.shape_hy = self.shape_ex
+        self.shape_hz = self.shape_cell
+
+        self.n_ex = int(np.prod(self.shape_ex))
+        self.n_ey = int(np.prod(self.shape_ey))
+        self.n_ez = int(np.prod(self.shape_ez))
+        self.n_hx = self.n_ey
+        self.n_hy = self.n_ex
+        self.n_hz = self.N
 
         # Material arrays
-        self.Erxx_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Eryy_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Erzz_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Mrxx_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Mryy_3D = np.ones((Nz, Ny, Nx), dtype=complex)
-        self.Mrzz_3D = np.ones((Nz, Ny, Nx), dtype=complex)
+        self.cell_Erxx_3D = np.ones(self.shape_cell, dtype=complex)
+        self.cell_Eryy_3D = np.ones(self.shape_cell, dtype=complex)
+        self.cell_Erzz_3D = np.ones(self.shape_cell, dtype=complex)
+        self.cell_Mrxx_3D = np.ones(self.shape_cell, dtype=complex)
+        self.cell_Mryy_3D = np.ones(self.shape_cell, dtype=complex)
+        self.cell_Mrzz_3D = np.ones(self.shape_cell, dtype=complex)
+        self.material_no_average_mask = np.zeros(self.shape_cell, dtype=bool)
+
+        self.Erxx_3D = np.ones(self.shape_ex, dtype=complex)
+        self.Eryy_3D = np.ones(self.shape_ey, dtype=complex)
+        self.Erzz_3D = np.ones(self.shape_ez, dtype=complex)
+        self.Mrxx_3D = np.ones(self.shape_hx, dtype=complex)
+        self.Mryy_3D = np.ones(self.shape_hy, dtype=complex)
+        self.Mrzz_3D = np.ones(self.shape_hz, dtype=complex)
+
+        self._pec_regions = []
+        self._pmc_regions = []
+        self._init_operators()
+        self.update_component_materials()
 
         # Storage
         self.fields = {}
         self.eigenvalues = None
         self.eigenvectors = None
 
+    def _invalidate_solution(self):
+        self.fields = {}
+        self.eigenvalues = None
+        self.eigenvectors = None
+        if hasattr(self, "gammas"):
+            delattr(self, "gammas")
+
     # --- Differentiation operators
-    def diff_operator(self, n):
-        e = np.ones(n)
-        return diags([-e, e], [0, 1], shape=(n, n)).tolil().tocsr()
+    def _init_operators(self):
+        self.DEX_EZ_TO_EX = self._difference_matrix_x(self.shape_ez, self.shape_ex, self.dx, forward=True)
+        self.DEY_EZ_TO_EY = self._difference_matrix_y(self.shape_ez, self.shape_ey, self.dy, forward=True)
+        self.DEX_EY_TO_HZ = self._difference_matrix_x(self.shape_ey, self.shape_hz, self.dx, forward=True)
+        self.DEY_EX_TO_HZ = self._difference_matrix_y(self.shape_ex, self.shape_hz, self.dy, forward=True)
 
-    def diff_operator_pbc(self, n):
-        e = np.ones(n)
-        D = diags([-e, e], [0, 1], shape=(n, n)).tolil()
-        D[-1, 0] = 1
-        return D.tocsr()
+        self.DHX_HY_TO_EZ = -self.DEX_EZ_TO_EX.conj().T
+        self.DHY_HX_TO_EZ = -self.DEY_EZ_TO_EY.conj().T
+        self.DHX_HZ_TO_HX = -self.DEX_EY_TO_HZ.conj().T
+        self.DHY_HZ_TO_HY = -self.DEY_EX_TO_HZ.conj().T
 
-    def add_operator_pbc(self, n):
-        e = np.ones(n)
-        D = 0.5 * diags([e, e], [0, 1], shape=(n, n)).tolil()
-        D[-1, 0] = 0.5
-        return D.tocsr()
+        self.DEZ_EX = self._periodic_difference_matrix_z(self.shape_ex, self.shape_ex, self.dz, forward=True)
+        self.DEZ_EY = self._periodic_difference_matrix_z(self.shape_ey, self.shape_ey, self.dz, forward=True)
+        self.DHZ_HX = -self.DEZ_EY.conj().T
+        self.DHZ_HY = -self.DEZ_EX.conj().T
+
+        self.AZ_EX = self._periodic_forward_average_z(self.shape_ex)
+        self.AZ_EY = self._periodic_forward_average_z(self.shape_ey)
+        self.AZ_HX = self.AZ_EY.conj().T
+        self.AZ_HY = self.AZ_EX.conj().T
+
+    @staticmethod
+    def _flat_index(i, j, k, nx, ny):
+        return i + nx * (j + ny * k)
+
+    def _difference_matrix_x(self, in_shape, out_shape, scale, forward=True):
+        rows = []
+        cols = []
+        data = []
+        in_nx, in_ny, _ = in_shape
+        out_nx, out_ny, out_nz = out_shape
+        for k in range(out_nz):
+            for j in range(out_ny):
+                for i in range(out_nx):
+                    row = self._flat_index(i, j, k, out_nx, out_ny)
+                    entries = ((i + 1, j, k, 1.0), (i, j, k, -1.0)) if forward else (
+                        (i, j, k, 1.0), (i - 1, j, k, -1.0)
+                    )
+                    for ci, cj, ck, value in entries:
+                        if 0 <= ci < in_shape[0] and 0 <= cj < in_shape[1] and 0 <= ck < in_shape[2]:
+                            rows.append(row)
+                            cols.append(self._flat_index(ci, cj, ck, in_nx, in_ny))
+                            data.append(value / scale)
+        return coo_matrix((data, (rows, cols)), shape=(np.prod(out_shape), np.prod(in_shape))).tocsr()
+
+    def _difference_matrix_y(self, in_shape, out_shape, scale, forward=True):
+        rows = []
+        cols = []
+        data = []
+        in_nx, in_ny, _ = in_shape
+        out_nx, out_ny, out_nz = out_shape
+        for k in range(out_nz):
+            for j in range(out_ny):
+                for i in range(out_nx):
+                    row = self._flat_index(i, j, k, out_nx, out_ny)
+                    entries = ((i, j + 1, k, 1.0), (i, j, k, -1.0)) if forward else (
+                        (i, j, k, 1.0), (i, j - 1, k, -1.0)
+                    )
+                    for ci, cj, ck, value in entries:
+                        if 0 <= ci < in_shape[0] and 0 <= cj < in_shape[1] and 0 <= ck < in_shape[2]:
+                            rows.append(row)
+                            cols.append(self._flat_index(ci, cj, ck, in_nx, in_ny))
+                            data.append(value / scale)
+        return coo_matrix((data, (rows, cols)), shape=(np.prod(out_shape), np.prod(in_shape))).tocsr()
+
+    def _periodic_difference_matrix_z(self, in_shape, out_shape, scale, forward=True):
+        if in_shape != out_shape:
+            raise ValueError("Periodic z derivatives should not change Yee component shape.")
+        rows = []
+        cols = []
+        data = []
+        nx, ny, nz = in_shape
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    row = self._flat_index(i, j, k, nx, ny)
+                    if forward:
+                        entries = ((i, j, (k + 1) % nz, 1.0), (i, j, k, -1.0))
+                    else:
+                        entries = ((i, j, k, 1.0), (i, j, (k - 1) % nz, -1.0))
+                    for ci, cj, ck, value in entries:
+                        rows.append(row)
+                        cols.append(self._flat_index(ci, cj, ck, nx, ny))
+                        data.append(value / scale)
+        return coo_matrix((data, (rows, cols)), shape=(np.prod(in_shape), np.prod(in_shape))).tocsr()
+
+    def _periodic_forward_average_z(self, shape):
+        rows = []
+        cols = []
+        data = []
+        nx, ny, nz = shape
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    row = self._flat_index(i, j, k, nx, ny)
+                    for ck in (k, (k + 1) % nz):
+                        rows.append(row)
+                        cols.append(self._flat_index(i, j, ck, nx, ny))
+                        data.append(0.5)
+        return coo_matrix((data, (rows, cols)), shape=(np.prod(shape), np.prod(shape))).tocsr()
 
     # --- Helper functions for modeling
-    def add_object(self, er, mr, x_slice, y_slice, z_slice):
-        if np.isscalar(er):
-            self.Erxx_3D[z_slice, y_slice, x_slice] = er
-            self.Eryy_3D[z_slice, y_slice, x_slice] = er
-            self.Erzz_3D[z_slice, y_slice, x_slice] = er
-        else:
-            self.Erxx_3D[z_slice, y_slice, x_slice] = er[0]
-            self.Eryy_3D[z_slice, y_slice, x_slice] = er[1]
-            self.Erzz_3D[z_slice, y_slice, x_slice] = er[2]
+    @staticmethod
+    def _normalise_three(name, value):
+        if np.isscalar(value):
+            return np.full(3, value, dtype=complex)
+        array = np.asarray(value, dtype=complex)
+        if array.ndim == 1 and array.size == 3:
+            return array
+        raise ValueError(f"{name} must be a scalar or a length-3 1D array (xx, yy, zz).")
 
-        if np.isscalar(mr):
-            self.Mrxx_3D[z_slice, y_slice, x_slice] = mr
-            self.Mryy_3D[z_slice, y_slice, x_slice] = mr
-            self.Mrzz_3D[z_slice, y_slice, x_slice] = mr
-        else:
-            self.Mrxx_3D[z_slice, y_slice, x_slice] = mr[0]
-            self.Mryy_3D[z_slice, y_slice, x_slice] = mr[1]
-            self.Mrzz_3D[z_slice, y_slice, x_slice] = mr[2]
+    @staticmethod
+    def _validate_subpixels(subpixels):
+        subpixels = int(subpixels)
+        if subpixels <= 0:
+            raise ValueError("subpixels must be positive.")
+        return subpixels
+
+    def _coordinate_to_length(self, value, axis):
+        if isinstance(value, (int, np.integer)):
+            step = {"x": self.dx, "y": self.dy, "z": self.dz}[axis]
+            return int(value) * step
+        if isinstance(value, (float, np.floating)):
+            return float(value)
+        raise ValueError("Coordinates must be int grid indices or float physical positions in metres.")
+
+    def _range_to_lengths(self, name, values, axis):
+        if isinstance(values, slice):
+            start = 0 if values.start is None else values.start
+            stop = {"x": self.Nx, "y": self.Ny, "z": self.Nz}[axis] if values.stop is None else values.stop
+            if values.step not in (None, 1):
+                raise ValueError(f"{name} slice step must be None or 1.")
+            values = (start, stop)
+        try:
+            start, stop = values
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be a slice or a (min, max) pair.")
+        start = self._coordinate_to_length(start, axis)
+        stop = self._coordinate_to_length(stop, axis)
+        if stop <= start:
+            raise ValueError(f"{name} must satisfy max > min.")
+        limit = {"x": self.x_range, "y": self.y_range, "z": self.z_range}[axis]
+        if start < 0 or stop > limit:
+            raise ValueError(f"{name} is out of bounds of the simulation grid.")
+        return start, stop
+
+    def _region_slices(self, x_range, y_range, z_range):
+        x_min, x_max = self._range_to_lengths("x_range", x_range, "x")
+        y_min, y_max = self._range_to_lengths("y_range", y_range, "y")
+        z_min, z_max = self._range_to_lengths("z_range", z_range, "z")
+        x0, x1, y0, y1, z0, z1 = self._clipped_cell_bbox(x_min, x_max, y_min, y_max, z_min, z_max)
+        if x0 >= x1 or y0 >= y1 or z0 >= z1:
+            raise ValueError("Region is outside the simulation grid.")
+        return slice(x0, x1), slice(y0, y1), slice(z0, z1)
+
+    def _cell_material_array(self, prefix, component):
+        if prefix == "eps":
+            return {"xx": self.cell_Erxx_3D, "yy": self.cell_Eryy_3D, "zz": self.cell_Erzz_3D}[component]
+        if prefix == "mu":
+            return {"xx": self.cell_Mrxx_3D, "yy": self.cell_Mryy_3D, "zz": self.cell_Mrzz_3D}[component]
+        raise ValueError(f"Unknown {prefix} component {component!r}.")
+
+    def _subpixel_axis(self, start, stop, step, subpixels):
+        indices = np.arange(start, stop, dtype=float)
+        offsets = (np.arange(subpixels, dtype=float) + 0.5) / subpixels
+        return (indices[:, None] + offsets[None, :]) * step
+
+    def _clipped_cell_bbox(self, xmin, xmax, ymin, ymax, zmin, zmax):
+        x0 = max(0, int(np.floor(xmin / self.dx)))
+        x1 = min(self.Nx, int(np.ceil(xmax / self.dx)))
+        y0 = max(0, int(np.floor(ymin / self.dy)))
+        y1 = min(self.Ny, int(np.ceil(ymax / self.dy)))
+        z0 = max(0, int(np.floor(zmin / self.dz)))
+        z1 = min(self.Nz, int(np.ceil(zmax / self.dz)))
+        return x0, x1, y0, y1, z0, z1
+
+    def _apply_fractional_material(self, er, mr, fraction, sl_x, sl_y, sl_z):
+        er = self._normalise_three("er", er)
+        mr = self._normalise_three("mr", mr)
+        fraction = np.asarray(fraction, dtype=float)
+        if fraction.shape != self.cell_Erxx_3D[sl_x, sl_y, sl_z].shape:
+            raise ValueError("fraction shape does not match target cell region.")
+
+        no_average = self.material_no_average_mask[sl_x, sl_y, sl_z]
+        covered = (fraction > 0.0) & ~no_average
+        if not np.any(covered):
+            return
+
+        for component, value in zip(("xx", "yy", "zz"), er):
+            target = self._cell_material_array("eps", component)[sl_x, sl_y, sl_z]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+        for component, value in zip(("xx", "yy", "zz"), mr):
+            target = self._cell_material_array("mu", component)[sl_x, sl_y, sl_z]
+            target[covered] = target[covered] * (1.0 - fraction[covered]) + value * fraction[covered]
+
+        self.update_component_materials()
+        self._invalidate_solution()
+
+    def add_block(self, er, mr, x_range, y_range, z_range, *, subpixels=8):
+        """Add a subpixel-smoothed rectangular block on the cell material grid.
+
+        Range bounds accept either integer grid indices or float physical
+        positions in metres, matching ``PeriodicModeSolver2D.add_rectangle``.
+        Python slices are also accepted for concise index-based regions.
+        """
+        x_min, x_max = self._range_to_lengths("x_range", x_range, "x")
+        y_min, y_max = self._range_to_lengths("y_range", y_range, "y")
+        z_min, z_max = self._range_to_lengths("z_range", z_range, "z")
+        subpixels = self._validate_subpixels(subpixels)
+        x0, x1, y0, y1, z0, z1 = self._clipped_cell_bbox(x_min, x_max, y_min, y_max, z_min, z_max)
+        if x0 >= x1 or y0 >= y1 or z0 >= z1:
+            return
+
+        xs = self._subpixel_axis(x0, x1, self.dx, subpixels)
+        ys = self._subpixel_axis(y0, y1, self.dy, subpixels)
+        zs = self._subpixel_axis(z0, z1, self.dz, subpixels)
+        x_inside = (xs >= x_min) & (xs <= x_max)
+        y_inside = (ys >= y_min) & (ys <= y_max)
+        z_inside = (zs >= z_min) & (zs <= z_max)
+        fraction = (
+            x_inside[:, :, None, None, None, None]
+            & y_inside[None, None, :, :, None, None]
+            & z_inside[None, None, None, None, :, :]
+        ).mean(axis=(1, 3, 5))
+        self._apply_fractional_material(er, mr, fraction, slice(x0, x1), slice(y0, y1), slice(z0, z1))
+
+    def add_pec(self, x_range, y_range, z_range, components=None, epsilon=1e8):
+        sl_x, sl_y, sl_z = self._region_slices(x_range, y_range, z_range)
+        selected = ("xx", "yy", "zz") if components is None else tuple(components)
+        for comp in selected:
+            self._cell_material_array("eps", comp)[sl_x, sl_y, sl_z] = epsilon
+        self.material_no_average_mask[sl_x, sl_y, sl_z] = True
+        self._pec_regions.append((sl_x, sl_y, sl_z))
+        self.update_component_materials()
+        self._invalidate_solution()
+
+    def add_pmc(self, x_range, y_range, z_range, components=None, mu=1e8):
+        sl_x, sl_y, sl_z = self._region_slices(x_range, y_range, z_range)
+        selected = ("xx", "yy", "zz") if components is None else tuple(components)
+        for comp in selected:
+            self._cell_material_array("mu", comp)[sl_x, sl_y, sl_z] = mu
+        self.material_no_average_mask[sl_x, sl_y, sl_z] = True
+        self._pmc_regions.append((sl_x, sl_y, sl_z))
+        self.update_component_materials()
+        self._invalidate_solution()
 
     def add_UPML(self, sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3):
         # Assumes e^{+i ω t}. If using e^{-i ω t}, change +1j -> -1j.
@@ -109,73 +348,182 @@ class PeriodicModeSolver3D:
             S = 1 + 1j * sigma / (omega * e0)  # flip sign if using e^{-iωt}
 
             if '-x' in sides:
-                sl = np.s_[:, :, i]
-                self.Erxx_3D[sl] /= S
-                self.Eryy_3D[sl] *= S
-                self.Erzz_3D[sl] *= S
-                self.Mrxx_3D[sl] /= S
-                self.Mryy_3D[sl] *= S
-                self.Mrzz_3D[sl] *= S
+                sl = np.s_[i, :, :]
+                self.cell_Erxx_3D[sl] /= S
+                self.cell_Eryy_3D[sl] *= S
+                self.cell_Erzz_3D[sl] *= S
+                self.cell_Mrxx_3D[sl] /= S
+                self.cell_Mryy_3D[sl] *= S
+                self.cell_Mrzz_3D[sl] *= S
 
             if '+x' in sides:
-                sl = np.s_[:, :, -1 - i]
-                self.Erxx_3D[sl] /= S
-                self.Eryy_3D[sl] *= S
-                self.Erzz_3D[sl] *= S
-                self.Mrxx_3D[sl] /= S
-                self.Mryy_3D[sl] *= S
-                self.Mrzz_3D[sl] *= S
+                sl = np.s_[-1 - i, :, :]
+                self.cell_Erxx_3D[sl] /= S
+                self.cell_Eryy_3D[sl] *= S
+                self.cell_Erzz_3D[sl] *= S
+                self.cell_Mrxx_3D[sl] /= S
+                self.cell_Mryy_3D[sl] *= S
+                self.cell_Mrzz_3D[sl] *= S
 
             if '+y' in sides:
                 sl = np.s_[:, i, :]
-                self.Erxx_3D[sl] *= S
-                self.Eryy_3D[sl] /= S
-                self.Erzz_3D[sl] *= S
-                self.Mrxx_3D[sl] *= S
-                self.Mryy_3D[sl] /= S
-                self.Mrzz_3D[sl] *= S
+                self.cell_Erxx_3D[sl] *= S
+                self.cell_Eryy_3D[sl] /= S
+                self.cell_Erzz_3D[sl] *= S
+                self.cell_Mrxx_3D[sl] *= S
+                self.cell_Mryy_3D[sl] /= S
+                self.cell_Mrzz_3D[sl] *= S
 
             if '-y' in sides:
                 sl = np.s_[:, -1 - i, :]
-                self.Erxx_3D[sl] *= S
-                self.Eryy_3D[sl] /= S
-                self.Erzz_3D[sl] *= S
-                self.Mrxx_3D[sl] *= S
-                self.Mryy_3D[sl] /= S
-                self.Mrzz_3D[sl] *= S
+                self.cell_Erxx_3D[sl] *= S
+                self.cell_Eryy_3D[sl] /= S
+                self.cell_Erzz_3D[sl] *= S
+                self.cell_Mrxx_3D[sl] *= S
+                self.cell_Mryy_3D[sl] /= S
+                self.cell_Mrzz_3D[sl] *= S
+
+        self.update_component_materials()
+        self._invalidate_solution()
+
+    @staticmethod
+    def _diag(values):
+        return diags(values.ravel(order="F"), format="csr")
+
+    def _average_x(self, values, no_average_mask=None):
+        out = np.zeros((self.Nx + 1, self.Ny, self.Nz), dtype=complex)
+        counts = np.zeros((self.Nx + 1, self.Ny, self.Nz), dtype=float)
+        out[:self.Nx, :, :] += values
+        counts[:self.Nx, :, :] += 1
+        out[1:, :, :] += values
+        counts[1:, :, :] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj, kk = np.nonzero(no_average_mask)
+            out[ii, jj, kk] = values[ii, jj, kk]
+            out[ii + 1, jj, kk] = values[ii, jj, kk]
+        return out
+
+    def _average_y(self, values, no_average_mask=None):
+        out = np.zeros((self.Nx, self.Ny + 1, self.Nz), dtype=complex)
+        counts = np.zeros((self.Nx, self.Ny + 1, self.Nz), dtype=float)
+        out[:, :self.Ny, :] += values
+        counts[:, :self.Ny, :] += 1
+        out[:, 1:, :] += values
+        counts[:, 1:, :] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj, kk = np.nonzero(no_average_mask)
+            out[ii, jj, kk] = values[ii, jj, kk]
+            out[ii, jj + 1, kk] = values[ii, jj, kk]
+        return out
+
+    def _average_xy(self, values, no_average_mask=None):
+        out = np.zeros((self.Nx + 1, self.Ny + 1, self.Nz), dtype=complex)
+        counts = np.zeros((self.Nx + 1, self.Ny + 1, self.Nz), dtype=float)
+        out[:self.Nx, :self.Ny, :] += values
+        counts[:self.Nx, :self.Ny, :] += 1
+        out[1:, :self.Ny, :] += values
+        counts[1:, :self.Ny, :] += 1
+        out[:self.Nx, 1:, :] += values
+        counts[:self.Nx, 1:, :] += 1
+        out[1:, 1:, :] += values
+        counts[1:, 1:, :] += 1
+        out = out / counts
+        if no_average_mask is not None:
+            ii, jj, kk = np.nonzero(no_average_mask)
+            out[ii, jj, kk] = values[ii, jj, kk]
+            out[ii + 1, jj, kk] = values[ii, jj, kk]
+            out[ii, jj + 1, kk] = values[ii, jj, kk]
+            out[ii + 1, jj + 1, kk] = values[ii, jj, kk]
+        return out
+
+    def _material_on_fields(self, erxx, eryy, erzz, mrxx, mryy, mrzz, no_average_mask):
+        return {
+            "erxx": self._average_y(erxx, no_average_mask),
+            "eryy": self._average_x(eryy, no_average_mask),
+            "erzz": self._average_xy(erzz, no_average_mask),
+            "mrxx": self._average_x(mrxx, no_average_mask),
+            "mryy": self._average_y(mryy, no_average_mask),
+            "mrzz": mrzz.copy(),
+        }
+
+    def _set_component_materials(self, materials):
+        self.Erxx_3D = materials["erxx"].copy()
+        self.Eryy_3D = materials["eryy"].copy()
+        self.Erzz_3D = materials["erzz"].copy()
+        self.Mrxx_3D = materials["mrxx"].copy()
+        self.Mryy_3D = materials["mryy"].copy()
+        self.Mrzz_3D = materials["mrzz"].copy()
+
+    def update_component_materials(self):
+        materials = self._material_on_fields(
+            self.cell_Erxx_3D,
+            self.cell_Eryy_3D,
+            self.cell_Erzz_3D,
+            self.cell_Mrxx_3D,
+            self.cell_Mryy_3D,
+            self.cell_Mrzz_3D,
+            self.material_no_average_mask,
+        )
+        self._set_component_materials(materials)
+        return materials
 
     # --- Solver
     def solve(self):
-        N = self.N
         omega, epsilon0, mu0 = self.omega, self.epsilon0, self.mu0
 
         # Build diagonal sparse matrices
-        Erxx = diags(self.Erxx_3D.ravel())
-        Eryy = diags(self.Eryy_3D.ravel())
-        Erzz = diags(self.Erzz_3D.ravel())
-        Mrxx = diags(self.Mrxx_3D.ravel())
-        Mryy = diags(self.Mryy_3D.ravel())
-        Mrzz = diags(self.Mrzz_3D.ravel())
-        Zero = diags(np.zeros(N))
+        Erxx = self._diag(self.Erxx_3D)
+        Eryy = self._diag(self.Eryy_3D)
+        Erzz = self._diag(self.Erzz_3D)
+        Mrxx = self._diag(self.Mrxx_3D)
+        Mryy = self._diag(self.Mryy_3D)
+        Mrzz = self._diag(self.Mrzz_3D)
+
+        zero_ex_ey = csr_matrix((self.n_ex, self.n_ey), dtype=complex)
+        zero_ey_ex = csr_matrix((self.n_ey, self.n_ex), dtype=complex)
+        zero_hx_hy = csr_matrix((self.n_hx, self.n_hy), dtype=complex)
+        zero_hy_hx = csr_matrix((self.n_hy, self.n_hx), dtype=complex)
 
         # Build system matrices
         A = bmat([
-            [self.DEZ, Zero, self.DEX @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY),
-             self.DEX @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX) + 1j * omega * mu0 * Mryy],
-            [Zero, self.DEZ,
-             self.DEY @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY) - 1j * omega * mu0 * Mrxx,
-             self.DEY @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX)],
-            [self.DHX @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY),
-             self.DHX @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX) - 1j * omega * epsilon0 * Eryy,
-             self.DHZ, Zero],
-            [self.DHY @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY) + 1j * omega * epsilon0 * Erxx,
-             self.DHY @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX),
-             Zero, self.DHZ]
+            [
+                self.DEZ_EX,
+                zero_ex_ey,
+                self.DEX_EZ_TO_EX @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY_HX_TO_EZ),
+                self.DEX_EZ_TO_EX @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX_HY_TO_EZ)
+                + 1j * omega * mu0 * Mryy,
+            ],
+            [
+                zero_ey_ex,
+                self.DEZ_EY,
+                self.DEY_EZ_TO_EY @ (-1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHY_HX_TO_EZ)
+                - 1j * omega * mu0 * Mrxx,
+                self.DEY_EZ_TO_EY @ (1j / (omega * epsilon0) * Erzz.power(-1) @ self.DHX_HY_TO_EZ),
+            ],
+            [
+                self.DHX_HZ_TO_HX @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY_EX_TO_HZ),
+                self.DHX_HZ_TO_HX @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX_EY_TO_HZ)
+                - 1j * omega * epsilon0 * Eryy,
+                self.DHZ_HX,
+                zero_hx_hy,
+            ],
+            [
+                self.DHY_HZ_TO_HY @ (1j / (omega * mu0) * Mrzz.power(-1) @ self.DEY_EX_TO_HZ)
+                + 1j * omega * epsilon0 * Erxx,
+                self.DHY_HZ_TO_HY @ (-1j / (omega * mu0) * Mrzz.power(-1) @ self.DEX_EY_TO_HZ),
+                zero_hy_hx,
+                self.DHZ_HY,
+            ],
         ]).tocsr()
 
-        B_diag = kron(kron(self.add_operator_pbc(self.Nz), self.Iy), self.Ix)
-        B = bmat([[B_diag, Zero, Zero, Zero], [Zero, B_diag, Zero, Zero],
-                  [Zero, Zero, B_diag.conj().T, Zero], [Zero, Zero, Zero, B_diag.conj().T]]).tocsr()
+        B = bmat([
+            [self.AZ_EX, zero_ex_ey, None, None],
+            [zero_ey_ex, self.AZ_EY, None, None],
+            [None, None, self.AZ_HX, zero_hx_hy],
+            [None, None, zero_hy_hx, self.AZ_HY],
+        ], format="csr")
 
         # Solve
         self.eigenvalues, self.eigenvectors = eigs(A, M=B, k=self.num_modes, sigma=self.sigma_guess, tol=self.tol,
@@ -184,26 +532,32 @@ class PeriodicModeSolver3D:
         self.store_fields()
 
     def store_fields(self):
-        N = self.N
-        self.fields['Ex'] = np.array(
-            [self.eigenvectors[:, i][0 * N:1 * N].reshape((self.Nz, self.Ny, self.Nx)) for i in range(self.num_modes)])
-        self.fields['Ey'] = np.array(
-            [self.eigenvectors[:, i][1 * N:2 * N].reshape((self.Nz, self.Ny, self.Nx)) for i in range(self.num_modes)])
-        self.fields['Hx'] = np.array(
-            [self.eigenvectors[:, i][2 * N:3 * N].reshape((self.Nz, self.Ny, self.Nx)) for i in range(self.num_modes)])
-        self.fields['Hy'] = np.array(
-            [self.eigenvectors[:, i][3 * N:4 * N].reshape((self.Nz, self.Ny, self.Nx)) for i in range(self.num_modes)])
+        n0 = 0
+        n1 = n0 + self.n_ex
+        n2 = n1 + self.n_ey
+        n3 = n2 + self.n_hx
+        n4 = n3 + self.n_hy
+        self.fields['Ex'] = np.array([
+            self.eigenvectors[n0:n1, i].reshape(self.shape_ex, order="F") for i in range(self.num_modes)
+        ])
+        self.fields['Ey'] = np.array([
+            self.eigenvectors[n1:n2, i].reshape(self.shape_ey, order="F") for i in range(self.num_modes)
+        ])
+        self.fields['Hx'] = np.array([
+            self.eigenvectors[n2:n3, i].reshape(self.shape_hx, order="F") for i in range(self.num_modes)
+        ])
+        self.fields['Hy'] = np.array([
+            self.eigenvectors[n3:n4, i].reshape(self.shape_hy, order="F") for i in range(self.num_modes)
+        ])
 
     # --- Plotting
     def plot_field_plane(self, axis, index, mode_index=0, field='Ex'):
         field_data = np.abs(self.fields[field][mode_index])
-        if axis == 'x':
-            plt.imshow(field_data[:, :, index], cmap='hot', origin='lower')
-        elif axis == 'y':
-            plt.imshow(field_data[:, index, :], cmap='hot', origin='lower')
-        elif axis == 'z':
-            plt.imshow(field_data[index, :, :], cmap='hot', origin='lower')
+        imdata, extent, xlabel, ylabel, _ = self._field_slice_plot_data(field_data, axis, index)
+        plt.imshow(imdata, cmap='hot', origin='lower', extent=extent, aspect='auto')
         plt.colorbar()
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
         plt.title(f'{field} at {axis}={index} | Mode {mode_index}')
         plt.show()
 
@@ -366,6 +720,21 @@ class PeriodicModeSolver3D:
             extent = [0, self.Nx * self.dx * 1e3, 0, self.Ny * self.dy * 1e3]
             return extent, 'x (mm)', 'y (mm)'
 
+    def _field_slice_plot_data(self, field_data, axis, index):
+        if axis == 'x':
+            index = int(np.clip(index, 0, field_data.shape[0] - 1))
+            imdata = field_data[index, :, :]
+            extent, xlabel, ylabel = self._slice_extent_labels(axis)
+        elif axis == 'y':
+            index = int(np.clip(index, 0, field_data.shape[1] - 1))
+            imdata = field_data[:, index, :]
+            extent, xlabel, ylabel = self._slice_extent_labels(axis)
+        else:
+            index = int(np.clip(index, 0, field_data.shape[2] - 1))
+            imdata = field_data[:, :, index].T
+            extent, xlabel, ylabel = self._slice_extent_labels(axis)
+        return imdata, extent, xlabel, ylabel, index
+
     def _create_slice_figure(self, mode_index, axis, index):
         """
         Create a 2x2 figure of |Ex|, |Ey|, |Hx|, |Hy| for a 2D slice of the 3D fields.
@@ -384,42 +753,20 @@ class PeriodicModeSolver3D:
 
         Ex, Ey, Hx, Hy = map(norm, (Ex, Ey, Hx, Hy))
 
-        # Clamp index to valid range
-        if axis == 'x':
-            index = int(np.clip(index, 0, self.Nx - 1))
-            slicer = (slice(None), slice(None), index)  # (z, y, x=index) -> 2D: (z, y)
-            orient_T = True  # transpose to show y vertical, z horizontal
-        elif axis == 'y':
-            index = int(np.clip(index, 0, self.Ny - 1))
-            slicer = (slice(None), index, slice(None))  # (z, y=index, x) -> 2D: (z, x)
-            orient_T = True  # transpose to show x vertical, z horizontal
-        else:  # 'z'
-            index = int(np.clip(index, 0, self.Nz - 1))
-            slicer = (index, slice(None), slice(None))  # (z=index, y, x) -> 2D: (y, x)
-            orient_T = False  # already (y, x)
-
-        # Extract slices
-        Ex2 = Ex[slicer]
-        Ey2 = Ey[slicer]
-        Hx2 = Hx[slicer]
-        Hy2 = Hy[slicer]
-
-        # Decide plotting extents and labels
-        extent, xlabel, ylabel = self._slice_extent_labels(axis)
-
         # Figure
         fig, axes = plt.subplots(2, 2, figsize=(10, 8))
         fig.subplots_adjust(wspace=0.25, hspace=0.25)
 
         panels = [
-            ('Ex', Ex2, axes[0, 0]),
-            ('Ey', Ey2, axes[0, 1]),
-            ('Hx', Hx2, axes[1, 0]),
-            ('Hy', Hy2, axes[1, 1]),
+            ('Ex', Ex, axes[0, 0]),
+            ('Ey', Ey, axes[0, 1]),
+            ('Hx', Hx, axes[1, 0]),
+            ('Hy', Hy, axes[1, 1]),
         ]
 
-        for title, data2d, ax in panels:
-            imdata = data2d.T if orient_T else data2d
+        plotted_index = int(index)
+        for title, data3d, ax in panels:
+            imdata, extent, xlabel, ylabel, plotted_index = self._field_slice_plot_data(data3d, axis, index)
             im = ax.imshow(imdata, cmap='viridis', origin='lower', extent=extent, aspect='auto')
             ax.set_title(title)
             ax.set_xlabel(xlabel)
@@ -429,7 +776,7 @@ class PeriodicModeSolver3D:
         # Mode info
         beta = float(np.imag(self.gammas[mode_index]))
         alpha = float(np.real(self.gammas[mode_index]))
-        fig.suptitle(f"Mode {mode_index} | Slice {axis}={index} | Beta={beta:.4f}, Alpha={alpha:.4f}", fontsize=12)
+        fig.suptitle(f"Mode {mode_index} | Slice {axis}={plotted_index} | Beta={beta:.4f}, Alpha={alpha:.4f}", fontsize=12)
 
         # >>> Add these two lines <<<
         fig.tight_layout()
@@ -460,24 +807,25 @@ class PeriodicModeSolver3D:
             tol=np.float64(self.tol),
 
             # materials
-            Erxx_3D=self.Erxx_3D,
-            Eryy_3D=self.Eryy_3D,
-            Erzz_3D=self.Erzz_3D,
-            Mrxx_3D=self.Mrxx_3D,
-            Mryy_3D=self.Mryy_3D,
-            Mrzz_3D=self.Mrzz_3D,
+            cell_Erxx_3D=self.cell_Erxx_3D,
+            cell_Eryy_3D=self.cell_Eryy_3D,
+            cell_Erzz_3D=self.cell_Erzz_3D,
+            cell_Mrxx_3D=self.cell_Mrxx_3D,
+            cell_Mryy_3D=self.cell_Mryy_3D,
+            cell_Mrzz_3D=self.cell_Mrzz_3D,
+            material_no_average_mask=self.material_no_average_mask,
 
             # modal results
             eigenvalues=self.eigenvalues,
             gammas=self.gammas,
-            Ex=self.fields['Ex'],  # shape: (num_modes, Nz, Ny, Nx)
+            Ex=self.fields['Ex'],
             Ey=self.fields['Ey'],
             Hx=self.fields['Hx'],
             Hy=self.fields['Hy'],
         )
 
         if include_eigenvectors and self.eigenvectors is not None:
-            out['eigenvectors'] = self.eigenvectors  # shape: (4*N, num_modes)
+            out['eigenvectors'] = self.eigenvectors
 
         return out
 
@@ -523,12 +871,14 @@ class PeriodicModeSolver3D:
             inst.sigma_guess = complex(d['sigma_guess'])
 
             # Materials
-            inst.Erxx_3D = d['Erxx_3D']
-            inst.Eryy_3D = d['Eryy_3D']
-            inst.Erzz_3D = d['Erzz_3D']
-            inst.Mrxx_3D = d['Mrxx_3D']
-            inst.Mryy_3D = d['Mryy_3D']
-            inst.Mrzz_3D = d['Mrzz_3D']
+            inst.cell_Erxx_3D = d['cell_Erxx_3D']
+            inst.cell_Eryy_3D = d['cell_Eryy_3D']
+            inst.cell_Erzz_3D = d['cell_Erzz_3D']
+            inst.cell_Mrxx_3D = d['cell_Mrxx_3D']
+            inst.cell_Mryy_3D = d['cell_Mryy_3D']
+            inst.cell_Mrzz_3D = d['cell_Mrzz_3D']
+            inst.material_no_average_mask = d['material_no_average_mask'].astype(bool)
+            inst.update_component_materials()
 
             # Modal results
             inst.eigenvalues = d['eigenvalues']
