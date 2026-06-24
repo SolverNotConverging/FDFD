@@ -1,7 +1,7 @@
 Periodic Solver 2D
 ==================
 
-``PeriodicModeSolver2D`` solves two-dimensional Bloch-periodic TE or TM modes. The grid spans transverse ``x`` and periodic ``z`` and stores material tensors with shape ``(Nx, Nz)``.
+``PeriodicModeSolver2D`` solves two-dimensional Bloch-periodic TE or TM modes. The grid spans transverse ``x`` and periodic ``z``. Geometry is assigned on a cell material grid with shape ``(Nx, Nz)`` and then averaged onto Yee-staggered component locations internally.
 
 Main Class
 ----------
@@ -38,16 +38,16 @@ Material And Boundary API
 
 .. code-block:: python
 
-   add_rectangle(epsilon, mu, x_range, z_range)
+   add_rectangle(epsilon, mu, x_range, z_range, subpixels=8)
    add_pec(x_range, z_range, components=None, epsilon=1e8)
    add_pmc(x_range, z_range, components=None, mu=1e8)
    add_pml(pml_width=20, n=3, sigma_max=5.0, direction="all")
-   add_UPML(pml_width=20, n=3, sigma_max=5.0, direction="all")
 
 Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * Region bounds accept grid-index pairs or physical coordinate pairs in metres.
+* ``add_rectangle`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
 * ``add_pec`` applies a large-permittivity material penalty instead of eliminating DOFs.
 * ``add_pmc`` applies a large-permeability material penalty instead of eliminating DOFs.
 * ``components`` can select tensor components; ``None`` applies all three.
@@ -79,7 +79,7 @@ Visualization
    visualize_with_gui()
 
 The GUI displays the material map and the active field components for the selected polarization and mode.
-PEC/PMC penalty regions are excluded from the material colormap and drawn as yellow rectangles so their large values do not dominate the plot scale.
+PEC/PMC penalty regions are excluded from the material colormap and drawn only on the material subplot so their large values do not dominate the plot scale.
 
 Minimal Example
 ---------------
@@ -99,7 +99,7 @@ Minimal Example
        guess=0,
    )
 
-   solver.add_rectangle(8.0, 1.0, (10, 25), (0, 80))
+   solver.add_rectangle(8.0, 1.0, (10, 25), (0, 80), subpixels=8)
    solver.add_pec((9, 10), (0, 80))
    solver.add_pml(pml_width=30, sigma_max=5, direction="x+")
    solver.solve()

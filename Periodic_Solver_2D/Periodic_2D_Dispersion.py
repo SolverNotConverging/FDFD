@@ -10,9 +10,9 @@ x_range = 10e-3
 z_range = 8e-3
 Nx = 200
 Nz = 80
-f_start = 20e9
-f_stop = 35e9
-f_step = 0.2e9
+f_start = 16e9
+f_stop = 25e9
+f_step = 0.1e9
 frequencies = np.arange(f_start, f_stop + f_step, f_step)
 num_modes = 4
 
@@ -32,11 +32,12 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     solver = PeriodicModeSolver2D("TM", freq=f, x_range=x_range, z_range=z_range, Nx=Nx, Nz=Nz,
                                   num_modes=num_modes, guess=sigma_guess, ncv=None)
 
-    solver.add_pec((25, 26), (0, 10))
-    solver.add_pec((9, 10), (0, Nz))
+    # Ground/metal edges
+    solver.add_pec((2.27e-3, 2.37e-3), (1.0e-3, 2.0e-3))
+    solver.add_pec((0.9e-3, 1.0e-3), (0, Nz))
 
     # Dielectric loading
-    solver.add_rectangle(8, 1, (10, 25), (0, Nz))
+    solver.add_rectangle(10.2, 1, (1.0e-3, 2.27e-3), (0, Nz), subpixels=8)
 
     solver.add_pml(pml_width=30, n=3, sigma_max=5, direction="x+")
 
