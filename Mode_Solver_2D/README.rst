@@ -55,6 +55,7 @@ Notes:
 * Shape points and centres can be integer grid coordinates or physical coordinates in metres.
 * The solver interpolates source materials onto component-location arrays named ``eps_r_*`` and ``mu_r_*``.
 * PEC/PMC ``components=None`` treats the region as cell-centred and expands it to component-specific Yee masks.
+* Transverse boundary masks are cross-constrained on collocated Yee pairs: PEC ``Ex`` implies PMC ``Hy`` (and vice versa), while PEC ``Ey`` implies PMC ``Hx`` (and vice versa).
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"all"``.
 
 Solve API

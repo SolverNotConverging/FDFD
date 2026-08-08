@@ -623,6 +623,21 @@ class ModeSolver2D:
         self._set_component_materials(materials)
         return materials
 
+    @staticmethod
+    def _apply_transverse_cross_constraints(pec_xx_mask, pec_yy_mask, pmc_xx_mask, pmc_yy_mask):
+        """Close the collocated transverse PEC/PMC Yee-mask pairs in place.
+
+        A tangential PEC constraint on Ex (Ey) also constrains the collocated
+        normal Hy (Hx) as PMC.  The dual PMC-to-PEC implication is required for
+        the same reason, so each collocated pair uses the union of both masks.
+        """
+        ex_hy_mask = pec_xx_mask | pmc_yy_mask
+        ey_hx_mask = pec_yy_mask | pmc_xx_mask
+        pec_xx_mask[:] = ex_hy_mask
+        pmc_yy_mask[:] = ex_hy_mask
+        pec_yy_mask[:] = ey_hx_mask
+        pmc_xx_mask[:] = ey_hx_mask
+
     def _effective_materials_and_masks(self):
         eps_r_xx = self.cell_eps_r_xx.copy()
         eps_r_yy = self.cell_eps_r_yy.copy()
@@ -655,6 +670,13 @@ class ModeSolver2D:
                 masks = self.component_masks_from_cell_mask(bad_cells, field="magnetic")
                 magnetic_targets[component][:] |= masks[mask_index[component]]
                 values[bad_cells] = 1.0 + 0j
+
+        self._apply_transverse_cross_constraints(
+            pec_xx_mask,
+            pec_yy_mask,
+            pmc_xx_mask,
+            pmc_yy_mask,
+        )
 
         materials = self._material_on_fields(
             eps_r_xx,
