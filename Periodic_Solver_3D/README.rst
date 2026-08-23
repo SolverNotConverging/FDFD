@@ -30,8 +30,8 @@ Material And Boundary API
 .. code-block:: python
 
    add_block(er, mr, x_range, y_range, z_range, subpixels=8)
-   add_pec(x_range, y_range, z_range, components=None, epsilon=1e8)
-   add_pmc(x_range, y_range, z_range, components=None, mu=1e8)
+   add_pec(x_range, y_range, z_range, components=None)
+   add_pmc(x_range, y_range, z_range, components=None)
    add_UPML(sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3)
 
 Notes:
@@ -40,7 +40,11 @@ Notes:
 * Geometry is assigned on a cell material grid with shape ``(Nx, Ny, Nz)`` and averaged onto Yee component locations internally.
 * Geometry regions are supplied as ``(min, max)`` pairs using integer grid indices or float physical positions in metres. Python slices are also accepted for index-based regions.
 * ``add_block`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
-* ``add_pec`` and ``add_pmc`` apply large material penalties and prevent averaging across those cells.
+* ``add_pec`` and ``add_pmc`` expand cell regions onto the staggered component grids and eliminate constrained transverse DOFs from both generalized-eigenproblem matrices.
+* PEC faces constrain tangential electric fields and normal magnetic fields, leaving normal electric and tangential magnetic components free. PMC faces apply the electromagnetic-dual constraints.
+* Face orientation is retained along x, y, and periodic z. At edges and corners the masks use union semantics, so every component required by any incident face is constrained. For example, a z-normal PEC face constrains ``Ex``, ``Ey``, and normal ``Hz``; a z-normal PMC face constrains ``Hx``, ``Hy``, and normal ``Ez``.
+* Schur-eliminated longitudinal fields remain exact: PEC ``Ez`` and PMC ``Hz`` entries are removed by zeroing their inverse-material entries.
+* PEC/PMC regions do not modify the material tensors or introduce a large-value penalty.
 * ``add_UPML`` accepts side labels such as ``'+y'`` to absorb selected faces.
 
 Solve And Field Storage
@@ -56,6 +60,8 @@ After solving, important attributes include:
 * ``gammas``: complex propagation constants normalized by ``k0``.
 * ``eigenvalues`` and ``eigenvectors``: eigensolver outputs.
 * Stored field arrays after ``store_fields`` or visualization routines.
+
+Reduced eigenvectors are expanded back to the full staggered field ordering after each solve, with every constrained entry restored as an exact zero. Saved result files include all six PEC/PMC masks so a loaded model retains its boundary constraints.
 
 Visualization And Export
 ------------------------

@@ -39,8 +39,8 @@ Material And Boundary API
 .. code-block:: python
 
    add_rectangle(epsilon, mu, x_range, z_range, subpixels=8)
-   add_pec(x_range, z_range, components=None, epsilon=1e8)
-   add_pmc(x_range, z_range, components=None, mu=1e8)
+   add_pec(x_range, z_range, components=None)
+   add_pmc(x_range, z_range, components=None)
    add_pml(pml_width=20, n=3, sigma_max=5.0, direction="all")
 
 Notes:
@@ -48,9 +48,13 @@ Notes:
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
 * Region bounds accept grid-index pairs or physical coordinate pairs in metres.
 * ``add_rectangle`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
-* ``add_pec`` applies a large-permittivity material penalty instead of eliminating DOFs.
-* ``add_pmc`` applies a large-permeability material penalty instead of eliminating DOFs.
+* ``add_pec`` and ``add_pmc`` expand cell regions onto the periodic Yee grids and eliminate the constrained DOFs from both generalized-eigenproblem matrices.
+* PEC faces constrain tangential electric fields and normal magnetic fields, leaving normal electric and tangential magnetic components free. PMC faces apply the electromagnetic-dual constraints.
+* Face orientation is retained on both axes. For example, a z-normal PEC face constrains tangential electric fields plus normal ``Hz``; the dual PMC face constrains tangential magnetic fields plus normal ``Ez``. At a corner, the constraints required by either incident face are combined.
+* Adjacent regions are merged on the cell grid before interfaces are derived, so no false internal wall is introduced.
+* Longitudinal ``Ez`` PEC and ``Hz`` PMC constraints are enforced exactly by zeroing their entries in the inverse material operators used for Schur elimination.
 * ``components`` can select tensor components; ``None`` applies all three.
+* PEC/PMC regions do not modify the material tensors or introduce a large-value penalty.
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
 
 Solve API
@@ -79,7 +83,7 @@ Visualization
    visualize_with_gui()
 
 The GUI displays the material map and the active field components for the selected polarization and mode.
-PEC/PMC penalty regions are excluded from the material colormap and drawn only on the material subplot so their large values do not dominate the plot scale.
+PEC/PMC regions are excluded from the material colormap and drawn as boundary overlays on the material subplot.
 
 Minimal Example
 ---------------

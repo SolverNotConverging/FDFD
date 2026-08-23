@@ -90,6 +90,14 @@ class PeriodicModeSolver2D:
         self.pmc_xx_mask = np.zeros(self.shape_hx, dtype=bool)
         self.pmc_yy_mask = np.zeros(self.shape_hy, dtype=bool)
         self.pmc_zz_mask = np.zeros(self.shape_hz, dtype=bool)
+        self._pec_cell_masks = {
+            component: np.zeros(self.shape_cell, dtype=bool)
+            for component in ("xx", "yy", "zz")
+        }
+        self._pmc_cell_masks = {
+            component: np.zeros(self.shape_cell, dtype=bool)
+            for component in ("xx", "yy", "zz")
+        }
         self._pec_regions = []
         self._pmc_regions = []
 
@@ -316,34 +324,61 @@ class PeriodicModeSolver2D:
         fraction = (x_inside[:, :, None, None] & z_inside[None, None, :, :]).mean(axis=(1, 3))
         self._apply_fractional_material(epsilon, mu, fraction, slice(x0, x1), slice(z0, z1))
 
-    def add_pec(self, x_range, z_range, components=None, epsilon=1e8):
-        """Add a PEC-like region using a large permittivity penalty.
-
-        Hard DOF elimination makes the generalized periodic TE/TM eigenproblem
-        fragile. A large material penalty preserves the periodic coupling and
-        matches the historical examples that used high-epsilon metal regions.
-        """
+    def add_pec(self, x_range, z_range, components=None):
+        """Add an exact PEC region by constraining staggered field DOFs."""
         sl_x, sl_z = self._region_slices(x_range, z_range)
-        if components is None:
-            components = ("xx", "yy", "zz")
-        for comp in self._validate_components(components):
-            self._cell_material_array("eps", comp)[sl_x, sl_z] = epsilon
-        self.material_no_average_mask[sl_x, sl_z] = True
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp in selected:
+            self._pec_cell_masks[comp][sl_x, sl_z] = True
+        self._refresh_constraint_masks()
         self._pec_regions.append((sl_x, sl_z))
-        self.update_component_materials()
+        self._effective_materials_and_masks()
         self._invalidate_solution()
 
-    def add_pmc(self, x_range, z_range, components=None, mu=1e8):
-        """Add a PMC-like region using a large permeability penalty."""
+    def add_pmc(self, x_range, z_range, components=None):
+        """Add an exact PMC region by constraining staggered field DOFs."""
         sl_x, sl_z = self._region_slices(x_range, z_range)
-        if components is None:
-            components = ("xx", "yy", "zz")
-        for comp in self._validate_components(components):
-            self._cell_material_array("mu", comp)[sl_x, sl_z] = mu
-        self.material_no_average_mask[sl_x, sl_z] = True
+        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
+        for comp in selected:
+            self._pmc_cell_masks[comp][sl_x, sl_z] = True
+        self._refresh_constraint_masks()
         self._pmc_regions.append((sl_x, sl_z))
-        self.update_component_materials()
+        self._effective_materials_and_masks()
         self._invalidate_solution()
+
+    def component_masks_from_cell_mask(self, cell_mask, field="electric"):
+        """Expand cell occupancy to this solver's periodic staggered grids."""
+        mask = np.asarray(cell_mask, dtype=bool)
+        if mask.shape != self.shape_cell:
+            raise ValueError(f"cell_mask must have shape {self.shape_cell}.")
+
+        ii, jj = np.nonzero(mask)
+        periodic_jj = (jj - 1) % self.Nz
+
+        if field == "electric":
+            xx_mask = np.zeros(self.shape_ex, dtype=bool)
+            yy_mask = np.zeros(self.shape_ey, dtype=bool)
+            zz_mask = np.zeros(self.shape_ez, dtype=bool)
+            xx_mask[ii, jj] = True
+            xx_mask[ii, periodic_jj] = True
+            yy_mask[ii, jj] = True
+            yy_mask[ii + 1, jj] = True
+            zz_mask[ii, jj] = True
+            zz_mask[ii + 1, jj] = True
+            return xx_mask, yy_mask, zz_mask
+
+        if field == "magnetic":
+            xx_mask = np.zeros(self.shape_hx, dtype=bool)
+            yy_mask = np.zeros(self.shape_hy, dtype=bool)
+            zz_mask = np.zeros(self.shape_hz, dtype=bool)
+            xx_mask[ii, jj] = True
+            xx_mask[ii + 1, jj] = True
+            yy_mask[ii, jj] = True
+            yy_mask[ii, periodic_jj] = True
+            zz_mask[ii, jj] = True
+            return xx_mask, yy_mask, zz_mask
+
+        raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_pml(self, pml_width=30, n=3, sigma_max=5.0, direction="all"):
         """Add a simple x-directed uniaxial PML."""
@@ -433,46 +468,193 @@ class PeriodicModeSolver2D:
         self._set_component_materials(materials)
         return materials
 
-    def _effective_materials_and_masks(self):
-        materials = self._material_on_fields(
-            self.cell_eps_r_xx.copy(),
-            self.cell_eps_r_yy.copy(),
-            self.cell_eps_r_zz.copy(),
-            self.cell_mu_r_xx.copy(),
-            self.cell_mu_r_yy.copy(),
-            self.cell_mu_r_zz.copy(),
-            self.material_no_average_mask.copy(),
+    @staticmethod
+    def _periodic_z_interface_mask(cell_mask):
+        mask = np.asarray(cell_mask, dtype=bool)
+        return mask ^ np.roll(mask, -1, axis=1)
+
+    def _x_interface_mask(self, cell_mask):
+        mask = np.asarray(cell_mask, dtype=bool)
+        interfaces = np.zeros(self.shape_ez, dtype=bool)
+        interfaces[0, :] = mask[0, :]
+        interfaces[-1, :] = mask[-1, :]
+        if self.Nx > 1:
+            interfaces[1:-1, :] = mask[:-1, :] ^ mask[1:, :]
+        return interfaces
+
+    @staticmethod
+    def _x_boundary_cells(cell_mask):
+        mask = np.asarray(cell_mask, dtype=bool)
+        left = np.zeros_like(mask)
+        right = np.zeros_like(mask)
+        left[1:, :] = mask[:-1, :]
+        right[:-1, :] = mask[1:, :]
+        return mask & (~left | ~right)
+
+    def _z_interface_component_masks(self, cell_mask, field="electric"):
+        """Return component footprints on z-normal interfaces of ``cell_mask``."""
+        interface = self._periodic_z_interface_mask(cell_mask)
+        ii, jj = np.nonzero(interface)
+        x_node_mask = np.zeros(self.shape_ez, dtype=bool)
+        x_node_mask[ii, jj] = True
+        x_node_mask[ii + 1, jj] = True
+
+        if field == "electric":
+            return interface.copy(), x_node_mask.copy(), x_node_mask.copy()
+        if field == "magnetic":
+            return x_node_mask.copy(), interface.copy(), interface.copy()
+        raise ValueError("field must be 'electric' or 'magnetic'.")
+
+    def _constraint_masks_from_sources(self, pec_sources, pmc_sources):
+        """Build orientation-aware field masks from component cell sources."""
+        pec_masks = [
+            np.zeros(self.shape_ex, dtype=bool),
+            np.zeros(self.shape_ey, dtype=bool),
+            np.zeros(self.shape_ez, dtype=bool),
+        ]
+        pmc_masks = [
+            np.zeros(self.shape_hx, dtype=bool),
+            np.zeros(self.shape_hy, dtype=bool),
+            np.zeros(self.shape_hz, dtype=bool),
+        ]
+
+        # PEC: electric interior/tangential-face DOFs plus magnetic
+        # interior/normal-face DOFs. Perpendicular faces restore corners.
+        source = pec_sources["xx"]
+        direct_ex = self.component_masks_from_cell_mask(source, field="electric")[0]
+        x_boundary = self._x_boundary_cells(source)
+        x_face_ex = self.component_masks_from_cell_mask(x_boundary, field="electric")[0]
+        z_face_ex = self._z_interface_component_masks(source, field="electric")[0]
+        pec_masks[0] |= (direct_ex & ~x_face_ex) | z_face_ex
+        direct_hy = self.component_masks_from_cell_mask(source, field="magnetic")[1]
+        x_face_hy = self.component_masks_from_cell_mask(x_boundary, field="magnetic")[1]
+        z_face_hy = self._z_interface_component_masks(source, field="magnetic")[1]
+        pmc_masks[1] |= direct_hy & ~x_face_hy & ~z_face_hy
+
+        source = pec_sources["yy"]
+        direct_ey = self.component_masks_from_cell_mask(source, field="electric")[1]
+        pec_masks[1] |= direct_ey | self._x_interface_mask(source)
+        pec_masks[1] |= self._z_interface_component_masks(source, field="electric")[1]
+        direct_hx = self.component_masks_from_cell_mask(source, field="magnetic")[0]
+        z_face_hx = self._z_interface_component_masks(source, field="magnetic")[0]
+        pmc_masks[0] |= direct_hx & ~self._x_interface_mask(source) & ~z_face_hx
+
+        source = pec_sources["zz"]
+        direct_ez = self.component_masks_from_cell_mask(source, field="electric")[2]
+        z_face_ez = self._z_interface_component_masks(source, field="electric")[2]
+        pec_masks[2] |= (direct_ez & ~z_face_ez) | self._x_interface_mask(source)
+        x_boundary = self._x_boundary_cells(source)
+        z_face_hz = self._periodic_z_interface_mask(source)
+        pmc_masks[2] |= source & ~x_boundary & ~z_face_hz
+
+        pmc_masks[0] |= self._x_interface_mask(pec_sources["yy"])
+        pmc_masks[0] |= self._x_interface_mask(pec_sources["zz"])
+        pmc_masks[2] |= self._periodic_z_interface_mask(pec_sources["xx"])
+        pmc_masks[2] |= self._periodic_z_interface_mask(pec_sources["yy"])
+
+        # PMC is the electromagnetic dual: magnetic interior/tangential-face
+        # DOFs plus electric interior/normal-face DOFs.
+        source = pmc_sources["xx"]
+        direct_hx = self.component_masks_from_cell_mask(source, field="magnetic")[0]
+        x_face_hx = self._x_interface_mask(source)
+        z_face_hx = self._z_interface_component_masks(source, field="magnetic")[0]
+        pmc_masks[0] |= (direct_hx & ~x_face_hx) | z_face_hx
+        pec_masks[1] |= direct_hx & ~x_face_hx & ~z_face_hx
+        pec_masks[2] |= self._z_interface_component_masks(source, field="electric")[2]
+
+        source = pmc_sources["yy"]
+        direct_hy = self.component_masks_from_cell_mask(source, field="magnetic")[1]
+        z_face_hy = self._z_interface_component_masks(source, field="magnetic")[1]
+        x_boundary = self._x_boundary_cells(source)
+        x_face_hy = self.component_masks_from_cell_mask(x_boundary, field="magnetic")[1]
+        x_face_ex = self.component_masks_from_cell_mask(x_boundary, field="electric")[0]
+        pmc_masks[1] |= direct_hy | z_face_hy
+        pec_masks[0] |= (direct_hy & ~z_face_hy) | x_face_ex
+        pec_masks[2] |= self._z_interface_component_masks(source, field="electric")[2]
+
+        source = pmc_sources["zz"]
+        z_face_hz = self._periodic_z_interface_mask(source)
+        x_boundary = self._x_boundary_cells(source)
+        pmc_masks[2] |= (source & ~z_face_hz) | x_boundary
+        direct_ez = self.component_masks_from_cell_mask(source, field="electric")[2]
+        x_face_ez = self._x_interface_mask(source)
+        pec_masks[2] |= direct_ez & ~x_face_ez
+        pec_masks[0] |= self.component_masks_from_cell_mask(
+            x_boundary, field="electric"
+        )[0]
+
+        return (*pec_masks, *pmc_masks)
+
+    def _refresh_constraint_masks(self):
+        masks = self._constraint_masks_from_sources(self._pec_cell_masks, self._pmc_cell_masks)
+        targets = (
+            self.pec_xx_mask,
+            self.pec_yy_mask,
+            self.pec_zz_mask,
+            self.pmc_xx_mask,
+            self.pmc_yy_mask,
+            self.pmc_zz_mask,
         )
+        for target, mask in zip(targets, masks):
+            target[:] = mask
 
-        eps_r_xx = materials["eps_xx"]
-        eps_r_yy = materials["eps_yy"]
-        eps_r_zz = materials["eps_zz"]
-        mu_r_xx = materials["mu_xx"]
-        mu_r_yy = materials["mu_yy"]
-        mu_r_zz = materials["mu_zz"]
+    def _effective_materials_and_masks(self):
+        eps_r_xx = self.cell_eps_r_xx.copy()
+        eps_r_yy = self.cell_eps_r_yy.copy()
+        eps_r_zz = self.cell_eps_r_zz.copy()
+        mu_r_xx = self.cell_mu_r_xx.copy()
+        mu_r_yy = self.cell_mu_r_yy.copy()
+        mu_r_zz = self.cell_mu_r_zz.copy()
+        no_average_mask = self.material_no_average_mask.copy()
 
-        pec_xx_mask = self.pec_xx_mask | ~np.isfinite(eps_r_xx)
-        pec_yy_mask = self.pec_yy_mask | ~np.isfinite(eps_r_yy)
-        pec_zz_mask = self.pec_zz_mask | ~np.isfinite(eps_r_zz)
-        pmc_xx_mask = self.pmc_xx_mask | ~np.isfinite(mu_r_xx)
-        pmc_yy_mask = self.pmc_yy_mask | ~np.isfinite(mu_r_yy)
-        pmc_zz_mask = self.pmc_zz_mask | ~np.isfinite(mu_r_zz)
+        pec_sources = {component: mask.copy() for component, mask in self._pec_cell_masks.items()}
+        pmc_sources = {component: mask.copy() for component, mask in self._pmc_cell_masks.items()}
 
-        eps_r_xx[pec_xx_mask] = 1.0 + 0j
-        eps_r_yy[pec_yy_mask] = 1.0 + 0j
-        eps_r_zz[pec_zz_mask] = 1.0 + 0j
-        mu_r_xx[pmc_xx_mask] = 1.0 + 0j
-        mu_r_yy[pmc_yy_mask] = 1.0 + 0j
-        mu_r_zz[pmc_zz_mask] = 1.0 + 0j
-        self._set_component_materials(materials)
+        for component, values in (("xx", eps_r_xx), ("yy", eps_r_yy), ("zz", eps_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                pec_sources[component] |= bad_cells
+                values[bad_cells] = 1.0 + 0j
 
-        return (
+        for component, values in (("xx", mu_r_xx), ("yy", mu_r_yy), ("zz", mu_r_zz)):
+            bad_cells = ~np.isfinite(values)
+            if np.any(bad_cells):
+                pmc_sources[component] |= bad_cells
+                values[bad_cells] = 1.0 + 0j
+
+        (
+            pec_xx_mask,
+            pec_yy_mask,
+            pec_zz_mask,
+            pmc_xx_mask,
+            pmc_yy_mask,
+            pmc_zz_mask,
+        ) = self._constraint_masks_from_sources(pec_sources, pmc_sources)
+
+        materials = self._material_on_fields(
             eps_r_xx,
             eps_r_yy,
             eps_r_zz,
             mu_r_xx,
             mu_r_yy,
             mu_r_zz,
+            no_average_mask,
+        )
+        materials["eps_xx"][pec_xx_mask] = 1.0 + 0j
+        materials["eps_yy"][pec_yy_mask] = 1.0 + 0j
+        materials["eps_zz"][pec_zz_mask] = 1.0 + 0j
+        materials["mu_xx"][pmc_xx_mask] = 1.0 + 0j
+        materials["mu_yy"][pmc_yy_mask] = 1.0 + 0j
+        materials["mu_zz"][pmc_zz_mask] = 1.0 + 0j
+        self._set_component_materials(materials)
+
+        return (
+            materials["eps_xx"],
+            materials["eps_yy"],
+            materials["eps_zz"],
+            materials["mu_xx"],
+            materials["mu_yy"],
+            materials["mu_zz"],
             pec_xx_mask,
             pec_yy_mask,
             pec_zz_mask,
@@ -481,30 +663,43 @@ class PeriodicModeSolver2D:
             pmc_zz_mask,
         )
 
-    def _build_tm_system(self, eps_r_xx, eps_r_zz, mu_r_yy):
+    def _inverse_diag_on_free(self, values, constrained_mask):
+        flat = self._flat(values)
+        constrained = self._flat(constrained_mask)
+        inverse = np.zeros_like(flat, dtype=complex)
+        inverse[~constrained] = 1.0 / flat[~constrained]
+        return diags(inverse, format="csr")
+
+    def _build_tm_system(self, eps_r_xx, eps_r_zz, mu_r_yy, pec_zz_mask=None):
         eps_r_xx_diag = self._diag(eps_r_xx)
-        eps_r_zz_diag = self._diag(eps_r_zz)
+        if pec_zz_mask is None:
+            eps_r_zz_inv = self._diag(eps_r_zz).power(-1)
+        else:
+            eps_r_zz_inv = self._inverse_diag_on_free(eps_r_zz, pec_zz_mask)
         mu_r_yy_diag = self._diag(mu_r_yy)
         zero = csr_matrix((self.n_ex, self.n_hy), dtype=complex)
 
         D1 = 1j * self.omega * self.mu0 * mu_r_yy_diag
         D1 += 1j / self.omega * self.DEX_EZ_TO_EX @ (
-            1 / self.epsilon0 * eps_r_zz_diag.power(-1) @ self.DHX_HY_TO_EZ
+            1 / self.epsilon0 * eps_r_zz_inv @ self.DHX_HY_TO_EZ
         )
         D2 = 1j * self.omega * self.epsilon0 * eps_r_xx_diag
         A = bmat([[self.DEZ_EX, D1], [D2, self.DHZ_HY]], format="csr")
         B = bmat([[self.AZ_EX, zero], [zero, self.AZ_HY]], format="csr")
         return A, B
 
-    def _build_te_system(self, eps_r_yy, mu_r_xx, mu_r_zz):
+    def _build_te_system(self, eps_r_yy, mu_r_xx, mu_r_zz, pmc_zz_mask=None):
         eps_r_yy_diag = self._diag(eps_r_yy)
         mu_r_xx_diag = self._diag(mu_r_xx)
-        mu_r_zz_diag = self._diag(mu_r_zz)
+        if pmc_zz_mask is None:
+            mu_r_zz_inv = self._diag(mu_r_zz).power(-1)
+        else:
+            mu_r_zz_inv = self._inverse_diag_on_free(mu_r_zz, pmc_zz_mask)
         zero = csr_matrix((self.n_hx, self.n_ey), dtype=complex)
 
         D1 = -1j * self.omega * self.epsilon0 * eps_r_yy_diag
         D1 -= 1j / self.omega * self.DHX_HZ_TO_HX @ (
-            1 / self.mu0 * mu_r_zz_diag.power(-1) @ self.DEX_EY_TO_HZ
+            1 / self.mu0 * mu_r_zz_inv @ self.DEX_EY_TO_HZ
         )
         D2 = -1j * self.omega * self.mu0 * mu_r_xx_diag
         A = bmat([[self.DHZ_HX, D1], [D2, self.DEZ_EY]], format="csr")
@@ -535,20 +730,23 @@ class PeriodicModeSolver2D:
             mu_r_zz,
             pec_xx_mask,
             pec_yy_mask,
-            _pec_zz_mask,
+            pec_zz_mask,
             pmc_xx_mask,
             pmc_yy_mask,
-            _pmc_zz_mask,
+            pmc_zz_mask,
         ) = self._effective_materials_and_masks()
 
         if self.polarization == "TM":
-            A, B = self._build_tm_system(eps_r_xx, eps_r_zz, mu_r_yy)
+            A, B = self._build_tm_system(eps_r_xx, eps_r_zz, mu_r_yy, pec_zz_mask)
         else:
-            A, B = self._build_te_system(eps_r_yy, mu_r_xx, mu_r_zz)
+            A, B = self._build_te_system(eps_r_yy, mu_r_xx, mu_r_zz, pmc_zz_mask)
 
         free = self._free_mask(pec_xx_mask, pec_yy_mask, pmc_xx_mask, pmc_yy_mask)
-        if np.count_nonzero(free) <= self.num_modes:
-            raise ValueError(f"Not enough unconstrained DOFs to solve {self.num_modes} modes.")
+        free_count = int(np.count_nonzero(free))
+        if free_count <= self.num_modes + 1:
+            raise ValueError(
+                f"Not enough unconstrained DOFs ({free_count}) to solve {self.num_modes} modes."
+            )
 
         A = A[free, :][:, free]
         B = B[free, :][:, free]
