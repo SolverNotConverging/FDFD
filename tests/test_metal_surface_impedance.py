@@ -1,5 +1,8 @@
 import math
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 
 from Mode_Solver_2D import (
     METAL_RESISTIVITIES_OHM_M,
@@ -24,6 +27,66 @@ EXPECTED_RESISTIVITIES_OHM_M = {
 
 
 class MetalSurfaceImpedanceTests(unittest.TestCase):
+    def test_2d_direct_folder_compatibility_import(self):
+        solver_directory = Path(__file__).resolve().parents[1] / "Mode_Solver_2D"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-W",
+                "error",
+                "-c",
+                (
+                    "import metal_surface_impedance as presets; "
+                    "assert presets.canonical_metal_name('Cu') == 'copper'"
+                ),
+            ],
+            cwd=solver_directory,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_direct_folder_1d_and_2d_compilers_do_not_collide(self):
+        repository_root = Path(__file__).resolve().parents[1]
+        scripts = (
+            (
+                "sys.path.insert(0, str(root / 'Mode_Solver_1D')); "
+                "from Mode_Solver_1D import ModeSolver1D; "
+                "sys.path.insert(0, str(root / 'Mode_Solver_2D')); "
+                "from Mode_Solver_2D import ModeSolver2D; "
+                "solver = ModeSolver2D(10e9, 0.04, 0.04, 4, 4, 1); "
+                "solver.add_impedance_surface(1+1j, x_range=(0, 1), "
+                "y_range=(0, 4))"
+            ),
+            (
+                "sys.path.insert(0, str(root / 'Mode_Solver_2D')); "
+                "from Mode_Solver_2D import ModeSolver2D; "
+                "sys.path.insert(0, str(root / 'Mode_Solver_1D')); "
+                "from Mode_Solver_1D import ModeSolver1D; "
+                "solver = ModeSolver1D(10e9, 0.08, 8, 1); "
+                "solver.add_impedance_surface(1+1j, x_range=(0, 1))"
+            ),
+        )
+        for script in scripts:
+            with self.subTest(script=script):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-W",
+                        "error",
+                        "-c",
+                        "from pathlib import Path; import sys; "
+                        "root = Path.cwd(); "
+                        + script,
+                    ],
+                    cwd=repository_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_resistivity_table_matches_reference_values_exactly(self):
         self.assertEqual(dict(METAL_RESISTIVITIES_OHM_M), EXPECTED_RESISTIVITIES_OHM_M)
         for metal, expected in EXPECTED_RESISTIVITIES_OHM_M.items():

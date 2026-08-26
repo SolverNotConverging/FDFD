@@ -13,14 +13,45 @@ if __package__:
         validate_impedance_pml_separation,
     )
 else:
+    # Direct-folder examples put only this directory on sys.path. Make the
+    # repository-level shared preset module importable without duplicating it,
+    # and give the local boundary compiler a dimension-specific private name.
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    module_directory = Path(__file__).resolve().parent
+    repository_root = str(module_directory.parent)
+    if repository_root in sys.path:
+        sys.path.remove(repository_root)
+    sys.path.insert(0, repository_root)
     from metal_surface_impedance import (
         canonical_metal_name,
         good_conductor_surface_impedance,
     )
-    from surface_impedance_boundary import (
-        SurfaceImpedanceDefinition,
-        compile_impedance_boundary,
-        validate_impedance_pml_separation,
+
+    boundary_module_name = "_fdfd_mode_solver_2d_surface_impedance_boundary"
+    boundary_module = sys.modules.get(boundary_module_name)
+    if boundary_module is None:
+        boundary_path = module_directory / "surface_impedance_boundary.py"
+        boundary_spec = importlib.util.spec_from_file_location(
+            boundary_module_name,
+            boundary_path,
+        )
+        if boundary_spec is None or boundary_spec.loader is None:
+            raise ImportError(f"Cannot load the 2D boundary compiler from {boundary_path}.")
+        boundary_module = importlib.util.module_from_spec(boundary_spec)
+        sys.modules[boundary_module_name] = boundary_module
+        try:
+            boundary_spec.loader.exec_module(boundary_module)
+        except Exception:
+            sys.modules.pop(boundary_module_name, None)
+            raise
+
+    SurfaceImpedanceDefinition = boundary_module.SurfaceImpedanceDefinition
+    compile_impedance_boundary = boundary_module.compile_impedance_boundary
+    validate_impedance_pml_separation = (
+        boundary_module.validate_impedance_pml_separation
     )
 
 

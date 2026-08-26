@@ -1,10 +1,58 @@
-import tkinter as tk
-from tkinter import ttk
-
 import numpy as np
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import eigs
+
+if __package__:
+    from metal_surface_impedance import (
+        canonical_metal_name,
+        good_conductor_surface_impedance,
+    )
+    from .surface_impedance_boundary import (
+        SurfaceImpedanceDefinition,
+        compile_impedance_boundary,
+        validate_impedance_pml_separation,
+    )
+else:
+    # Direct-folder examples put only this directory on sys.path. Make the
+    # repository-level shared preset module importable without duplicating it,
+    # and give the local boundary compiler a dimension-specific private name.
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    module_directory = Path(__file__).resolve().parent
+    repository_root = str(module_directory.parent)
+    if repository_root in sys.path:
+        sys.path.remove(repository_root)
+    sys.path.insert(0, repository_root)
+    from metal_surface_impedance import (
+        canonical_metal_name,
+        good_conductor_surface_impedance,
+    )
+
+    boundary_module_name = "_fdfd_mode_solver_1d_surface_impedance_boundary"
+    boundary_module = sys.modules.get(boundary_module_name)
+    if boundary_module is None:
+        boundary_path = module_directory / "surface_impedance_boundary.py"
+        boundary_spec = importlib.util.spec_from_file_location(
+            boundary_module_name,
+            boundary_path,
+        )
+        if boundary_spec is None or boundary_spec.loader is None:
+            raise ImportError(f"Cannot load the 1D boundary compiler from {boundary_path}.")
+        boundary_module = importlib.util.module_from_spec(boundary_spec)
+        sys.modules[boundary_module_name] = boundary_module
+        try:
+            boundary_spec.loader.exec_module(boundary_module)
+        except Exception:
+            sys.modules.pop(boundary_module_name, None)
+            raise
+
+    SurfaceImpedanceDefinition = boundary_module.SurfaceImpedanceDefinition
+    compile_impedance_boundary = boundary_module.compile_impedance_boundary
+    validate_impedance_pml_separation = (
+        boundary_module.validate_impedance_pml_separation
+    )
 
 
 class ModeSolver1D:
@@ -48,8 +96,19 @@ class ModeSolver1D:
         self.pmc_xx_mask = np.zeros(self.shape_node, dtype=bool)
         self.pmc_yy_mask = np.zeros(self.shape_cell, dtype=bool)
         self.pmc_zz_mask = np.zeros(self.shape_cell, dtype=bool)
+        self._pec_cell_mask = np.zeros(self.shape_cell, dtype=bool)
+        self._pmc_cell_mask = np.zeros(self.shape_cell, dtype=bool)
+        self._pml_cell_mask = np.zeros(self.shape_cell, dtype=bool)
         self._pec_regions = []
         self._pmc_regions = []
+        self._surface_impedance_owner = np.full(
+            self.shape_cell,
+            -1,
+            dtype=np.int32,
+        )
+        self._surface_impedance_definitions = []
+        self._surface_impedance_regions = []
+        self._compiled_impedance_boundary = None
 
         self.num_modes = int(num_modes)
         if self.num_modes <= 0:
@@ -222,29 +281,89 @@ class ModeSolver1D:
     def add_pec(self, x_range, components=None):
         """Add a PEC cell region and expand it onto surrounding electric components."""
         sl_x = self._region_slice(x_range)
-        self._pec_regions.append(sl_x)
+        selected = (
+            ("xx", "yy", "zz")
+            if components is None
+            else self._validate_components(components)
+        )
         cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x] = True
+        if np.any(cell_mask & self.impedance_surface_mask):
+            raise ValueError("Surface-impedance overlap with PEC region.")
+
+        previous_masks = tuple(
+            values.copy()
+            for values in (
+                self.pec_xx_mask,
+                self.pec_yy_mask,
+                self.pec_zz_mask,
+            )
+        )
+        previous_cell_mask = self._pec_cell_mask.copy()
+        previous_region_count = len(self._pec_regions)
+        previous_compiled_boundary = self._compiled_impedance_boundary
+        self._pec_regions.append(sl_x)
+        self._pec_cell_mask |= cell_mask
         xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="electric")
-        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
-        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
-            if comp in selected:
-                self._component_mask("pec", comp)[:] |= mask
-        self._effective_materials_and_masks()
+        try:
+            for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+                if comp in selected:
+                    self._component_mask("pec", comp)[:] |= mask
+            self._effective_materials_and_masks()
+        except Exception:
+            for target, previous in zip(
+                    (self.pec_xx_mask, self.pec_yy_mask, self.pec_zz_mask),
+                    previous_masks,
+            ):
+                target[:] = previous
+            self._pec_cell_mask[:] = previous_cell_mask
+            del self._pec_regions[previous_region_count:]
+            self._compiled_impedance_boundary = previous_compiled_boundary
+            raise
         self._invalidate_solution()
 
     def add_pmc(self, x_range, components=None):
         """Add a PMC cell region and expand it onto surrounding magnetic components."""
         sl_x = self._region_slice(x_range)
-        self._pmc_regions.append(sl_x)
+        selected = (
+            ("xx", "yy", "zz")
+            if components is None
+            else self._validate_components(components)
+        )
         cell_mask = np.zeros(self.shape_cell, dtype=bool)
         cell_mask[sl_x] = True
+        if np.any(cell_mask & self.impedance_surface_mask):
+            raise ValueError("Surface-impedance overlap with PMC region.")
+
+        previous_masks = tuple(
+            values.copy()
+            for values in (
+                self.pmc_xx_mask,
+                self.pmc_yy_mask,
+                self.pmc_zz_mask,
+            )
+        )
+        previous_cell_mask = self._pmc_cell_mask.copy()
+        previous_region_count = len(self._pmc_regions)
+        previous_compiled_boundary = self._compiled_impedance_boundary
+        self._pmc_regions.append(sl_x)
+        self._pmc_cell_mask |= cell_mask
         xx_mask, yy_mask, zz_mask = self.component_masks_from_cell_mask(cell_mask, field="magnetic")
-        selected = ("xx", "yy", "zz") if components is None else self._validate_components(components)
-        for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
-            if comp in selected:
-                self._component_mask("pmc", comp)[:] |= mask
-        self._effective_materials_and_masks()
+        try:
+            for comp, mask in (("xx", xx_mask), ("yy", yy_mask), ("zz", zz_mask)):
+                if comp in selected:
+                    self._component_mask("pmc", comp)[:] |= mask
+            self._effective_materials_and_masks()
+        except Exception:
+            for target, previous in zip(
+                    (self.pmc_xx_mask, self.pmc_yy_mask, self.pmc_zz_mask),
+                    previous_masks,
+            ):
+                target[:] = previous
+            self._pmc_cell_mask[:] = previous_cell_mask
+            del self._pmc_regions[previous_region_count:]
+            self._compiled_impedance_boundary = previous_compiled_boundary
+            raise
         self._invalidate_solution()
 
     def component_masks_from_cell_mask(self, cell_mask, field="electric"):
@@ -289,6 +408,13 @@ class ModeSolver1D:
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1] = sigma_max * ((pml_width - i) / pml_width) ** n
 
+        pml_cells = sigma_x != 0.0
+        prospective_pml_cells = self._pml_cell_mask | pml_cells
+        validate_impedance_pml_separation(
+            self.impedance_surface_mask,
+            prospective_pml_cells,
+        )
+
         omega = 2 * np.pi * self.frequency
         Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * omega)
 
@@ -298,7 +424,135 @@ class ModeSolver1D:
         self.cell_mu_r_xx *= 1 / Sx
         self.cell_mu_r_yy *= Sx
         self.cell_mu_r_zz *= Sx
+        self._pml_cell_mask |= pml_cells
         self.update_component_materials()
+        self._invalidate_solution()
+
+    @property
+    def impedance_surface_mask(self):
+        """Return a copy of the opaque cell mask used by impedance surfaces."""
+        return self._surface_impedance_owner >= 0
+
+    @staticmethod
+    def _validate_surface_impedance_value(value):
+        if isinstance(value, (bool, np.bool_)) or isinstance(value, (str, bytes)):
+            raise TypeError("Zs must be a scalar complex impedance in ohms.")
+        if not np.isscalar(value):
+            raise TypeError("Zs must be a scalar complex impedance in ohms.")
+        try:
+            impedance = complex(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise TypeError("Zs must be a scalar complex impedance in ohms.") from exc
+        if not np.isfinite(impedance):
+            raise ValueError("Zs must be finite.")
+        if impedance == 0:
+            raise ValueError("Zs must be nonzero; use add_pec(...) for the PEC limit.")
+        if impedance.real < 0:
+            raise ValueError("Zs must be passive with Re(Zs) >= 0.")
+        return impedance
+
+    def _surface_impedance_definition(self, Zs, preset):
+        if (Zs is None) == (preset is None):
+            raise ValueError("Provide exactly one of Zs or preset.")
+        if not np.isfinite(self.frequency) or self.frequency <= 0:
+            raise ValueError(
+                "frequency must be finite and positive for surface impedance."
+            )
+
+        if preset is not None:
+            canonical = canonical_metal_name(preset)
+            impedance = good_conductor_surface_impedance(
+                canonical,
+                self.frequency,
+            )
+            return SurfaceImpedanceDefinition(
+                key=("preset", canonical),
+                impedance=impedance,
+                label=canonical,
+                preset=canonical,
+            )
+
+        impedance = self._validate_surface_impedance_value(Zs)
+        return SurfaceImpedanceDefinition(
+            key=("constant", impedance.real, impedance.imag),
+            impedance=impedance,
+            label=f"Zs={impedance!r}",
+        )
+
+    def add_impedance_surface(
+            self,
+            Zs: complex | None = None,
+            *,
+            preset: str | None = None,
+            x_range,
+    ):
+        """Mark opaque cells whose exposed interfaces obey a scalar SIBC."""
+        definition = self._surface_impedance_definition(Zs, preset)
+        sl_x = self._region_slice(x_range)
+        region_mask = np.zeros(self.shape_cell, dtype=bool)
+        region_mask[sl_x] = True
+
+        for label, conflict_mask in (
+                ("PEC", self._pec_cell_mask),
+                ("PMC", self._pmc_cell_mask),
+                ("PML", self._pml_cell_mask),
+        ):
+            if np.any(region_mask & conflict_mask):
+                raise ValueError(
+                    f"Surface-impedance region overlaps an existing {label} region."
+                )
+
+        definition_index = next(
+            (
+                index
+                for index, existing in enumerate(
+                    self._surface_impedance_definitions
+                )
+                if existing.key == definition.key
+            ),
+            None,
+        )
+        occupied_owners = np.unique(
+            self._surface_impedance_owner[region_mask]
+        )
+        occupied_owners = occupied_owners[occupied_owners >= 0]
+        if occupied_owners.size:
+            if definition_index is None or np.any(
+                    occupied_owners != definition_index
+            ):
+                raise ValueError(
+                    "Surface-impedance region has an impedance overlap with "
+                    "a different definition."
+                )
+
+        prospective_mask = self.impedance_surface_mask | region_mask
+        if np.all(prospective_mask):
+            raise ValueError(
+                "Surface-impedance geometry leaves no retained field cells."
+            )
+        validate_impedance_pml_separation(
+            prospective_mask,
+            self._pml_cell_mask,
+        )
+
+        previous_owner = self._surface_impedance_owner.copy()
+        previous_definition_count = len(self._surface_impedance_definitions)
+        previous_region_count = len(self._surface_impedance_regions)
+        previous_compiled_boundary = self._compiled_impedance_boundary
+        try:
+            if definition_index is None:
+                definition_index = len(self._surface_impedance_definitions)
+                self._surface_impedance_definitions.append(definition)
+            unowned = region_mask & (self._surface_impedance_owner < 0)
+            self._surface_impedance_owner[unowned] = definition_index
+            self._surface_impedance_regions.append((sl_x, definition.label))
+            self._effective_materials_and_masks()
+        except Exception:
+            self._surface_impedance_owner[:] = previous_owner
+            del self._surface_impedance_definitions[previous_definition_count:]
+            del self._surface_impedance_regions[previous_region_count:]
+            self._compiled_impedance_boundary = previous_compiled_boundary
+            raise
         self._invalidate_solution()
 
     @staticmethod
@@ -358,9 +612,68 @@ class ModeSolver1D:
             data.extend((1.0 / self.dx_normalized, -1.0 / self.dx_normalized))
         D_e_to_h = coo_matrix((data, (rows, cols)), shape=(self.Nx, self.Nx + 1)).tocsr()
         D_h_to_e = -D_e_to_h.conj().T
+        D_h_to_e = self._apply_impedance_ampere_rows(D_h_to_e)
         self.DEX = D_e_to_h
         self.DHX = D_h_to_e
         return D_e_to_h, D_h_to_e
+
+    def _apply_impedance_ampere_rows(self, derivative):
+        """Replace full-cell Ampere differences with clipped half-cell rows."""
+        boundary = self._compiled_impedance_boundary
+        if boundary is None or not boundary.rows:
+            return derivative
+
+        editable = derivative.tolil(copy=True)
+        occupied_rows = set()
+        for row in boundary.rows:
+            if row.electric_index in occupied_rows:
+                raise ValueError(
+                    "Duplicate surface-impedance Ampere row at node "
+                    f"{row.electric_index}."
+                )
+            occupied_rows.add(row.electric_index)
+            editable.rows[row.electric_index] = [row.retained_cell_index]
+            editable.data[row.electric_index] = [
+                row.magnetic_coefficient / self.k_0
+            ]
+        return editable.tocsr()
+
+    @staticmethod
+    def _apply_transverse_cross_constraints(
+            pec_xx_mask,
+            pec_yy_mask,
+            pmc_xx_mask,
+            pmc_yy_mask,
+    ):
+        """Close the collocated Ex/Hy and Ey/Hx constraint pairs."""
+        ex_hy_mask = pec_xx_mask | pmc_yy_mask
+        ey_hx_mask = pec_yy_mask | pmc_xx_mask
+        pec_xx_mask[:] = ex_hy_mask
+        pmc_yy_mask[:] = ex_hy_mask
+        pec_yy_mask[:] = ey_hx_mask
+        pmc_xx_mask[:] = ey_hx_mask
+
+    @staticmethod
+    def _validate_impedance_row_conflicts(
+            boundary,
+            pec_yy_mask,
+            pec_zz_mask,
+            pmc_yy_mask,
+            pmc_zz_mask,
+    ):
+        for row in boundary.rows:
+            node = row.electric_index
+            cell = row.retained_cell_index
+            if pec_yy_mask[node] or pec_zz_mask[node]:
+                raise ValueError(
+                    "Surface-impedance boundary conflicts with a PEC/PMC "
+                    f"constraint at electric node {node}."
+                )
+            if pmc_yy_mask[cell] or pmc_zz_mask[cell]:
+                raise ValueError(
+                    "Surface-impedance boundary has a PEC/PMC constraint on "
+                    f"magnetic cell {cell}."
+                )
 
     def _effective_materials_and_masks(self):
         eps_r_xx = self.cell_eps_r_xx.copy()
@@ -377,6 +690,27 @@ class ModeSolver1D:
         pmc_xx_mask = self.pmc_xx_mask.copy()
         pmc_yy_mask = self.pmc_yy_mask.copy()
         pmc_zz_mask = self.pmc_zz_mask.copy()
+
+        opaque_cells = self.impedance_surface_mask
+        if np.any(opaque_cells):
+            electric_bad = (
+                ~np.isfinite(eps_r_xx)
+                | ~np.isfinite(eps_r_yy)
+                | ~np.isfinite(eps_r_zz)
+            )
+            magnetic_bad = (
+                ~np.isfinite(mu_r_xx)
+                | ~np.isfinite(mu_r_yy)
+                | ~np.isfinite(mu_r_zz)
+            )
+            if np.any(opaque_cells & electric_bad):
+                raise ValueError(
+                    "Surface-impedance cells overlap a PEC material region."
+                )
+            if np.any(opaque_cells & magnetic_bad):
+                raise ValueError(
+                    "Surface-impedance cells overlap a PMC material region."
+                )
 
         electric_targets = {"xx": pec_xx_mask, "yy": pec_yy_mask, "zz": pec_zz_mask}
         magnetic_targets = {"xx": pmc_xx_mask, "yy": pmc_yy_mask, "zz": pmc_zz_mask}
@@ -395,6 +729,13 @@ class ModeSolver1D:
                 magnetic_targets[component][:] |= masks[mask_index[component]]
                 values[bad_cells] = 1.0 + 0j
 
+        self._apply_transverse_cross_constraints(
+            pec_xx_mask,
+            pec_yy_mask,
+            pmc_xx_mask,
+            pmc_yy_mask,
+        )
+
         materials = self._material_on_fields(
             eps_r_xx,
             eps_r_yy,
@@ -404,6 +745,57 @@ class ModeSolver1D:
             mu_r_zz,
             no_average_mask,
         )
+
+        if np.any(opaque_cells):
+            boundary = compile_impedance_boundary(
+                owner=self._surface_impedance_owner,
+                definitions=tuple(self._surface_impedance_definitions),
+                cell_eps_r_yy=eps_r_yy,
+                cell_eps_r_zz=eps_r_zz,
+                dx=self.dx,
+                frequency=self.frequency,
+                epsilon0=self.epsilon0,
+                pml_cells=self._pml_cell_mask,
+            )
+            self._compiled_impedance_boundary = boundary
+            self._validate_impedance_row_conflicts(
+                boundary,
+                pec_yy_mask,
+                pec_zz_mask,
+                pmc_yy_mask,
+                pmc_zz_mask,
+            )
+            for row in boundary.rows:
+                node = row.electric_index
+                materials["eps_yy"][node] = row.relative_permittivity_yy
+                materials["eps_zz"][node] = row.relative_permittivity_zz
+                materials["mu_xx"][node] = mu_r_xx[
+                    row.retained_cell_index
+                ]
+
+            electric_constraints = (
+                pec_xx_mask,
+                pec_yy_mask,
+                pec_zz_mask,
+            )
+            magnetic_constraints = (
+                pmc_xx_mask,
+                pmc_yy_mask,
+                pmc_zz_mask,
+            )
+            for constraint, retained in zip(
+                    electric_constraints,
+                    boundary.electric_retained,
+            ):
+                constraint[:] |= ~retained
+            for constraint, retained in zip(
+                    magnetic_constraints,
+                    boundary.magnetic_retained,
+            ):
+                constraint[:] |= ~retained
+        else:
+            self._compiled_impedance_boundary = None
+
         materials["eps_xx"][pec_xx_mask] = 1.0 + 0j
         materials["eps_yy"][pec_yy_mask] = 1.0 + 0j
         materials["eps_zz"][pec_zz_mask] = 1.0 + 0j
@@ -494,8 +886,8 @@ class ModeSolver1D:
         self.neff_TM = self._passive_positive_neff(-self.eigenvalues_TM)
         self.propagation_constant_TE = np.real(self.neff_TE)
         self.propagation_constant_TM = np.real(self.neff_TM)
-        self.attenuation_constant_TE = np.imag(self.neff_TE)
-        self.attenuation_constant_TM = np.imag(self.neff_TM)
+        self.attenuation_constant_TE = -np.imag(self.neff_TE)
+        self.attenuation_constant_TM = -np.imag(self.neff_TM)
 
         self.Ey = np.asarray(self.eigenvectors_TE, dtype=complex)
         self.Hy = np.asarray(self.eigenvectors_TM, dtype=complex)
@@ -530,18 +922,22 @@ class ModeSolver1D:
             finite = np.isfinite(values)
             if np.any(np.abs(np.imag(values[finite])) > 1e-14):
                 return True
-        return False
+        return any(
+            definition.impedance.real > 0
+            for definition in self._surface_impedance_definitions
+        )
 
     def _passive_positive_neff(self, neff_squared):
-        sqrt = np.sqrt(neff_squared)
-        neff = np.where(np.real(sqrt) < 0, -sqrt, sqrt)
+        root = np.sqrt(neff_squared)
+        tolerance = 1e-12 * np.maximum(1.0, np.abs(root))
+        flip = (np.real(root) < -tolerance) | (
+            (np.abs(np.real(root)) <= tolerance) & (np.imag(root) > tolerance)
+        )
+        neff = np.where(flip, -root, root)
         real = np.real(neff)
         imag = np.imag(neff)
-        tolerance = 1e-12 * np.maximum(1.0, np.abs(neff))
         real = np.where(np.abs(real) <= tolerance, 0.0, real)
-        imag = np.where(np.abs(imag) <= tolerance, 0.0, np.abs(imag))
-        if not self._has_lossy_material():
-            imag = np.zeros_like(imag)
+        imag = np.where(np.abs(imag) <= tolerance, 0.0, imag)
         return real + 1j * imag
 
     def _field_x(self, field_name):
@@ -598,6 +994,14 @@ class ModeSolver1D:
             ax.axvspan(sl_x.start * self.dx * 1e3, sl_x.stop * self.dx * 1e3, color="yellow", alpha=0.5, zorder=1)
         for sl_x in self._pmc_regions:
             ax.axvspan(sl_x.start * self.dx * 1e3, sl_x.stop * self.dx * 1e3, color="blue", alpha=0.5, zorder=1)
+        for sl_x, _ in self._surface_impedance_regions:
+            ax.axvspan(
+                sl_x.start * self.dx * 1e3,
+                sl_x.stop * self.dx * 1e3,
+                color="magenta",
+                alpha=0.45,
+                zorder=1,
+            )
         ax.set_xlim(0, self.x_range * 1e3)
         ax.set_ylim(-1.0, 1.0)
 
@@ -676,7 +1080,11 @@ class ModeSolver1D:
         if self.neff_TE is None:
             raise RuntimeError("solve() must be called before visualize_with_gui().")
 
+        import tkinter as tk
+        from tkinter import ttk
+
         import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
         root = tk.Tk()
         root.title("FDFD 1D Mode Visualizer")
