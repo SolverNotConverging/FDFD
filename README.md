@@ -26,11 +26,11 @@ pair used by the usual forward/inverse FFT convention.
 
 Forward and outgoing waves therefore use ``exp(-j k·r)`` (and guided modes use ``exp(-j beta z)``). Under this convention:
 
-- passive bulk materials have $\operatorname{Im}(\epsilon_r)\le 0$ and $\operatorname{Im}(\mu_r)\le 0$;
-- passive forward guided modes have $\operatorname{Im}(n_\mathrm{eff})\le 0$, with field-amplitude attenuation $\alpha=-k_0\operatorname{Im}(n_\mathrm{eff})\ge 0$ (and power decaying as $e^{-2\alpha z}$);
+- passive bulk materials have $\mathrm{Im}(\epsilon_r)\le 0$ and $\mathrm{Im}(\mu_r)\le 0$;
+- passive forward guided modes have $\mathrm{Im}(n_\mathrm{eff})\le 0$, with field-amplitude attenuation $\alpha=-k_0\mathrm{Im}(n_\mathrm{eff})\ge 0$ (and power decaying as $e^{-2\alpha z}$);
 - positive conductivity enters bulk permittivity as $-j\sigma/(\omega\epsilon_0)$ and the PML stretch as $1-j\sigma/(\omega\epsilon_0)$;
-- passive scalar surface impedance still has $\operatorname{Re}(Z_s)\ge 0$; the good-conductor preset is $Z_s=(1+j)R_s$;
-- decaying complex-frequency eigenmodes have $\operatorname{Im}(\omega)\ge 0$;
+- passive scalar surface impedance still has $\mathrm{Re}(Z_s)\ge 0$; the good-conductor preset is $Z_s=(1+j)R_s$;
+- decaying complex-frequency eigenmodes have $\mathrm{Im}(\omega)\ge 0$;
 - outgoing two-dimensional Green functions use $H_0^{(2)}$.
 
 The electrostatic solver has no time dependence, so this convention does not affect it.

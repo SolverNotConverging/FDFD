@@ -76,7 +76,7 @@ Fields use
 
 .. math::
 
-   F(z,t)=\operatorname{Re}\{\widetilde F\exp(+j\omega t-j\beta z)\}.
+   F(z,t)=\mathrm{Re}\{\widetilde F\exp(+j\omega t-j\beta z)\}.
 
 The corresponding forward Fourier-transform kernel is ``exp(-j*omega*t)``;
 the ``+j*omega*t`` factor above is the inverse-transform/phasor synthesis.
