@@ -6,7 +6,7 @@ Mode Solver 1D
 What It Solves
 --------------
 
-Use this solver for dielectric slabs, grounded slabs, impedance-loaded sheets, and quick modal dispersion sweeps.
+Use this solver for dielectric slabs, grounded slabs, and quick modal dispersion sweeps.
 
 The solver supports:
 
@@ -15,7 +15,6 @@ The solver supports:
 * Isotropic or diagonal-anisotropic relative ``epsilon`` and ``mu``.
 * Cell-centred PEC and PMC regions expanded to component-specific Yee masks.
 * Simple uniaxial PML stretching at the left and/or right boundary.
-* Electric impedance-sheet perturbations.
 
 Grid Layout
 -----------
@@ -58,7 +57,6 @@ Material And Boundary API
    add_pec(x_range, components=None)
    add_pmc(x_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=25, direction="all")
-   add_impedance_surface(Zs, position, thickness_cells=1, eps_components=("xx", "yy", "zz"))
 
 Notes:
 

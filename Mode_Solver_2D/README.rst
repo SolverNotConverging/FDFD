@@ -14,7 +14,7 @@ The solver supports:
 * PEC and PMC masks for selected Yee-grid components.
 * Component masks generated from cell-centred PEC/PMC regions.
 * Simple uniaxial PML in ``x``, ``y``, or all boundaries.
-* Impedance sheets normal to ``x`` or ``y``.
+* Opaque scalar surface-impedance boundaries compiled from cell regions.
 * True staggered Yee-grid field storage and rectangular curl operators.
 
 Main Class
@@ -44,7 +44,7 @@ Material And Boundary API
    add_pmc(x_range, y_range, components=None)
    add_pml(pml_width=50, n=3, sigma_max=5, direction="all")
    add_UPML(pml_width=50, n=3, sigma_max=5, direction="all")
-   add_impedance_surface(Zs, position, orientation="x", thickness_cells=1, eps_components=("xx", "yy", "zz"))
+   add_impedance_surface(Zs=None, *, preset=None, x_range, y_range)
 
 Notes:
 
@@ -58,6 +58,98 @@ Notes:
 * Transverse boundary masks are cross-constrained on collocated Yee pairs: PEC ``Ex`` implies PMC ``Hy`` (and vice versa), while PEC ``Ey`` implies PMC ``Hx`` (and vice versa).
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, ``"y-"``, ``"y+"``, ``"y"``, or ``"all"``.
 
+Surface Impedance Boundaries
+----------------------------
+
+``add_impedance_surface`` marks an opaque rectangular cell region.  Fields in
+the marked cells are excluded, while every exposed face between an opaque and
+retained cell receives a one-sided scalar Leontovich boundary condition.  The
+ranges describe the solid region; they are not a numerical film thickness.
+
+Provide exactly one of a complex ``Zs`` in ohms or a named metal ``preset``:
+
+.. code-block:: python
+
+   # Constant impedance at the solver frequency.
+   solver.add_impedance_surface(
+       Zs=0.025 + 0.030j,
+       x_range=(0, 2),
+       y_range=(0, solver.Ny),
+   )
+
+   # Good-conductor copper impedance evaluated at solver.frequency.
+   solver.add_impedance_surface(
+       preset="Cu",
+       x_range=(solver.Nx - 2, solver.Nx),
+       y_range=(0, solver.Ny),
+   )
+
+Under the solver convention
+``F(z, t) = Re{F~ exp(+j omega t - j beta z)}``, the normal points from the
+opaque region into the retained medium and ``E_t = Zs (n x H_t)``.  A preset
+is evaluated directly as
+
+.. math::
+
+   Z_s=(1+j)\sqrt{\frac{\omega\mu_0}{2\sigma}}
+      =(1+j)\sqrt{\pi f\mu_0\rho}.
+
+Preset names and chemical symbols are case-insensitive. ``aluminum`` is also
+accepted as an alias for ``aluminium``.
+
+.. list-table:: Metal surface-impedance presets at the cited reference condition
+   :header-rows: 1
+
+   * - Preset (symbol)
+     - Resistivity (ohm metre)
+     - Conductivity (S/m)
+     - Source
+   * - aluminium (Al)
+     - ``2.650e-8``
+     - ``3.774e7``
+     - DES1984A_
+   * - copper (Cu)
+     - ``1.676e-8``
+     - ``5.967e7``
+     - MAT1979_
+   * - gold (Au)
+     - ``2.192e-8``
+     - ``4.562e7``
+     - MAT1979_
+   * - molybdenum (Mo)
+     - ``5.340e-8``
+     - ``1.873e7``
+     - DES1984S_
+   * - palladium (Pd)
+     - ``1.054e-7``
+     - ``9.488e6``
+     - MAT1979_
+   * - silver (Ag)
+     - ``1.586e-8``
+     - ``6.305e7``
+     - MAT1979_
+   * - tungsten (W)
+     - ``5.280e-8``
+     - ``1.894e7``
+     - DES1984S_
+   * - zinc (Zn)
+     - ``5.964e-8``
+     - ``1.677e7``
+     - DES1984S_
+
+.. _DES1984A: https://doi.org/10.1063/1.555725
+.. _MAT1979: https://doi.org/10.1063/1.555614
+.. _DES1984S: https://doi.org/10.1063/1.555723
+
+``Zs`` must be finite, nonzero, scalar, and passive
+(``Re(Zs) >= 0``); use ``add_pec`` for the exact ``Zs=0`` limit.  Identical
+definitions may overlap and union, while different definitions may not
+overlap. PEC/PMC regions must not constrain a Yee component used by an SIBC;
+this excludes both cell overlaps and immediately adjacent row conflicts. PML
+cells must neither overlap an impedance region nor touch one of its exposed
+faces. Point-only diagonal contacts are rejected as non-manifold. The public
+``impedance_surface_mask`` property returns a copy of the marked-cell mask.
+
 Solve API
 ---------
 
@@ -70,7 +162,8 @@ Solve API
 After ``solve()``, outputs include:
 
 * ``neff``: complex effective index for each selected mode.
-* ``propagation_constant`` and ``attenuation_constant``: real and imaginary parts of ``neff``.
+* ``propagation_constant``: real part of ``neff``.
+* ``attenuation_constant``: positive normalized attenuation ``-Im(neff)`` for passive forward modes.
 * ``eigenvalues`` and ``eigenvectors``: selected sparse eigensystem outputs.
 * ``Ex`` and ``Hy``: staggered field arrays of shape ``(Nx, Ny + 1, num_modes)``.
 * ``Ey`` and ``Hx``: staggered field arrays of shape ``(Nx + 1, Ny, num_modes)``.

@@ -301,28 +301,6 @@ class ModeSolver1D:
         self.update_component_materials()
         self._invalidate_solution()
 
-    def add_impedance_surface(
-            self,
-            Zs: complex,
-            position: float | int,
-            *,
-            thickness_cells: int = 1,
-            eps_components=("xx", "yy", "zz"),
-    ):
-        thickness_cells = int(thickness_cells)
-        if thickness_cells <= 0:
-            raise ValueError("thickness_cells must be positive.")
-
-        idx = self._bound_to_index(position)
-        sl_x = self._region_slice((idx, idx + thickness_cells))
-        thickness = thickness_cells * self.dx
-
-        delta_eps = -1j / (2 * np.pi * self.frequency * self.epsilon0 * thickness * Zs)
-        for comp in self._validate_components(eps_components):
-            self._cell_material_array("eps", comp)[sl_x] += delta_eps
-        self.update_component_materials()
-        self._invalidate_solution()
-
     @staticmethod
     def _average_to_node(values, no_average_mask=None):
         out = np.zeros(values.size + 1, dtype=complex)
