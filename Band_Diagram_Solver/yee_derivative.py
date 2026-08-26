@@ -17,7 +17,8 @@ def yeeder2d(NS, RES, BC, kinc=None):
         0: Dirichlet boundary conditions
         1: Periodic boundary conditions
     kinc : list of float, optional
-        [kx, ky] Incident Wave Vector (only needed for PBCs)
+        [kx, ky] Bloch wave vector (only needed for PBCs).  Periodic fields
+        use ``exp(-j*kinc·r)``, consistent with ``exp(+j*omega*t)``.
 
     Returns
     -------

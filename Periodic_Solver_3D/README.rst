@@ -3,6 +3,13 @@ Periodic Solver 3D
 
 ``PeriodicModeSolver3D`` solves full-vector Bloch-periodic eigenmodes in three-dimensional unit cells. The solver is intended for periodically loaded waveguides, leaky-wave antenna unit cells, and other structures periodic along ``z``.
 
+The solver uses the ``exp(+j*omega*t)`` phasor convention. Its raw
+eigenvalue is the dimensional spatial exponent ``gamma = alpha + j*beta``
+in ``exp(-gamma*z)``. The standard effective index is therefore
+``neff = -j*gamma/k0 = beta/k0 - j*alpha/k0``. Passive forward modes have
+``Im(neff) <= 0``. The paired forward Fourier-transform kernel is
+``exp(-j*omega*t)``.
+
 What It Solves
 --------------
 
@@ -21,7 +28,7 @@ Parameters:
 * ``x_range``, ``y_range``, ``z_range``: physical domain spans in metres.
 * ``freq``: operating frequency in Hz.
 * ``num_modes``: number of modes to compute.
-* ``sigma_guess``: optional sparse-eigensolver shift.
+* ``sigma_guess``: optional shift for the dimensional spatial exponent ``gamma`` in inverse metres.
 * ``tol`` and ``ncv``: optional eigensolver controls.
 
 Material And Boundary API
@@ -37,6 +44,7 @@ Material And Boundary API
 Notes:
 
 * ``er`` and ``mr`` can be scalar or anisotropic material values accepted by the implementation.
+* Under ``exp(+j*omega*t)``, passive lossy permittivity and permeability use negative imaginary parts.
 * Geometry is assigned on a cell material grid with shape ``(Nx, Ny, Nz)`` and averaged onto Yee component locations internally.
 * Geometry regions are supplied as ``(min, max)`` pairs using integer grid indices or float physical positions in metres. Python slices are also accepted for index-based regions.
 * ``add_block`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
@@ -45,7 +53,7 @@ Notes:
 * Face orientation is retained along x, y, and periodic z. At edges and corners the masks use union semantics, so every component required by any incident face is constrained. For example, a z-normal PEC face constrains ``Ex``, ``Ey``, and normal ``Hz``; a z-normal PMC face constrains ``Hx``, ``Hy``, and normal ``Ez``.
 * Schur-eliminated longitudinal fields remain exact: PEC ``Ez`` and PMC ``Hz`` entries are removed by zeroing their inverse-material entries.
 * PEC/PMC regions do not modify the material tensors or introduce a large-value penalty.
-* ``add_UPML`` accepts side labels such as ``'+y'`` to absorb selected faces.
+* ``add_UPML`` accepts side labels such as ``'+y'`` to absorb selected faces; ``max_loss`` must be finite and nonnegative.
 
 Solve And Field Storage
 -----------------------
@@ -57,8 +65,12 @@ Solve And Field Storage
 
 After solving, important attributes include:
 
-* ``gammas``: complex propagation constants normalized by ``k0``.
-* ``eigenvalues`` and ``eigenvectors``: eigensolver outputs.
+* ``eigenvalues``: dimensional spatial exponents ``gamma`` in inverse metres.
+* ``gammas``: normalized spatial exponents ``gamma/k0``.
+* ``neff``: complex effective indices ``-j*gamma/k0``.
+* ``propagation_constant``: normalized phase constants ``Re(neff) = beta/k0``.
+* ``attenuation_constant``: normalized positive-forward attenuation ``-Im(neff) = alpha/k0``.
+* ``eigenvectors``: eigensolver field vectors.
 * Stored field arrays after ``store_fields`` or visualization routines.
 
 Reduced eigenvectors are expanded back to the full staggered field ordering after each solve, with every constrained entry restored as an exact zero. Saved result files include all six PEC/PMC masks so a loaded model retains its boundary constraints.

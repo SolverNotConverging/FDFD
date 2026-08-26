@@ -56,7 +56,7 @@ else:
 
 
 class ModeSolver2D:
-    """2D full-vector FDFD mode solver on a true staggered Yee grid."""
+    """2D Yee-grid mode solver using ``exp(+j*omega*t - j*beta*z)``."""
 
     def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, guess=None):
         self.frequency = frequency
@@ -497,10 +497,13 @@ class ModeSolver2D:
         raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_pml(self, pml_width=50, n=3, sigma_max=5, direction="all"):
-        """Add a simple uniaxial PML by stretching cell-centered epsilon and mu tensors."""
+        """Add a uniaxial PML for the ``exp(+j*omega*t)`` convention."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
+        sigma_max = float(sigma_max)
+        if not np.isfinite(sigma_max) or sigma_max < 0:
+            raise ValueError("sigma_max must be finite and nonnegative.")
         if direction not in ("x-", "x+", "x", "y-", "y+", "y", "all"):
             raise ValueError("direction must be one of 'x-', 'x+', 'x', 'y-', 'y+', 'y', or 'all'.")
 
@@ -528,8 +531,10 @@ class ModeSolver2D:
         )
 
         omega = 2 * np.pi * self.frequency
-        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * omega)
-        Sy = 1.0 + 1j * sigma_y / (self.epsilon0 * omega)
+        # With exp(+j*omega*t), outgoing exp(-j*k*x) and exp(-j*k*y)
+        # waves decay for stretches with negative imaginary parts.
+        Sx = 1.0 - 1j * sigma_x / (self.epsilon0 * omega)
+        Sy = 1.0 - 1j * sigma_y / (self.epsilon0 * omega)
 
         self.cell_eps_r_xx *= Sy / Sx
         self.cell_eps_r_yy *= Sx / Sy
@@ -1081,7 +1086,12 @@ class ModeSolver2D:
         return diags(values.ravel(order="F"), format="csr")
 
     def _unflatten_modes(self, flat_modes, shape):
-        return np.asarray(flat_modes, dtype=complex).reshape((*shape, flat_modes.shape[1]), order="F")
+        # Return independent field storage.  Electric slices can otherwise
+        # alias self.eigenvectors and receive the final common phase twice.
+        return np.asarray(flat_modes, dtype=complex).reshape(
+            (*shape, flat_modes.shape[1]),
+            order="F",
+        ).copy()
 
     def _zero_constrained_fields(self, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask):
         self.Ex[pec_xx_mask, :] = 0.0
@@ -1219,7 +1229,7 @@ class ModeSolver2D:
                 self.cell_mu_r_zz,
         ):
             finite = np.isfinite(values)
-            if np.any(np.abs(np.imag(values[finite])) > 1e-14):
+            if np.any(np.imag(values[finite]) < -1e-14):
                 return True
         return any(
             definition.impedance.real > 0
@@ -1227,6 +1237,7 @@ class ModeSolver2D:
         )
 
     def _passive_positive_neff(self, neff_squared):
+        """Select positive-phase or purely evanescent-decaying modal roots."""
         root = np.sqrt(neff_squared)
         tolerance = 1e-12 * np.maximum(1.0, np.abs(root))
         flip = (np.real(root) < -tolerance) | (

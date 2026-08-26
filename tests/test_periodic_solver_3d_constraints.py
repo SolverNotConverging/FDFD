@@ -443,6 +443,97 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
         np.testing.assert_array_equal(solver.fields["Ey"][0][pec_yy], 0.0)
         np.testing.assert_array_equal(solver.fields["Hx"][0][pmc_xx], 0.0)
 
+    def test_spatial_eigenvalue_maps_to_exp_plus_jwt_effective_index(self):
+        solver = self.make_solver()
+        gamma = solver.k0 * (0.02 + 1.5j)
+
+        def fake_eigs(A, M, *, k, sigma, tol, ncv):
+            return np.array([gamma]), self.deterministic_vector(A.shape[0])
+
+        with patch.object(periodic_solver_3d_module, "eigs", side_effect=fake_eigs):
+            solver.solve(method="eigs")
+
+        self.assertAlmostEqual(solver.eigenvalues[0], gamma)
+        self.assertAlmostEqual(solver.gammas[0], 0.02 + 1.5j)
+        self.assertAlmostEqual(solver.neff[0], 1.5 - 0.02j)
+        self.assertAlmostEqual(solver.propagation_constant[0], 1.5)
+        self.assertAlmostEqual(solver.attenuation_constant[0], 0.02)
+        self.assertLess(solver.neff[0].imag, 0.0)
+
+    def test_upml_stretch_uses_exp_plus_jwt_passive_sign(self):
+        solver = self.make_solver()
+        sigma = 0.25 * solver.epsilon0 * solver.omega
+        stretch = 1.0 - 0.25j
+
+        solver.add_UPML(sides=("-x",), width=1, max_loss=sigma, n=1)
+
+        np.testing.assert_allclose(solver.cell_Erxx_3D[0, :, :], 1.0 / stretch)
+        np.testing.assert_allclose(solver.cell_Eryy_3D[0, :, :], stretch)
+        np.testing.assert_allclose(solver.cell_Erzz_3D[0, :, :], stretch)
+        np.testing.assert_allclose(solver.cell_Mrxx_3D[0, :, :], 1.0 / stretch)
+        np.testing.assert_allclose(solver.cell_Mryy_3D[0, :, :], stretch)
+        np.testing.assert_allclose(solver.cell_Mrzz_3D[0, :, :], stretch)
+        np.testing.assert_array_equal(
+            solver.cell_Eryy_3D[1:, :, :],
+            np.ones_like(solver.cell_Eryy_3D[1:, :, :]),
+        )
+
+    def test_upml_rejects_active_or_nonfinite_loss(self):
+        for max_loss in (-1.0, np.inf, np.nan):
+            with self.subTest(max_loss=max_loss):
+                solver = self.make_solver()
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "max_loss must be finite and nonnegative",
+                ):
+                    solver.add_UPML(sides=("-x",), width=1, max_loss=max_loss)
+
+    def test_passive_material_uses_negative_imaginary_constitutive_values(self):
+        solver = self.make_solver()
+        epsilon = 2.0 - 0.2j
+        mu = 1.0 - 0.1j
+
+        solver.add_block(
+            epsilon,
+            mu,
+            (0, solver.Nx),
+            (0, solver.Ny),
+            (0, solver.Nz),
+            subpixels=1,
+        )
+
+        np.testing.assert_array_equal(
+            solver.cell_Erxx_3D,
+            np.full(solver.shape_cell, epsilon),
+        )
+        np.testing.assert_array_equal(
+            solver.cell_Mrxx_3D,
+            np.full(solver.shape_cell, mu),
+        )
+
+    def test_uniform_passive_medium_has_negative_imaginary_neff(self):
+        solver = self.make_solver()
+        epsilon = 2.0 - 0.1j
+        expected_neff = np.sqrt(epsilon)
+        solver.add_block(
+            epsilon,
+            1.0,
+            (0, solver.Nx),
+            (0, solver.Ny),
+            (0, solver.Nz),
+            subpixels=1,
+        )
+        # Stay slightly off the analytically degenerate pole; asking ARPACK
+        # to factor exactly at the uniform-medium eigenvalue is numerically
+        # singular and can fail depending on the preceding test order.
+        solver.sigma_guess = 0.97j * solver.k0 * expected_neff
+
+        solver.solve(method="eigs", ncv=30, tol=1e-10)
+
+        self.assertGreater(solver.neff[0].real, 0.0)
+        self.assertLess(solver.neff[0].imag, 0.0)
+        self.assertGreater(solver.attenuation_constant[0], 0.0)
+
     def test_inverse_diagonal_is_exactly_zero_on_longitudinal_constraints(self):
         solver = self.make_solver()
 
@@ -534,7 +625,7 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
             components=("yy", "zz"),
         )
         solver.eigenvalues = np.array([2.0 + 0.0j])
-        solver.gammas = solver.eigenvalues / solver.k0
+        solver._update_propagation_outputs()
         solver.fields = {
             "Ex": np.zeros((1, *solver.shape_ex), dtype=complex),
             "Ey": np.zeros((1, *solver.shape_ey), dtype=complex),
@@ -545,7 +636,28 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "periodic_constraints.npz"
             solver.save_results(path)
+            with np.load(path, allow_pickle=False) as saved:
+                self.assertEqual(
+                    saved["time_convention"].item(),
+                    "exp(+j*omega*t)",
+                )
+                self.assertEqual(
+                    saved["fourier_transform_convention"].item(),
+                    "forward exp(-j*omega*t)",
+                )
             loaded = PeriodicModeSolver3D.load_results(path)
+
+        np.testing.assert_array_equal(loaded.eigenvalues, solver.eigenvalues)
+        np.testing.assert_array_equal(loaded.gammas, solver.gammas)
+        np.testing.assert_array_equal(loaded.neff, solver.neff)
+        np.testing.assert_array_equal(
+            loaded.propagation_constant,
+            solver.propagation_constant,
+        )
+        np.testing.assert_array_equal(
+            loaded.attenuation_constant,
+            solver.attenuation_constant,
+        )
 
         for name in (
             "pec_xx_mask",

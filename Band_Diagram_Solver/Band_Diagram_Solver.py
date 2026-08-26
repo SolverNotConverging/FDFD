@@ -42,7 +42,9 @@ class BandStructureResult:
     frequencies : dict[str, np.ndarray]
         Dictionary keyed by polarisation ('TE' and/or 'TM').  Each entry is
         an array of shape (num_bands, N) containing the normalised
-        frequencies ``a/λ`` (using the x-period ``a``).
+        complex frequencies ``a*omega/(2*pi*c)`` (using the x-period ``a``).
+        For passive media under the ``exp(+j*omega*t)`` convention, temporal
+        decay appears as a non-negative imaginary frequency.
     eigenvalues : dict[str, np.ndarray]
         Un-normalised eigen-values (ω/c)² returned by the eigensolver for
         each polarisation.
@@ -57,6 +59,10 @@ class BandStructureResult:
 
 class BandDiagramSolver2D:
     """Finite-difference frequency-domain band diagram solver.
+
+    Phasors use ``exp(+j*omega*t)`` and Bloch fields use the spatial factor
+    ``exp(-j*beta·r)``.  Passive bulk material loss therefore has
+    non-positive imaginary relative permittivity/permeability.
 
     Parameters
     ----------
@@ -296,7 +302,7 @@ class BandDiagramSolver2D:
         ERyy_inv = ERyy_diag.power(-1)
 
         for pol in polarisations:
-            frequencies[pol] = np.zeros((num_bands, num_samples), dtype=float)
+            frequencies[pol] = np.zeros((num_bands, num_samples), dtype=complex)
             eigenvalues[pol] = np.zeros((num_bands, num_samples), dtype=complex)
 
         for idx in range(num_samples):
@@ -373,7 +379,7 @@ class BandDiagramSolver2D:
         path_artist_kwargs : dict, optional
             Extra keyword arguments forwarded to
             :meth:`matplotlib.axes.Axes.plot` when drawing the Bloch path.
-        
+
         Notes
         -----
         The figure is saved to ``band_diagram.png`` and displayed via
@@ -411,7 +417,7 @@ class BandDiagramSolver2D:
             if pol in result.frequencies:
                 ax_bands.plot(
                     x_axis,
-                    result.frequencies[pol].T,
+                    result.frequencies[pol].real.T,
                     f".{style}",
                     label=pol,
                 )
@@ -555,6 +561,8 @@ class BandDiagramSolver2D:
         return values[order][:num_bands]
 
     def _normalise_eigenvalues(self, values: np.ndarray) -> np.ndarray:
-        vals = np.real_if_close(values)
-        vals = np.clip(vals.real, 0.0, None)
+        # Use the principal complex square root.  For a passive material with
+        # Im(epsilon_r) <= 0, the eigenvalue and hence omega have non-negative
+        # imaginary parts, so exp(+j*omega*t) decays in time.
+        vals = np.asarray(values, dtype=complex)
         return self.a / (2 * np.pi) * np.sqrt(vals)

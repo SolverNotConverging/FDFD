@@ -21,7 +21,11 @@ def guess_func(f):
     return 0
 
 
-data = {"Frequency (Hz)": frequencies}
+data = {
+    "Frequency (Hz)": frequencies,
+    "Time_Convention": ["exp(+j*omega*t)"] * len(frequencies),
+    "Fourier_Convention": ["forward exp(-j*omega*t)"] * len(frequencies),
+}
 for mode in range(1, num_modes + 1):
     data[f"Alpha_Mode_{mode}"] = []
     data[f"Beta_Mode_{mode}"] = []
@@ -44,9 +48,12 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
     try:
         solver.solve()
         for mode in range(num_modes):
-            neff = solver.neff[mode]
-            data[f"Alpha_Mode_{mode + 1}"].append(neff.real)
-            data[f"Beta_Mode_{mode + 1}"].append(neff.imag)
+            data[f"Alpha_Mode_{mode + 1}"].append(
+                solver.attenuation_constant[mode]
+            )
+            data[f"Beta_Mode_{mode + 1}"].append(
+                solver.propagation_constant[mode]
+            )
     except Exception as exc:
         print(f"[WARN] eigs failed at {f / 1e9:.2f} GHz: {exc}")
         for mode in range(num_modes):

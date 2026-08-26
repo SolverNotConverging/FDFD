@@ -69,6 +69,29 @@ Notes:
 * Transverse boundary masks are closed on collocated Yee pairs: PEC ``Ex`` implies PMC ``Hy`` (and vice versa), while PEC ``Ey`` implies PMC ``Hx`` (and vice versa).
 * PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
 
+Time, Propagation, And Loss Convention
+--------------------------------------
+
+Fields use
+
+.. math::
+
+   F(z,t)=\operatorname{Re}\{\widetilde F\exp(+j\omega t-j\beta z)\}.
+
+The corresponding forward Fourier-transform kernel is ``exp(-j*omega*t)``;
+the ``+j*omega*t`` factor above is the inverse-transform/phasor synthesis.
+Consequently, passive bulk materials have ``Im(epsilon) <= 0`` and
+``Im(mu) <= 0``.  For example, electric conductivity is represented by
+
+.. math::
+
+   \epsilon_r=\epsilon_r'-j\frac{\sigma}{\omega\epsilon_0}.
+
+A forward passive mode has ``Im(neff) <= 0``, and the solver reports the
+positive normalized attenuation as ``-Im(neff)``.  The uniaxial PML uses
+``S = 1 - j sigma/(omega epsilon0)`` under the same convention.  A positive
+imaginary bulk constitutive parameter therefore represents gain, not loss.
+
 Surface Impedance Boundaries
 ----------------------------
 
@@ -220,6 +243,11 @@ After ``solve()``, the main outputs are:
 * ``propagation_constant_TE`` and ``propagation_constant_TM``: real parts of ``neff``.
 * ``attenuation_constant_TE`` and ``attenuation_constant_TM``: positive normalized attenuation ``-Im(neff)`` for passive forward modes.
 * ``Ey``, ``Hx``, ``Hz``, ``Hy``, ``Ex``, ``Ez``: fields on native staggered locations.
+
+The magnetic arrays use the solver normalization
+``H_stored = -j*eta0*H_physical``. Recover physical magnetic fields with
+``H_physical = j*H_stored/eta0``. This keeps the dimensionless curl equations
+compact while preserving the ``exp(+j*omega*t - j*beta*z)`` Maxwell phases.
 
 Visualization
 -------------

@@ -308,6 +308,97 @@ class PeriodicModeSolver2DConstraintTests(unittest.TestCase):
             0.0,
         )
 
+    def test_spatial_eigenvalue_maps_to_exp_plus_jwt_effective_index(self):
+        solver = self.make_solver("TM")
+        gamma = solver.k0 * (0.02 + 1.5j)
+
+        def fake_eigs(A, M, *, k, sigma, tol, ncv, v0):
+            vector = np.ones((A.shape[0], 1), dtype=complex)
+            return np.array([gamma]), vector
+
+        with patch.object(periodic_solver_2d_module, "eigs", side_effect=fake_eigs):
+            solver.solve()
+
+        self.assertAlmostEqual(solver.eigenvalues[0], gamma)
+        self.assertAlmostEqual(solver.gammas[0], 0.02 + 1.5j)
+        self.assertAlmostEqual(solver.neff[0], 1.5 - 0.02j)
+        self.assertAlmostEqual(solver.propagation_constant[0], 1.5)
+        self.assertAlmostEqual(solver.attenuation_constant[0], 0.02)
+        self.assertLess(solver.neff[0].imag, 0.0)
+
+    def test_pml_stretch_uses_exp_plus_jwt_passive_sign(self):
+        solver = self.make_solver("TM")
+        sigma = 0.25 * solver.epsilon0 * solver.omega
+        stretch = 1.0 - 0.25j
+
+        solver.add_pml(pml_width=1, sigma_max=sigma, direction="x-")
+
+        np.testing.assert_allclose(solver.cell_eps_r_xx[0, :], 1.0 / stretch)
+        np.testing.assert_allclose(solver.cell_eps_r_yy[0, :], stretch)
+        np.testing.assert_allclose(solver.cell_eps_r_zz[0, :], stretch)
+        np.testing.assert_allclose(solver.cell_mu_r_xx[0, :], 1.0 / stretch)
+        np.testing.assert_allclose(solver.cell_mu_r_yy[0, :], stretch)
+        np.testing.assert_allclose(solver.cell_mu_r_zz[0, :], stretch)
+        np.testing.assert_array_equal(
+            solver.cell_eps_r_yy[1:, :],
+            np.ones_like(solver.cell_eps_r_yy[1:, :]),
+        )
+
+    def test_pml_rejects_active_or_nonfinite_loss(self):
+        for sigma_max in (-1.0, np.inf, np.nan):
+            with self.subTest(sigma_max=sigma_max):
+                solver = self.make_solver("TM")
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "sigma_max must be finite and nonnegative",
+                ):
+                    solver.add_pml(pml_width=1, sigma_max=sigma_max)
+
+    def test_passive_material_uses_negative_imaginary_constitutive_values(self):
+        solver = self.make_solver("TM")
+        epsilon = 2.0 - 0.2j
+        mu = 1.0 - 0.1j
+
+        solver.add_rectangle(
+            epsilon,
+            mu,
+            (0, solver.Nx),
+            (0, solver.Nz),
+            subpixels=1,
+        )
+
+        np.testing.assert_array_equal(
+            solver.cell_eps_r_xx,
+            np.full(solver.shape_cell, epsilon),
+        )
+        np.testing.assert_array_equal(
+            solver.cell_mu_r_xx,
+            np.full(solver.shape_cell, mu),
+        )
+
+    def test_uniform_passive_medium_has_negative_imaginary_neff(self):
+        solver = self.make_solver("TE")
+        epsilon = 2.0 - 0.1j
+        expected_neff = np.sqrt(epsilon)
+        solver.add_rectangle(
+            epsilon,
+            1.0,
+            (0, solver.Nx),
+            (0, solver.Nz),
+            subpixels=1,
+        )
+        solver.guess = 1j * solver.k0 * expected_neff
+
+        solver.solve()
+
+        self.assertAlmostEqual(solver.neff[0], expected_neff, delta=1e-10)
+        self.assertLess(solver.neff[0].imag, 0.0)
+        self.assertAlmostEqual(
+            solver.attenuation_constant[0],
+            -expected_neff.imag,
+            delta=1e-10,
+        )
+
     def test_inverse_diagonal_is_exactly_zero_on_longitudinal_constraints(self):
         solver = self.make_solver()
         values = np.full(solver.shape_ez, 4.0 + 0.0j)

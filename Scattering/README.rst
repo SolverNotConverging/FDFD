@@ -3,6 +3,11 @@ Scattering Solver 2D
 
 ``FDFD2DScatteringSolver`` solves two-dimensional frequency-domain scattering problems on a Yee grid. It supports scalar TEz and TMz total-field/scattered-field formulations with plane-wave or point-source excitation.
 
+Time Convention
+---------------
+
+The solver uses the ``exp(+j*omega*t)`` phasor convention, paired with the forward Fourier-transform kernel ``exp(-j*omega*t)``. A wave travelling in the ``+r`` direction therefore varies as ``exp(-j*k*r)``. Passive bulk materials use ``Im(epsilon_r) <= 0`` and ``Im(mu_r) <= 0``. Point sources use the outgoing Hankel function ``H_0^(2)``, and the UPML coordinate stretch has negative imaginary part so outgoing fields decay into the layer.
+
 What It Solves
 --------------
 
@@ -56,7 +61,8 @@ Notes:
 
 * ``src_type`` accepts ``"plane_wave"`` or ``"point"``.
 * ``angle_deg`` is measured from ``+x`` for plane waves.
-* Point sources require ``location=(x0, y0)``.
+* Point sources require ``location=(x0, y0)`` and radiate outward according to ``H_0^(2)(k*r)``.
+* UPML ``sigma_max`` must be finite and nonnegative; ``direction`` accepts ``"x"``, ``"y"``, or ``"both"``.
 * ``add_mask`` accepts a scalar frame width, a dense mask array, or a sparse mask matrix.
 
 Solve API

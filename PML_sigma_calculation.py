@@ -5,6 +5,10 @@ def calculate_sigma_max(n, R, eta, d):
     """
     Calculate maximum sigma for PML.
 
+    This returns the positive conductivity magnitude.  With the repository's
+    exp(+j*omega*t) convention, the electromagnetic solvers apply it through
+    the negative-imaginary stretch ``1 - j*sigma/(omega*epsilon_0)``.
+
     Parameters:
     - n (int): Polynomial order of sigma profile
     - R (float): Desired reflection coefficient (e.g., 1e-6)

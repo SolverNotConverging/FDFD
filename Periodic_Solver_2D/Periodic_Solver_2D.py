@@ -10,7 +10,12 @@ from scipy.sparse.linalg import eigs
 
 
 class PeriodicModeSolver2D:
-    """2D Bloch-periodic TE/TM mode solver on a periodic Yee grid."""
+    """2D Bloch-periodic TE/TM mode solver on a periodic Yee grid.
+
+    The raw eigenvalue is ``gamma`` in ``exp(-gamma*z)``. Phasors use
+    ``exp(+j*omega*t)``, and ``neff = -j*gamma/k0``; consequently, passive
+    forward modes have ``neff.imag <= 0``.
+    """
 
     def __init__(
             self,
@@ -108,6 +113,7 @@ class PeriodicModeSolver2D:
     def _invalidate_solution(self):
         self.eigenvalues = None
         self.eigenvectors = None
+        self.gammas = None
         self.neff = None
         self.propagation_constant = None
         self.attenuation_constant = None
@@ -381,10 +387,13 @@ class PeriodicModeSolver2D:
         raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_pml(self, pml_width=30, n=3, sigma_max=5.0, direction="all"):
-        """Add a simple x-directed uniaxial PML."""
+        """Add an x-directed uniaxial PML for ``exp(+j*omega*t)`` phasors."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
+        sigma_max = float(sigma_max)
+        if not np.isfinite(sigma_max) or sigma_max < 0:
+            raise ValueError("sigma_max must be finite and nonnegative.")
         if direction not in ("x-", "x+", "x", "all"):
             raise ValueError("direction must be one of 'x-', 'x+', 'x', or 'all'.")
 
@@ -397,7 +406,9 @@ class PeriodicModeSolver2D:
             for i in range(min(pml_width, self.Nx)):
                 sigma_x[-i - 1, :] = sigma_max * ((pml_width - i) / pml_width) ** n
 
-        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * self.omega)
+        # For exp(+j*omega*t), a passive coordinate stretch has negative
+        # imaginary part so exp(-j*k*x_tilde) decays into the PML.
+        Sx = 1.0 - 1j * sigma_x / (self.epsilon0 * self.omega)
         self.cell_eps_r_xx *= 1 / Sx
         self.cell_eps_r_yy *= Sx
         self.cell_eps_r_zz *= Sx
@@ -769,9 +780,12 @@ class PeriodicModeSolver2D:
 
         self.eigenvalues = eigenvalues
         self.eigenvectors = eigenvectors
-        self.neff = eigenvalues / self.k0
-        self.propagation_constant = np.imag(self.neff)
-        self.attenuation_constant = np.real(self.neff)
+        # The generalized eigenvalue is gamma in exp(-gamma*z). Under the
+        # exp(+j*omega*t) convention, gamma = j*k0*neff.
+        self.gammas = eigenvalues / self.k0
+        self.neff = -1j * self.gammas
+        self.propagation_constant = np.real(self.neff)
+        self.attenuation_constant = -np.imag(self.neff)
 
         if self.polarization == "TM":
             self.Ex = eigenvectors[:self.n_ex, :]

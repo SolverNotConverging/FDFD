@@ -33,10 +33,10 @@ def guess_func(f):
 output_dir = Path(__file__).resolve().parent / "example_outputs"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-last_gamma = None
+last_normalized_gamma = None
 for f in tqdm(frequencies, desc="Frequency sweep"):
     k0 = 2 * np.pi * f / 3e8
-    sigma_guess = last_gamma * k0 if last_gamma is not None else guess_func(f) if guess_func else 0
+    sigma_guess = last_normalized_gamma * k0 if last_normalized_gamma is not None else guess_func(f) if guess_func else 0
 
     solver = PeriodicModeSolver3D(Nx=Nx, Ny=Ny, Nz=Nz,
                                      x_range=x_range, y_range=y_range, z_range=z_range,
@@ -54,8 +54,13 @@ for f in tqdm(frequencies, desc="Frequency sweep"):
         solver.solve(method="refined", max_restarts=max_restarts)
         elapsed = time.perf_counter() - start
         solver.save_results(output_dir / f"{f / 1e9:.0f}_GHz.npz")
-        last_gamma = solver.gammas[0]
-        print(f"{f / 1e9:.1f} GHz: beta={solver.gammas[0].real}, alpha={solver.gammas[0].imag}")
+        last_normalized_gamma = solver.gammas[0]
+        print(
+            f"{f / 1e9:.1f} GHz: "
+            f"beta/k0={solver.propagation_constant[0]}, "
+            f"alpha/k0={solver.attenuation_constant[0]}, "
+            f"neff={solver.neff[0]}"
+        )
         print(f"  residuals={solver.refined_residuals}, restarts={solver.refined_restarts}, elapsed={elapsed:.2f}s")
     except Exception as exc:
         print(f"[WARN] refined solve failed at {f / 1e9:.2f} GHz: {exc}")

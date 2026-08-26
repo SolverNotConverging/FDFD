@@ -3,6 +3,8 @@ Electrostatic Solver
 
 ``ElectrostaticSolver`` solves simple one-dimensional and two-dimensional electrostatic potential problems with fixed-potential constraints and spatially varying permittivity.
 
+This solver is static, so the repository's ``exp(+j*omega*t)`` phasor convention does not enter its equations.
+
 What It Solves
 --------------
 

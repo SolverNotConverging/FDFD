@@ -1,3 +1,5 @@
+"""Two-dimensional scattering with the ``exp(+j*omega*t)`` convention."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
@@ -12,6 +14,10 @@ class FDFD2DScatteringSolver:
     2-D frequency–domain FDFD solver (TEz / TMz) on a Yee grid.
     Geometry is defined on the cell centres,   E/H - derivatives on staggered edges
     via the helper `yeeder2d`.
+
+    Phasors use ``exp(+j*omega*t)``.  Consequently, a wave travelling in
+    ``+r`` has spatial phase ``exp(-j*k*r)``, and passive material loss has
+    non-positive imaginary permittivity/permeability.
 
     Parameters
     ----------
@@ -74,6 +80,9 @@ class FDFD2DScatteringSolver:
         region_mask : boolean Ny×Nx array – cells where the object lives
         er_tensor   : scalar or len-3 list/array  (ε_xx, ε_yy, ε_zz)
         mr_tensor   : same for μ
+
+        Passive lossy values have non-positive imaginary parts under the
+        solver's exp(+j*omega*t) convention.
         """
         if np.isscalar(er_tensor): er_tensor = (er_tensor,) * 3
         if np.isscalar(mr_tensor): mr_tensor = (mr_tensor,) * 3
@@ -95,8 +104,8 @@ class FDFD2DScatteringSolver:
         """
         Populate self.source (flattened Ny×Nx) with the incident field.
 
-        plane_wave : exp(-i k · r),  k=(k0 cosθ, k0 sinθ) with θ measured *from +x*
-        point      : 2-D scalar Green’s function H₀⁽¹⁾(k r)
+        plane_wave : exp(-j k · r),  k=(k0 cosθ, k0 sinθ) with θ measured *from +x*
+        point      : outgoing 2-D scalar Green’s function H₀⁽²⁾(k r)
         """
         self.source[:] = 0.0
         kx = self.k0 * np.cos(np.deg2rad(angle_deg))
@@ -113,15 +122,24 @@ class FDFD2DScatteringSolver:
             r = np.hypot(self.X - x0, self.Y - y0)
             r[r == 0] = self.dx / 50  # avoid singularity at the source cell
             if polarization.upper() == "TE":
-                field = scipy.special.hankel1(0, self.k0 * r)  # Ez for 2-D TE
+                field = scipy.special.hankel2(0, self.k0 * r)  # Ez for 2-D TE
             else:  # TM (magnetic out of plane)
-                field = 1j / 4 * scipy.special.hankel1(0, self.k0 * r)  # convention
+                field = -1j / 4 * scipy.special.hankel2(0, self.k0 * r)
             self.source = (amplitude * field).ravel()
         else:
             raise ValueError(f"Unknown src_type {src_type}")
 
     # ============ 3.  Uniaxial PML  (UPML) ======================================
     def add_UPML(self, pml_width=20, n=3, sigma_max=5.0, direction="both"):
+        pml_width = int(pml_width)
+        if pml_width <= 0:
+            raise ValueError("pml_width must be positive.")
+        sigma_max = float(sigma_max)
+        if not np.isfinite(sigma_max) or sigma_max < 0:
+            raise ValueError("sigma_max must be finite and nonnegative.")
+        if direction not in ("x", "y", "both"):
+            raise ValueError("direction must be one of 'x', 'y', or 'both'.")
+
         Nx, Ny = self.Nx, self.Ny
         sigma_x = np.zeros((Ny, Nx))
         sigma_y = np.zeros_like(sigma_x)
@@ -141,8 +159,10 @@ class FDFD2DScatteringSolver:
                 sigma_y[i, :] = s  # bottom
                 sigma_y[-i - 1, :] = s  # top
 
-        Sx = 1.0 + 1j * sigma_x / (self.eps0 * self.omega)
-        Sy = 1.0 + 1j * sigma_y / (self.eps0 * self.omega)
+        # With exp(+j*omega*t), a negative-imaginary coordinate stretch
+        # damps the outgoing exp(-j*k*r) wave inside the PML.
+        Sx = 1.0 - 1j * sigma_x / (self.eps0 * self.omega)
+        Sy = 1.0 - 1j * sigma_y / (self.eps0 * self.omega)
 
         # uniaxial scaling
         self.ERxx *= Sy / Sx

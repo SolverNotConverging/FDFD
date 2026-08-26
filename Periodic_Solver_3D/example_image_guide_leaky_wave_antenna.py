@@ -26,7 +26,8 @@ solver.add_block(6, 1, (1.5e-3, 4.5e-3), (0, 1.5e-3), (0, Nz), subpixels=8)
 
 solver.add_UPML(['+y'], width=10, max_loss=5, n=3)
 solver.solve(method="refined", max_restarts=8)
-print(f"gammas={solver.gammas}")
+print(f"neff={solver.neff}")
+print(f"alpha/k0={solver.attenuation_constant}")
 print(f"refined residuals={solver.refined_residuals}, restarts={solver.refined_restarts}")
 solver.visualize_with_gui()
 

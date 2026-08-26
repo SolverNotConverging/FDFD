@@ -1,5 +1,8 @@
 """Plot periodic 2D dispersion CSV outputs.
 
+``Beta`` is ``Re(neff)`` and ``Alpha`` is ``-Im(neff)`` for the
+``exp(+j*omega*t)`` convention used by the solver.
+
 Run this file directly in PyCharm. Adjust `csv_path` if needed.
 """
 

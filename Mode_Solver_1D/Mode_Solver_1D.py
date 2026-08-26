@@ -56,7 +56,7 @@ else:
 
 
 class ModeSolver1D:
-    """1D FDFD mode solver on a true staggered Yee grid."""
+    """1D Yee-grid mode solver using ``exp(+j*omega*t - j*beta*z)``."""
 
     def __init__(self, frequency, x_range, Nx, num_modes, guess=None):
         self.frequency = frequency
@@ -393,10 +393,13 @@ class ModeSolver1D:
         raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_pml(self, pml_width=50, n=3, sigma_max=25, direction="all"):
-        """Add a simple uniaxial PML by stretching cell-centered epsilon and mu tensors."""
+        """Add a uniaxial PML for the ``exp(+j*omega*t)`` convention."""
         pml_width = int(pml_width)
         if pml_width <= 0:
             raise ValueError("pml_width must be positive.")
+        sigma_max = float(sigma_max)
+        if not np.isfinite(sigma_max) or sigma_max < 0:
+            raise ValueError("sigma_max must be finite and nonnegative.")
         if direction not in ("x-", "x+", "x", "all"):
             raise ValueError("direction must be one of 'x-', 'x+', 'x', or 'all'.")
 
@@ -416,7 +419,9 @@ class ModeSolver1D:
         )
 
         omega = 2 * np.pi * self.frequency
-        Sx = 1.0 + 1j * sigma_x / (self.epsilon0 * omega)
+        # With exp(+j*omega*t), an outgoing exp(-j*k*x) wave decays for a
+        # stretch with negative imaginary part.
+        Sx = 1.0 - 1j * sigma_x / (self.epsilon0 * omega)
 
         self.cell_eps_r_xx *= 1 / Sx
         self.cell_eps_r_yy *= Sx
@@ -889,16 +894,22 @@ class ModeSolver1D:
         self.attenuation_constant_TE = -np.imag(self.neff_TE)
         self.attenuation_constant_TM = -np.imag(self.neff_TM)
 
-        self.Ey = np.asarray(self.eigenvectors_TE, dtype=complex)
-        self.Hy = np.asarray(self.eigenvectors_TM, dtype=complex)
+        # Keep reconstructed fields independent from the eigensolver storage;
+        # otherwise the common phase rotation below is applied twice through
+        # NumPy's shared-memory view.
+        self.Ey = np.asarray(self.eigenvectors_TE, dtype=complex).copy()
+        self.Hy = np.asarray(self.eigenvectors_TM, dtype=complex).copy()
         self.Hx = np.zeros_like(self.Ey)
         self.Hz = np.asarray(mu_zz_inv @ (D_e_to_h @ self.Ey), dtype=complex)
         self.Ex = np.zeros_like(self.Hy)
         self.Ez = np.asarray(eps_zz_inv @ (D_h_to_e @ self.Hy), dtype=complex)
 
         for mode in range(self.num_modes):
-            self.Hx[:, mode] = self.neff_TE[mode] * (1.0 / materials["mu_xx"]) * self.Ey[:, mode]
-            self.Ex[:, mode] = self.neff_TM[mode] * (1.0 / materials["eps_xx"]) * self.Hy[:, mode]
+            # Stored magnetic fields use H_num = -j*eta0*H_physical.  With
+            # exp(+j*omega*t - j*beta*z), the propagation-derived transverse
+            # components therefore carry +j relative to the primary field.
+            self.Hx[:, mode] = 1j * self.neff_TE[mode] * (1.0 / materials["mu_xx"]) * self.Ey[:, mode]
+            self.Ex[:, mode] = 1j * self.neff_TM[mode] * (1.0 / materials["eps_xx"]) * self.Hy[:, mode]
 
         self._zero_constrained_fields(
             pec_xx_mask,
@@ -920,7 +931,7 @@ class ModeSolver1D:
                 self.cell_mu_r_zz,
         ):
             finite = np.isfinite(values)
-            if np.any(np.abs(np.imag(values[finite])) > 1e-14):
+            if np.any(np.imag(values[finite]) < -1e-14):
                 return True
         return any(
             definition.impedance.real > 0
@@ -928,6 +939,7 @@ class ModeSolver1D:
         )
 
     def _passive_positive_neff(self, neff_squared):
+        """Select positive-phase or purely evanescent-decaying modal roots."""
         root = np.sqrt(neff_squared)
         tolerance = 1e-12 * np.maximum(1.0, np.abs(root))
         flip = (np.real(root) < -tolerance) | (

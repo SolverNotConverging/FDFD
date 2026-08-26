@@ -15,6 +15,12 @@ except ImportError:
 
 
 class PeriodicModeSolver3D:
+    """Full-vector Bloch-periodic solver using ``exp(+j*omega*t)`` phasors.
+
+    The raw eigenvalue is ``gamma`` in ``exp(-gamma*z)`` and
+    ``neff = -j*gamma/k0``, so passive forward modes have ``neff.imag <= 0``.
+    """
+
     def __init__(self, Nx, Ny, Nz, x_range, y_range, z_range, freq, num_modes, sigma_guess=None, tol=0, ncv=None):
         # Store parameters
         self.Nx = int(Nx)
@@ -97,6 +103,10 @@ class PeriodicModeSolver3D:
         self.fields = {}
         self.eigenvalues = None
         self.eigenvectors = None
+        self.gammas = None
+        self.neff = None
+        self.propagation_constant = None
+        self.attenuation_constant = None
         self.refined_residuals = None
         self.refined_restarts = None
 
@@ -104,10 +114,12 @@ class PeriodicModeSolver3D:
         self.fields = {}
         self.eigenvalues = None
         self.eigenvectors = None
+        self.gammas = None
+        self.neff = None
+        self.propagation_constant = None
+        self.attenuation_constant = None
         self.refined_residuals = None
         self.refined_restarts = None
-        if hasattr(self, "gammas"):
-            delattr(self, "gammas")
 
     # --- Differentiation operators
     def _init_operators(self):
@@ -410,7 +422,7 @@ class PeriodicModeSolver3D:
         raise ValueError("field must be 'electric' or 'magnetic'.")
 
     def add_UPML(self, sides=('-x', '+x', '-y', '+y'), width=10, max_loss=5, n=3):
-        # Assumes e^{+i ω t}. If using e^{-i ω t}, change +1j -> -1j.
+        """Add a transverse UPML for the ``exp(+j*omega*t)`` convention."""
         omega = self.omega
         e0 = self.epsilon0
 
@@ -418,10 +430,15 @@ class PeriodicModeSolver3D:
         ny = self.Ny
         assert width > 0
         assert width <= nx // 2 and width <= ny // 2, "PML width too large for grid."
+        max_loss = float(max_loss)
+        if not np.isfinite(max_loss) or max_loss < 0:
+            raise ValueError("max_loss must be finite and nonnegative.")
 
         for i in range(width):
             sigma = max_loss * ((width - i) / width) ** n
-            S = 1 + 1j * sigma / (omega * e0)  # flip sign if using e^{-iωt}
+            # A negative-imaginary stretch makes exp(-j*k*x_tilde) decay
+            # into the PML under the exp(+j*omega*t) convention.
+            S = 1 - 1j * sigma / (omega * e0)
 
             if '-x' in sides:
                 sl = np.s_[i, :, :]
@@ -916,8 +933,24 @@ class PeriodicModeSolver3D:
 
         self.eigenvectors = np.zeros((free.size, self.num_modes), dtype=complex)
         self.eigenvectors[free, :] = eigenvectors_reduced
-        self.gammas = self.eigenvalues / self.k0
+        self._update_propagation_outputs()
         self.store_fields()
+
+    def _update_propagation_outputs(self):
+        """Map the spatial eigenvalue to the repository phasor convention."""
+        if self.eigenvalues is None:
+            self.gammas = None
+            self.neff = None
+            self.propagation_constant = None
+            self.attenuation_constant = None
+            return
+
+        # The eigenproblem returns gamma in exp(-gamma*z). Since
+        # gamma = j*k0*neff for exp(+j*omega*t), neff = -j*gamma/k0.
+        self.gammas = self.eigenvalues / self.k0
+        self.neff = -1j * self.gammas
+        self.propagation_constant = np.real(self.neff)
+        self.attenuation_constant = -np.imag(self.neff)
 
     def store_fields(self):
         n0 = 0
@@ -1162,8 +1195,8 @@ class PeriodicModeSolver3D:
             plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
         # Mode info
-        beta = float(np.imag(self.gammas[mode_index]))
-        alpha = float(np.real(self.gammas[mode_index]))
+        beta = float(self.propagation_constant[mode_index])
+        alpha = float(self.attenuation_constant[mode_index])
         fig.suptitle(f"Mode {mode_index} | Slice {axis}={plotted_index} | Beta={beta:.4f}, Alpha={alpha:.4f}", fontsize=12)
 
         # >>> Add these two lines <<<
@@ -1180,6 +1213,8 @@ class PeriodicModeSolver3D:
         """
         if self.eigenvalues is None or not self.fields:
             raise RuntimeError("No results to store yet. Run solve() first.")
+
+        self._update_propagation_outputs()
 
         out = dict(
             # grid + problem setup
@@ -1218,6 +1253,11 @@ class PeriodicModeSolver3D:
             # modal results
             eigenvalues=self.eigenvalues,
             gammas=self.gammas,
+            neff=self.neff,
+            propagation_constant=self.propagation_constant,
+            attenuation_constant=self.attenuation_constant,
+            time_convention=np.str_("exp(+j*omega*t)"),
+            fourier_transform_convention=np.str_("forward exp(-j*omega*t)"),
             Ex=self.fields['Ex'],
             Ey=self.fields['Ey'],
             Hx=self.fields['Hx'],
@@ -1306,7 +1346,7 @@ class PeriodicModeSolver3D:
 
             # Modal results
             inst.eigenvalues = d['eigenvalues']
-            inst.gammas = d['gammas']
+            inst._update_propagation_outputs()
 
             # Fields dict (keep same shape/order)
             inst.fields = dict(

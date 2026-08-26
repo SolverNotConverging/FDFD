@@ -3,6 +3,11 @@ Band Diagram Solver
 
 ``BandDiagramSolver2D`` computes two-dimensional photonic-crystal band diagrams for rectangular unit cells. It samples a Bloch path through reciprocal space and solves TE and/or TM sparse eigenproblems at each Bloch vector.
 
+Time Convention
+---------------
+
+The solver uses ``exp(+j*omega*t)`` in time, paired with the forward Fourier-transform kernel ``exp(-j*omega*t)``, and ``exp(-j*beta·r)`` for the Bloch spatial phase. Passive bulk materials therefore use ``Im(epsilon_r) <= 0`` and ``Im(mu_r) <= 0``. For a complex-frequency band calculation, temporal decay has ``Im(omega) >= 0``.
+
 What It Solves
 --------------
 
@@ -51,7 +56,7 @@ The returned ``BandStructureResult`` contains:
 
 * ``beta_path``: sampled Bloch vectors.
 * ``tick_positions`` and ``tick_labels``: symmetry-point labels for plotting.
-* ``frequencies``: normalized frequencies keyed by polarization.
+* ``frequencies``: complex normalized frequencies ``a*omega/(2*pi*c)`` keyed by polarization. The band plot shows their real parts; imaginary parts remain available in the result.
 * ``eigenvalues``: raw eigenvalues keyed by polarization.
 
 Plotting API

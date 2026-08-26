@@ -3,6 +3,13 @@ Periodic Solver 2D
 
 ``PeriodicModeSolver2D`` solves two-dimensional Bloch-periodic TE or TM modes. The grid spans transverse ``x`` and periodic ``z``. Geometry is assigned on a cell material grid with shape ``(Nx, Nz)`` and then averaged onto Yee-staggered component locations internally.
 
+The solver uses the ``exp(+j*omega*t)`` phasor convention. Its raw
+eigenvalue is the dimensional spatial exponent ``gamma = alpha + j*beta``
+in ``exp(-gamma*z)``. The standard effective index is therefore
+``neff = -j*gamma/k0 = beta/k0 - j*alpha/k0``. Passive forward modes have
+``Im(neff) <= 0``. The paired forward Fourier-transform kernel is
+``exp(-j*omega*t)``.
+
 Main Class
 ----------
 
@@ -30,7 +37,7 @@ Parameters:
 * ``Nx``, ``Nz``: grid cells in transverse and periodic directions.
 * ``num_modes``: number of modes requested.
 * ``mode_filter``: reserved for API consistency with ``ModeSolver2D``.
-* ``guess``: shift target for the sparse eigensolver.
+* ``guess``: shift target for the dimensional spatial exponent ``gamma`` in inverse metres, where ``gamma = j*k0*neff``.
 * ``tol`` and ``ncv``: optional eigensolver controls.
 
 Material And Boundary API
@@ -46,6 +53,7 @@ Material And Boundary API
 Notes:
 
 * ``epsilon`` and ``mu`` can be scalars or length-3 values ordered as ``(xx, yy, zz)``.
+* Under ``exp(+j*omega*t)``, passive lossy permittivity and permeability use negative imaginary parts.
 * Region bounds accept grid-index pairs or physical coordinate pairs in metres.
 * ``add_rectangle`` uses subpixel fill ratios on the cell material grid before Yee-component averaging.
 * ``add_pec`` and ``add_pmc`` expand cell regions onto the periodic Yee grids and eliminate the constrained DOFs from both generalized-eigenproblem matrices.
@@ -55,7 +63,7 @@ Notes:
 * Longitudinal ``Ez`` PEC and ``Hz`` PMC constraints are enforced exactly by zeroing their entries in the inverse material operators used for Schur elimination.
 * ``components`` can select tensor components; ``None`` applies all three.
 * PEC/PMC regions do not modify the material tensors or introduce a large-value penalty.
-* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``.
+* PML ``direction`` accepts ``"x-"``, ``"x+"``, ``"x"``, or ``"all"``; ``sigma_max`` must be finite and nonnegative.
 
 Solve API
 ---------
@@ -68,10 +76,12 @@ Solve API
 
 After solving, common outputs are:
 
-* ``neff``: complex propagation constants normalized by ``k0``.
-* ``propagation_constant``: imaginary part of ``neff`` under the existing plotting convention.
-* ``attenuation_constant``: real part of ``neff`` under the existing plotting convention.
-* ``eigenvalues`` and ``eigenvectors``: sparse eigensolver outputs.
+* ``gammas``: normalized spatial exponents ``gamma/k0`` for ``exp(-gamma*z)``.
+* ``neff``: complex effective indices, calculated as ``-j*gamma/k0``.
+* ``propagation_constant``: normalized phase constants ``Re(neff) = beta/k0``.
+* ``attenuation_constant``: normalized positive-forward attenuation ``-Im(neff) = alpha/k0``.
+* ``eigenvalues``: dimensional spatial exponents ``gamma`` in inverse metres.
+* ``eigenvectors``: sparse eigensolver field vectors.
 * ``Ex`` and ``Hy`` for ``"TM"`` polarization.
 * ``Hx`` and ``Ey`` for ``"TE"`` polarization.
 

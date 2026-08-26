@@ -10,7 +10,8 @@ num_modes = 6
 
 solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
 
-solver.add_rectangle(3 + 0.1j, 1, (2e-3, 10e-3), (2e-3, 8e-3))
+# Passive bulk loss has negative imaginary permittivity for exp(+j*omega*t).
+solver.add_rectangle(3 - 0.1j, 1, (2e-3, 10e-3), (2e-3, 8e-3))
 solver.add_impedance_surface(preset='Cu', x_range=(1.9e-3, 10.1e-3), y_range=(1.9e-3, 2e-3))
 solver.add_impedance_surface(preset='Cu', x_range=(1.9e-3, 10.1e-3), y_range=(8e-3, 8.1e-3))
 solver.add_impedance_surface(preset='Cu', x_range=(1.9e-3, 2e-3), y_range=(1.9e-3, 8.1e-3))
