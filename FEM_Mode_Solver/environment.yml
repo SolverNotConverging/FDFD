@@ -1,0 +1,13 @@
+name: RF_Engineering_env
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - numpy>=1.26
+  - scipy>=1.12
+  - matplotlib>=3.8
+  - gmsh>=4.13
+  - pip
+  - pip:
+      - scikit-fem>=12,<13
+      - pytest>=8,<10

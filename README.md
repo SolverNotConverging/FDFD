@@ -39,6 +39,7 @@ The electrostatic solver has no time dependence, so this convention does not aff
 
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
+| `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
 | `Mode_Solver_1D/` | `ModeSolver1D` | TE/TM modes of 1D slab waveguides | [`README.rst`](Mode_Solver_1D/README.rst) |
 | `Mode_Solver_2D/` | `ModeSolver2D` | Full-vector modes of 2D waveguide cross-sections | [`README.rst`](Mode_Solver_2D/README.rst) |
 | `Periodic_Solver_2D/` | `PeriodicModeSolver2D` | 2D Bloch-periodic TE/TM unit-cell modes | [`README.rst`](Periodic_Solver_2D/README.rst) |
@@ -59,6 +60,10 @@ pip install numpy scipy matplotlib
 
 Some visualizers use Tk through Matplotlib. If GUI windows do not open, install the Tk package for your Python distribution.
 
+The standalone FEM mode package additionally needs scikit-fem and Gmsh; its
+isolated installation and environment are documented in
+[`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst).
+
 ## Basic Workflow
 
 1. Pick the solver folder that matches the physics.
@@ -76,6 +81,12 @@ python example_grounded_isotropic_slab.py
 ```bash
 cd Mode_Solver_2D
 python example_ridge_dielectric_waveguide.py
+```
+
+```bash
+python -m FEM_Mode_Solver.examples.slab_1d
+python -m FEM_Mode_Solver.examples.ridge_2d
+python -m FEM_Mode_Solver.examples.microstrip_sibc
 ```
 
 ```bash
