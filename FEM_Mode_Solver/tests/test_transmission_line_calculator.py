@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from math import log, pi, sqrt
+from types import SimpleNamespace
 
 import matplotlib
 import numpy as np
@@ -11,7 +13,8 @@ import pytest
 matplotlib.use("Agg", force=True)
 
 import FEM_Mode_Solver as fem
-from FEM_Mode_Solver.constants import ETA_0, EPSILON_0, MU_0
+from FEM_Mode_Solver.constants import C_0, ETA_0, EPSILON_0, MU_0
+from FEM_Mode_Solver.transmission_lines.electrostatics import solve_quasi_tem
 
 
 def test_specs_factory_and_cpw_terminal_definition() -> None:
@@ -26,18 +29,20 @@ def test_specs_factory_and_cpw_terminal_definition() -> None:
         substrate_epsilon=3.48,
         tan_delta=0.001,
         domain_padding=1.5,
+        metal_sigma=58.0e6,
     )
 
     assert isinstance(calculator.spec, fem.CoplanarWaveguide)
     assert calculator.spec.domain_padding_factor == pytest.approx(1.5)
+    assert calculator.spec.metal_conductivity == pytest.approx(58.0e6)
     assert calculator.solution is None
     assert calculator._built.signal_boundaries == ("signal",)
     assert calculator._built.reference_boundaries == (
         "left_ground",
         "right_ground",
     )
-    assert "odd" in calculator._built.label.casefold()
-    assert "tied grounds" in calculator._built.label.casefold()
+    assert calculator._built.label == "CPW"
+    assert calculator._built.metal_conductivity == pytest.approx(58.0e6)
 
     with pytest.raises(fem.NotDiscretizedError):
         calculator.solve()
@@ -46,6 +51,62 @@ def test_specs_factory_and_cpw_terminal_definition() -> None:
             frequency=10.0e9,
             inner_radius=2.0e-3,
             outer_radius=1.0e-3,
+        )
+
+
+@pytest.mark.parametrize(
+    "spec_type",
+    (fem.Coaxial, fem.Microstrip, fem.Stripline, fem.CoplanarWaveguide),
+)
+def test_all_specs_accept_optional_metal_conductivity(spec_type) -> None:
+    assert spec_type().metal_conductivity is None
+    assert spec_type(metal_conductivity=59.6e6).metal_conductivity == pytest.approx(
+        59.6e6
+    )
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    (0.0, -1.0, np.nan, np.inf, True, "58e6", np.asarray((58e6,))),
+)
+@pytest.mark.parametrize(
+    "spec_type",
+    (fem.Coaxial, fem.Microstrip, fem.Stripline, fem.CoplanarWaveguide),
+)
+def test_metal_conductivity_must_be_finite_and_positive(
+    spec_type, bad_value: object
+) -> None:
+    with pytest.raises(fem.ConfigurationError, match="metal_conductivity"):
+        spec_type(metal_conductivity=bad_value)
+
+
+@pytest.mark.parametrize(
+    "alias",
+    (
+        "conductivity",
+        "conductor_conductivity",
+        "bulk_conductivity",
+        "sigma",
+        "metal_sigma",
+        "conductor_sigma",
+        "metal_conductance",
+    ),
+)
+def test_factory_normalizes_metal_conductivity_aliases(alias: str) -> None:
+    calculator = fem.TransmissionLineCalculator.from_type(
+        "microstrip",
+        frequency=2.5e9,
+        **{alias: 58.0e6},
+    )
+    assert calculator.spec.metal_conductivity == pytest.approx(58.0e6)
+    assert calculator._built.metal_conductivity == pytest.approx(58.0e6)
+
+    with pytest.raises(fem.ConfigurationError, match="supplied more than once"):
+        fem.TransmissionLineCalculator.from_type(
+            "microstrip",
+            frequency=2.5e9,
+            metal_conductivity=58.0e6,
+            **{alias: 59.0e6},
         )
 
 
@@ -168,6 +229,11 @@ def test_all_line_templates_solve_to_mode_compatible_vector_fields(
         assert np.isfinite(result.power)
         assert result.mode.fields.mesh_cells is not None
 
+        if kind == "coplanar_waveguide":
+            assert result.label == "CPW"
+            assert result.mode.metadata["line_label"] == "CPW"
+            assert result.modes.metadata["line_label"] == "CPW"
+
         terminal_names = (
             *calculator._built.signal_boundaries,
             *calculator._built.reference_boundaries,
@@ -261,6 +327,54 @@ def test_lossy_coax_uses_the_passive_forward_branch_and_power_conjugation() -> N
     assert result.wave_impedance.imag > 0.0
     assert result.current.imag < 0.0
     assert result.power.imag > 0.0
+
+
+@pytest.mark.gmsh
+def test_result_wrapper_uses_its_explicit_frequency_for_rlgc_metadata() -> None:
+    calculator = fem.TransmissionLineCalculator.coaxial(
+        frequency=2.0e9,
+        inner_radius=0.50e-3,
+        outer_radius=1.67e-3,
+        outer_conductor_thickness=0.15e-3,
+        epsilon_r=2.25,
+        loss_tangent=0.01,
+    )
+    calculator.discretize(max_element_size=0.50e-3)
+    solution = solve_quasi_tem(
+        calculator._built,
+        frequency=calculator.frequency,
+    )
+
+    result_frequency = 3.0e9
+    omega = 2.0 * np.pi * result_frequency
+    expected_series = complex(
+        solution.resistance_per_length,
+        omega * solution.inductance_per_length,
+    )
+    expected_shunt = complex(
+        solution.conductance_per_length,
+        omega * solution.capacitance_per_length.real,
+    )
+    expected_beta = 2.0 * np.pi * result_frequency / C_0 * solution.neff
+
+    for metadata in ({}, {"frequency": 17.0e9}):
+        result = fem.TransmissionLineResult.from_solution(
+            calculator.spec,
+            calculator._built,
+            replace(solution, metadata=metadata),
+            frequency=result_frequency,
+        )
+
+        assert result.frequency == result_frequency
+        assert result.mode.beta == pytest.approx(expected_beta)
+        assert result.mode.metadata["series_impedance_per_length"] == pytest.approx(
+            expected_series
+        )
+        assert result.mode.metadata["shunt_admittance_per_length"] == pytest.approx(
+            expected_shunt
+        )
+        assert result.series_impedance_per_length == pytest.approx(expected_series)
+        assert result.shunt_admittance_per_length == pytest.approx(expected_shunt)
 
 
 @pytest.mark.gmsh
@@ -361,11 +475,11 @@ def test_vector_viewer_keeps_fixed_axes_during_updates(
         plt.close(figure)
 
 
-def test_calculator_gui_exposes_only_the_requested_cpw_mode() -> None:
+def test_calculator_gui_exposes_only_the_requested_cpw_mode(monkeypatch) -> None:
     gui = fem.TransmissionLineCalculatorGUI(show=False)
     try:
         cpw_labels = [label for label in gui.line_labels if "CPW" in label]
-        assert cpw_labels == ["CPW odd (signal to tied grounds)"]
+        assert cpw_labels == ["CPW"]
         gui.line_control.set_active(gui.line_labels.index(cpw_labels[0]))
         assert gui.line_kind == "coplanar_waveguide"
         assert set(gui.parameter_boxes) == {
@@ -378,8 +492,72 @@ def test_calculator_gui_exposes_only_the_requested_cpw_mode() -> None:
             "domain_padding_factor",
             "epsilon_r",
             "loss_tangent",
+            "metal_conductivity",
             "max_element_size",
         }
+
+        rendered = []
+
+        def capture_render(result, _axes, _colorbar_axes, **options) -> None:
+            rendered.append((result, options["mesh"]))
+
+        monkeypatch.setattr(
+            "FEM_Mode_Solver.transmission_lines.gui._draw_transverse_fields",
+            capture_render,
+        )
+        result = SimpleNamespace(
+            resistance_per_length=0.25,
+            capacitance_per_length=1.0,
+            inductance_per_length=1.0,
+            conductance_per_length=2.0e-4,
+            power=1.0,
+            neff=1.0,
+            characteristic_impedance=50.0,
+            wave_impedance=50.0,
+            mode=SimpleNamespace(alpha=0.03),
+        )
+        gui.result = result
+        assert gui.mesh is False
+        gui.mesh_control.set_active(0)
+        assert gui.mesh is True
+        assert rendered == [(result, True)]
+        result_text = gui.results_text.get_text()
+        assert "R' = 0.25 ohm/m" in result_text
+        assert "L' = 1 H/m" in result_text
+        assert "G' = 0.0002 S/m" in result_text
+        assert "C' = 1 F/m" in result_text
+        assert "alpha = 0.03 1/m" in result_text
+        assert "P = 1 W" in result_text
+    finally:
+        gui.close()
+
+
+def test_calculator_gui_conductivity_scaling_mesh_defaults_and_layout() -> None:
+    gui = fem.TransmissionLineCalculatorGUI(show=False)
+    try:
+        for index, label in enumerate(gui.line_labels):
+            gui.line_control.set_active(index)
+            assert gui.line_label == label
+            assert gui.parameter_boxes["metal_conductivity"].text == ""
+            assert gui.parameter_boxes["max_element_size"].text == "1.00"
+
+            _, mesh_size, parameters = gui._read_inputs()
+            assert mesh_size == pytest.approx(1.0e-3)
+            assert parameters["metal_conductivity"] is None
+
+            gui.parameter_boxes["metal_conductivity"].set_val("58")
+            _, _, parameters = gui._read_inputs()
+            assert parameters["metal_conductivity"] == pytest.approx(58.0e6)
+
+            gui.parameter_boxes["metal_conductivity"].set_val("0")
+            with pytest.raises(ValueError, match="greater than zero"):
+                gui._read_inputs()
+
+        lowest_entry = min(
+            axes.get_position(original=True).y0 for axes, _box in gui._entry_rows
+        )
+        mesh_top = sum(gui.mesh_control.ax.get_position(original=True).bounds[1::2])
+        assert lowest_entry > mesh_top
     finally:
         gui.close()
 
@@ -408,7 +586,7 @@ def test_calculator_gui_invalidates_solved_state_after_edits_and_selection() -> 
         assert gui.calculator is not None
         assert gui.calculator.spec.epsilon_r == pytest.approx(2.2)
 
-        cpw_index = gui.line_labels.index("CPW odd (signal to tied grounds)")
+        cpw_index = gui.line_labels.index("CPW")
         gui.line_control.set_active(cpw_index)
         assert gui.line_kind == "coplanar_waveguide"
         assert gui.calculator is None

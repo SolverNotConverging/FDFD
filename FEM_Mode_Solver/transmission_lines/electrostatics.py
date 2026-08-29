@@ -20,12 +20,12 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.sparse.linalg import splu
-from skfem import Basis, BilinearForm, MeshTri, asm
+from skfem import Basis, BilinearForm, FacetBasis, MeshTri, asm
 from skfem.element import ElementTriP1
 
 from ..assembly import evaluate_material
 from ..constants import C_0 as SPEED_OF_LIGHT
-from ..constants import EPSILON_0
+from ..constants import EPSILON_0, MU_0
 from ..exceptions import ConfigurationError, SolverError
 
 if TYPE_CHECKING:  # pragma: no cover - imports used only by static checkers
@@ -80,6 +80,13 @@ def _positive_real(value: float, name: str) -> float:
     return result
 
 
+def _nonnegative_real(value: float, name: str) -> float:
+    result = float(value)
+    if not np.isfinite(result) or result < 0.0:
+        raise SolverError(f"{name} must be finite and nonnegative.")
+    return result
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class QuasiTEMSolution:
     """Immutable quadrature-level solution of the quasi-TEM field problem."""
@@ -102,6 +109,10 @@ class QuasiTEMSolution:
     current: complex
     power: complex
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    resistance_per_length: float = 0.0
+    conductance_per_length: float = 0.0
+    surface_resistance: float = 0.0
+    external_inductance_per_length: float | None = None
 
     def __post_init__(self) -> None:
         potential = _readonly_array(
@@ -179,6 +190,30 @@ class QuasiTEMSolution:
         voltage = _finite_complex(self.voltage, "voltage")
         current = _finite_complex(self.current, "current")
         power = _finite_complex(self.power, "power")
+        resistance = _nonnegative_real(
+            self.resistance_per_length, "resistance_per_length"
+        )
+        conductance = _nonnegative_real(
+            self.conductance_per_length, "conductance_per_length"
+        )
+        surface_resistance = _nonnegative_real(
+            self.surface_resistance, "surface_resistance"
+        )
+        external_inductance = (
+            inductance
+            if self.external_inductance_per_length is None
+            else _positive_real(
+                self.external_inductance_per_length,
+                "external_inductance_per_length",
+            )
+        )
+        inductance_tolerance = 64.0 * np.finfo(float).eps * max(
+            inductance, external_inductance
+        )
+        if inductance + inductance_tolerance < external_inductance:
+            raise SolverError(
+                "inductance_per_length cannot be smaller than its external part."
+            )
         if neff.real <= 0.0:
             raise SolverError("neff must select the forward branch with Re(neff) > 0.")
         if characteristic.real <= 0.0:
@@ -205,6 +240,12 @@ class QuasiTEMSolution:
         object.__setattr__(self, "voltage", voltage)
         object.__setattr__(self, "current", current)
         object.__setattr__(self, "power", power)
+        object.__setattr__(self, "resistance_per_length", resistance)
+        object.__setattr__(self, "conductance_per_length", conductance)
+        object.__setattr__(self, "surface_resistance", surface_resistance)
+        object.__setattr__(
+            self, "external_inductance_per_length", external_inductance
+        )
         object.__setattr__(self, "metadata", _freeze(self.metadata))
 
     # Short electromagnetic aliases are convenient in numerical workflows.
@@ -253,6 +294,46 @@ class QuasiTEMSolution:
         return self.inductance_per_length
 
     @property
+    def R(self) -> float:  # noqa: N802 - conventional line-parameter name
+        return self.resistance_per_length
+
+    @property
+    def G(self) -> float:  # noqa: N802 - conventional line-parameter name
+        return self.conductance_per_length
+
+    @property
+    def series_impedance_per_length(self) -> complex:
+        """Return ``R' + j omega L'`` in ohms per metre."""
+
+        try:
+            frequency = _positive_real(self.metadata["frequency"], "frequency")
+        except KeyError as exc:  # defensive invariant for manually built solutions
+            raise SolverError(
+                "solution metadata must contain frequency to form the series impedance."
+            ) from exc
+        omega = 2.0 * np.pi * frequency
+        return complex(
+            self.resistance_per_length,
+            omega * self.inductance_per_length,
+        )
+
+    @property
+    def shunt_admittance_per_length(self) -> complex:
+        """Return ``G' + j omega C'`` in siemens per metre."""
+
+        try:
+            frequency = _positive_real(self.metadata["frequency"], "frequency")
+        except KeyError as exc:  # defensive invariant for manually built solutions
+            raise SolverError(
+                "solution metadata must contain frequency to form the shunt admittance."
+            ) from exc
+        omega = 2.0 * np.pi * frequency
+        return complex(
+            self.conductance_per_length,
+            omega * self.capacitance_per_length.real,
+        )
+
+    @property
     def Zc(self) -> complex:  # noqa: N802 - conventional line-parameter name
         return self.characteristic_impedance
 
@@ -269,6 +350,13 @@ def _electrostatic_form(u: object, v: object, w: object) -> object:
     return epsilon[0] * u.grad[0] * np.conj(v.grad[0]) + epsilon[1] * u.grad[
         1
     ] * np.conj(v.grad[1])
+
+
+@BilinearForm(dtype=np.complex128)
+def _boundary_mass_form(u: object, v: object, w: object) -> object:
+    """Hermitian L2 mass form used to recover conductor surface charge."""
+
+    return u * np.conj(v)
 
 
 def _boundary_names(value: object, role: str) -> tuple[str, ...]:
@@ -344,6 +432,97 @@ def _validated_facets(
     if not pieces:
         return np.empty(0, dtype=np.int64)
     return np.unique(np.concatenate(pieces)).astype(np.int64, copy=False)
+
+
+def _projected_conductor_geometry_factors(
+    mesh: MeshTri,
+    boundary_facets: Mapping[str, ArrayLike],
+    boundary_names: tuple[str, ...],
+    vacuum_reaction: ComplexArray,
+    vacuum_capacitance: float,
+    *,
+    quadrature_order: int,
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Recover ``integral |H_t/I|^2 dl`` on each physical conductor.
+
+    The nodal vacuum reaction is the weak surface-charge functional.  A
+    boundary L2 mass solve recovers a continuous P1 charge density before its
+    squared norm is integrated.  This is substantially more accurate on
+    curved conductors than sampling the discontinuous adjacent-element
+    gradient directly.  Since ``H_t/I = q_s / C0`` for the vacuum dual, the
+    resulting geometry factor has units of inverse metres.
+    """
+
+    factors: dict[str, float] = {}
+    projection_residuals: dict[str, float] = {}
+    element = ElementTriP1()
+    tiny = np.finfo(float).tiny
+    for name in boundary_names:
+        facets = _validated_facets(
+            mesh,
+            boundary_facets,
+            (name,),
+            "conductor",
+        )
+        facet_basis = FacetBasis(
+            mesh,
+            element,
+            facets=facets,
+            intorder=quadrature_order,
+        )
+        boundary_mass = asm(_boundary_mass_form, facet_basis).astype(
+            np.complex128, copy=False
+        )
+        dofs = np.asarray(
+            facet_basis.get_dofs(facets=facets).all(), dtype=np.int64
+        )
+        if dofs.size == 0:  # defensive; _validated_facets already rejects this
+            raise SolverError(
+                f"Conductor boundary {name!r} has no scalar trace degrees of freedom."
+            )
+        restricted_mass = boundary_mass[dofs][:, dofs].tocsc()
+        right_hand_side = np.asarray(vacuum_reaction[dofs], dtype=np.complex128)
+        try:
+            charge_density = splu(restricted_mass).solve(right_hand_side)
+        except (RuntimeError, ValueError) as exc:
+            raise SolverError(
+                f"The boundary mass projection is singular on conductor {name!r}."
+            ) from exc
+        projected_reaction = np.asarray(
+            restricted_mass @ charge_density, dtype=np.complex128
+        )
+        residual = float(np.linalg.norm(projected_reaction - right_hand_side)) / max(
+            float(np.linalg.norm(right_hand_side)), tiny
+        )
+        if not np.isfinite(residual) or residual > 1e-10:
+            raise SolverError(
+                "The conductor boundary projection did not satisfy its residual "
+                f"on {name!r} (relative residual {residual:.3e})."
+            )
+        squared_charge_norm = complex(
+            np.vdot(charge_density, restricted_mass @ charge_density)
+        )
+        norm_tolerance = 256.0 * np.finfo(float).eps * max(
+            abs(squared_charge_norm), tiny
+        )
+        if (
+            not np.isfinite(
+                (squared_charge_norm.real, squared_charge_norm.imag)
+            ).all()
+            or squared_charge_norm.real < -norm_tolerance
+            or abs(squared_charge_norm.imag) > norm_tolerance
+        ):
+            raise SolverError(
+                f"The projected surface-current norm is invalid on {name!r}."
+            )
+        factor = max(0.0, squared_charge_norm.real) / vacuum_capacitance**2
+        if not np.isfinite(factor) or factor <= 0.0:
+            raise SolverError(
+                f"The conductor geometry factor is not positive on {name!r}."
+            )
+        factors[name] = float(factor)
+        projection_residuals[name] = residual
+    return factors, projection_residuals
 
 
 def _solve_dirichlet(
@@ -446,6 +625,22 @@ def solve_quasi_tem(
         raise TypeError(
             "built must provide solver, signal_boundaries, and reference_boundaries."
         ) from exc
+    metal_conductivity = getattr(built, "metal_conductivity", None)
+    if metal_conductivity is not None:
+        if isinstance(metal_conductivity, (bool, np.bool_, str, bytes)):
+            raise ConfigurationError(
+                "metal_conductivity must be finite and positive in siemens per metre."
+            )
+        try:
+            metal_conductivity = float(metal_conductivity)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError(
+                "metal_conductivity must be finite and positive in siemens per metre."
+            ) from exc
+        if not np.isfinite(metal_conductivity) or metal_conductivity <= 0.0:
+            raise ConfigurationError(
+                "metal_conductivity must be finite and positive in siemens per metre."
+            )
     mesh = mesh_data.mesh
     if not isinstance(mesh, MeshTri):
         raise TypeError("built.solver.mesh_data.mesh must be a scikit-fem MeshTri.")
@@ -545,11 +740,82 @@ def solve_quasi_tem(
         raise SolverError("The extracted vacuum capacitance is not finite and positive-real.")
     vacuum_capacitance = float(vacuum_capacitance_complex.real)
 
-    inductance = 1.0 / (SPEED_OF_LIGHT**2 * vacuum_capacitance)
-    neff = _positive_real_root(capacitance / vacuum_capacitance, "neff")
-    characteristic_impedance = _positive_real_root(
-        inductance / capacitance, "characteristic impedance"
+    omega = 2.0 * np.pi * frequency_value
+    external_inductance = 1.0 / (SPEED_OF_LIGHT**2 * vacuum_capacitance)
+    raw_conductance = -omega * capacitance.imag
+    conductance_tolerance = (
+        256.0
+        * np.finfo(float).eps
+        * omega
+        * max(abs(capacitance), np.finfo(float).tiny)
     )
+    if raw_conductance < -conductance_tolerance:
+        raise SolverError(
+            "The extracted dielectric shunt conductance is active; passive material "
+            "loss requires Im(capacitance_per_length) <= 0."
+        )
+    conductance = float(max(0.0, raw_conductance))
+
+    conductor_names = (*signal_names, *reference_names)
+    if metal_conductivity is None:
+        conductor_geometry_factors = {name: 0.0 for name in conductor_names}
+        projection_residuals = {name: 0.0 for name in conductor_names}
+        total_geometry_factor = 0.0
+        surface_resistance = 0.0
+        skin_depth: float | None = None
+        resistance = 0.0
+        inductance = external_inductance
+        # Preserve the historical PEC/dielectric-only arithmetic exactly.
+        neff = _positive_real_root(capacitance / vacuum_capacitance, "neff")
+        characteristic_impedance = _positive_real_root(
+            inductance / capacitance, "characteristic impedance"
+        )
+        beta = omega * neff / SPEED_OF_LIGHT
+    else:
+        conductor_geometry_factors, projection_residuals = (
+            _projected_conductor_geometry_factors(
+                mesh,
+                facet_map,
+                conductor_names,
+                vacuum_reaction,
+                vacuum_capacitance,
+                quadrature_order=order,
+            )
+        )
+        total_geometry_factor = float(sum(conductor_geometry_factors.values()))
+        if not np.isfinite(total_geometry_factor) or total_geometry_factor <= 0.0:
+            raise SolverError(
+                "The total conductor geometry factor must be finite and positive."
+            )
+        surface_resistance = float(
+            np.sqrt(np.pi * frequency_value * MU_0 / metal_conductivity)
+        )
+        skin_depth = float(
+            np.sqrt(1.0 / (np.pi * frequency_value * MU_0 * metal_conductivity))
+        )
+        resistance = float(surface_resistance * total_geometry_factor)
+        inductance = float(external_inductance + resistance / omega)
+        series_impedance = complex(resistance, omega * inductance)
+        shunt_admittance = complex(conductance, omega * capacitance.real)
+        beta = _positive_real_root(
+            -series_impedance * shunt_admittance,
+            "complex phase constant",
+        )
+        neff = beta * SPEED_OF_LIGHT / omega
+        characteristic_impedance = _positive_real_root(
+            series_impedance / shunt_admittance,
+            "characteristic impedance",
+        )
+
+    series_impedance = complex(resistance, omega * inductance)
+    shunt_admittance = complex(conductance, omega * capacitance.real)
+    passive_beta_tolerance = 256.0 * np.finfo(float).eps * max(1.0, abs(beta))
+    if beta.imag > passive_beta_tolerance or neff.imag > (
+        passive_beta_tolerance * SPEED_OF_LIGHT / omega
+    ):
+        raise SolverError(
+            "The RLGC extraction selected an active forward propagation branch."
+        )
 
     dielectric_field = np.asarray(-basis.interpolate(potential).grad, dtype=np.complex128)
     vacuum_field = np.asarray(
@@ -575,6 +841,31 @@ def solve_quasi_tem(
         1
     ] * np.conj(magnetic_field[0])
     power = complex(0.5 * np.sum(weights * poynting_numerator))
+    circuit_forward_power = float(
+        0.5 * np.real(voltage * np.conj(current))
+    )
+    if not np.isfinite(circuit_forward_power) or circuit_forward_power <= 0.0:
+        raise SolverError(
+            "The RLGC characteristic impedance produced non-positive forward power."
+        )
+    conductor_loss = float(0.5 * resistance * abs(current) ** 2)
+    dielectric_loss = float(0.5 * conductance * abs(voltage) ** 2)
+    dissipated_power = conductor_loss + dielectric_loss
+    attenuation = max(0.0, float(-beta.imag))
+    attenuation_power_decay = float(2.0 * attenuation * circuit_forward_power)
+    balance_scale = max(
+        dissipated_power,
+        attenuation_power_decay,
+        np.finfo(float).tiny,
+    )
+    power_balance_residual = abs(
+        dissipated_power - attenuation_power_decay
+    ) / balance_scale
+    if not np.isfinite(power_balance_residual) or power_balance_residual > 1e-9:
+        raise SolverError(
+            "The extracted RLGC parameters violate passive modal power balance "
+            f"(relative residual {power_balance_residual:.3e})."
+        )
     magnetic_norm = np.abs(magnetic_field[0]) ** 2 + np.abs(magnetic_field[1]) ** 2
     integrated_magnetic_norm = float(np.sum(weights * magnetic_norm))
     if not np.isfinite(integrated_magnetic_norm) or integrated_magnetic_norm <= 0.0:
@@ -616,6 +907,10 @@ def solve_quasi_tem(
         voltage=voltage,
         current=current,
         power=power,
+        resistance_per_length=resistance,
+        conductance_per_length=conductance,
+        surface_resistance=surface_resistance,
+        external_inductance_per_length=external_inductance,
         metadata={
             "formulation": "scalar-quasi-TEM-P1",
             "quadrature_order": order,
@@ -626,6 +921,28 @@ def solve_quasi_tem(
             "capacitance_from_energy": material_energy,
             "vacuum_capacitance_from_energy": vacuum_energy,
             "frequency": frequency_value,
+            "metal_conductivity": metal_conductivity,
+            "surface_resistance": surface_resistance,
+            "surface_impedance": complex(surface_resistance, surface_resistance),
+            "skin_depth": skin_depth,
+            "conductor_geometry_factors": conductor_geometry_factors,
+            "conductor_geometry_factor_per_length": total_geometry_factor,
+            "conductor_projection_residuals": projection_residuals,
+            "resistance_per_length": resistance,
+            "conductance_per_length": conductance,
+            "external_inductance_per_length": external_inductance,
+            "internal_inductance_per_length": inductance - external_inductance,
+            "series_impedance_per_length": series_impedance,
+            "shunt_admittance_per_length": shunt_admittance,
+            "conductor_loss_per_length": conductor_loss,
+            "dielectric_loss_per_length": dielectric_loss,
+            "dissipated_power_per_length": dissipated_power,
+            "power_balance": {
+                "circuit_forward_power": circuit_forward_power,
+                "field_forward_power": power.real,
+                "attenuation_power_decay": attenuation_power_decay,
+                "relative_residual": power_balance_residual,
+            },
             "time_convention": "exp(+1j*omega*t - 1j*beta*z)",
         },
     )

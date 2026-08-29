@@ -61,6 +61,13 @@ def _positive_real(value: float, name: str) -> float:
     return result
 
 
+def _nonnegative_real(value: float, name: str) -> float:
+    result = float(value)
+    if not np.isfinite(result) or result < 0.0:
+        raise ValueError(f"{name} must be finite and nonnegative.")
+    return result
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class TransmissionLineResult:
     """One unit-voltage forward TEM or quasi-TEM line mode and its metrics."""
@@ -83,6 +90,10 @@ class TransmissionLineResult:
     vacuum_potential: NDArray[np.complex128]
     local_wave_impedance: NDArray[np.complex128]
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    resistance_per_length: float = 0.0
+    conductance_per_length: float = 0.0
+    surface_resistance: float = 0.0
+    external_inductance_per_length: float | None = None
 
     def __post_init__(self) -> None:
         label = str(self.label).strip()
@@ -110,6 +121,33 @@ class TransmissionLineResult:
         inductance = _positive_real(
             self.inductance_per_length, "inductance_per_length"
         )
+        resistance = _nonnegative_real(
+            self.resistance_per_length, "resistance_per_length"
+        )
+        conductance = _nonnegative_real(
+            self.conductance_per_length, "conductance_per_length"
+        )
+        surface_resistance = _nonnegative_real(
+            self.surface_resistance, "surface_resistance"
+        )
+        external_inductance = (
+            inductance
+            if self.external_inductance_per_length is None
+            else _positive_real(
+                self.external_inductance_per_length,
+                "external_inductance_per_length",
+            )
+        )
+        inductance_tolerance = 64.0 * np.finfo(float).eps * max(
+            1.0,
+            inductance,
+            external_inductance,
+        )
+        if external_inductance > inductance + inductance_tolerance:
+            raise ValueError(
+                "external_inductance_per_length must not exceed the total "
+                "inductance_per_length."
+            )
         voltage = _finite_complex(self.voltage, "voltage")
         current = _finite_complex(self.current, "current")
         power = _finite_complex(self.power, "power")
@@ -151,6 +189,14 @@ class TransmissionLineResult:
         object.__setattr__(self, "capacitance_per_length", capacitance)
         object.__setattr__(self, "vacuum_capacitance_per_length", vacuum_capacitance)
         object.__setattr__(self, "inductance_per_length", inductance)
+        object.__setattr__(self, "resistance_per_length", resistance)
+        object.__setattr__(self, "conductance_per_length", conductance)
+        object.__setattr__(self, "surface_resistance", surface_resistance)
+        object.__setattr__(
+            self,
+            "external_inductance_per_length",
+            external_inductance,
+        )
         object.__setattr__(self, "voltage", voltage)
         object.__setattr__(self, "current", current)
         object.__setattr__(self, "power", power)
@@ -204,6 +250,15 @@ class TransmissionLineResult:
             "Hy": solution.magnetic_field[1].reshape(-1),
             "Hz": zero,
         }
+        omega = 2.0 * np.pi * frequency_value
+        series_impedance = complex(
+            solution.resistance_per_length,
+            omega * solution.inductance_per_length,
+        )
+        shunt_admittance = complex(
+            solution.conductance_per_length,
+            omega * solution.capacitance_per_length.real,
+        )
         sampled = SampledFields(
             coordinates,
             values,
@@ -238,6 +293,12 @@ class TransmissionLineResult:
                 "wave_impedance": solution.wave_impedance,
                 "voltage": solution.voltage,
                 "current": solution.current,
+                "resistance_per_length": solution.resistance_per_length,
+                "inductance_per_length": solution.inductance_per_length,
+                "conductance_per_length": solution.conductance_per_length,
+                "capacitance_per_length": solution.capacitance_per_length,
+                "series_impedance_per_length": series_impedance,
+                "shunt_admittance_per_length": shunt_admittance,
             },
         )
         modes = ModeSet(
@@ -249,6 +310,8 @@ class TransmissionLineResult:
             metadata={
                 "formulation": "scalar-quasi-TEM-P1",
                 "line_label": label,
+                "resistance_per_length": solution.resistance_per_length,
+                "conductance_per_length": solution.conductance_per_length,
             },
         )
         return cls(
@@ -271,10 +334,17 @@ class TransmissionLineResult:
             local_wave_impedance=solution.local_wave_impedance.reshape(-1),
             metadata={
                 **dict(solution.metadata),
+                "frequency": frequency_value,
                 "line_type": type(spec).__name__,
                 "signal_boundaries": signal_boundaries,
                 "reference_boundaries": reference_boundaries,
             },
+            resistance_per_length=solution.resistance_per_length,
+            conductance_per_length=solution.conductance_per_length,
+            surface_resistance=solution.surface_resistance,
+            external_inductance_per_length=(
+                solution.external_inductance_per_length
+            ),
         )
 
     @property
@@ -292,6 +362,57 @@ class TransmissionLineResult:
     @property
     def inductance(self) -> float:
         return self.inductance_per_length
+
+    @property
+    def internal_inductance_per_length(self) -> float:
+        """Skin-effect internal inductance represented by the SIBC reactance."""
+
+        return max(
+            0.0,
+            self.inductance_per_length
+            - float(self.external_inductance_per_length),
+        )
+
+    @property
+    def conductor_impedance_per_length(self) -> complex:
+        """Good-conductor SIBC contribution in ohm/m."""
+
+        omega = 2.0 * np.pi * self.frequency
+        return complex(
+            self.resistance_per_length,
+            omega * self.internal_inductance_per_length,
+        )
+
+    @property
+    def surface_impedance(self) -> complex:
+        """Leontovich good-conductor impedance ``(1 + j) R_s`` in ohm."""
+
+        return complex(self.surface_resistance, self.surface_resistance)
+
+    @property
+    def series_impedance_per_length(self) -> complex:
+        """Telegrapher series impedance ``R' + j omega L'`` in ohm/m."""
+
+        omega = 2.0 * np.pi * self.frequency
+        return complex(self.resistance_per_length, omega * self.inductance_per_length)
+
+    @property
+    def shunt_admittance_per_length(self) -> complex:
+        """Telegrapher shunt admittance ``G' + j omega C'`` in S/m."""
+
+        omega = 2.0 * np.pi * self.frequency
+        return complex(
+            self.conductance_per_length,
+            omega * self.capacitance_per_length.real,
+        )
+
+    @property
+    def R(self) -> float:  # noqa: N802 - conventional line-parameter name
+        return self.resistance_per_length
+
+    @property
+    def G(self) -> float:  # noqa: N802 - conventional line-parameter name
+        return self.conductance_per_length
 
     @property
     def Zc(self) -> complex:  # noqa: N802 - conventional line-parameter name

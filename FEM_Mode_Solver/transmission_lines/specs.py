@@ -1,8 +1,9 @@
 """Validated, frequency-independent transmission-line specifications.
 
-All dimensions are expressed in metres.  The relative permittivity follows
-the mode solver's ``exp(+j*omega*t)`` convention, so a passive dielectric is
-represented by ``epsilon_r * (1 - 1j * loss_tangent)``.
+All dimensions are expressed in metres and optional bulk metal conductivity
+is expressed in S/m.  The relative permittivity follows the mode solver's
+``exp(+j*omega*t)`` convention, so a passive dielectric is represented by
+``epsilon_r * (1 - 1j * loss_tangent)``.
 """
 
 from __future__ import annotations
@@ -60,6 +61,13 @@ def _set_dielectric(instance: object) -> None:
     )
 
 
+def _set_metal_conductivity(instance: object) -> None:
+    conductivity = getattr(instance, "metal_conductivity")
+    if conductivity is not None:
+        conductivity = _positive(conductivity, "metal_conductivity")
+    object.__setattr__(instance, "metal_conductivity", conductivity)
+
+
 def _complex_epsilon(epsilon_r: float, loss_tangent: float) -> complex:
     return complex(epsilon_r * (1.0 - 1j * loss_tangent))
 
@@ -80,6 +88,7 @@ class Coaxial:
     outer_conductor_thickness: float = 0.15e-3
     epsilon_r: float = 2.10
     loss_tangent: float = 2.0e-4
+    metal_conductivity: float | None = None
 
     def __post_init__(self) -> None:
         _set_positive(
@@ -89,6 +98,7 @@ class Coaxial:
             "outer_conductor_thickness",
         )
         _set_dielectric(self)
+        _set_metal_conductivity(self)
         if self.outer_radius <= self.inner_radius:
             raise ConfigurationError(
                 "outer_radius must be greater than inner_radius."
@@ -121,6 +131,7 @@ class Microstrip:
     epsilon_r: float = 3.55
     loss_tangent: float = 2.7e-3
     domain_padding_factor: float = 1.0
+    metal_conductivity: float | None = None
 
     def __post_init__(self) -> None:
         _set_positive(
@@ -131,6 +142,7 @@ class Microstrip:
             "domain_padding_factor",
         )
         _set_dielectric(self)
+        _set_metal_conductivity(self)
 
     @property
     def complex_epsilon(self) -> complex:
@@ -159,6 +171,7 @@ class Stripline:
     epsilon_r: float = 3.55
     loss_tangent: float = 2.7e-3
     domain_padding_factor: float = 1.0
+    metal_conductivity: float | None = None
 
     def __post_init__(self) -> None:
         _set_positive(
@@ -169,6 +182,7 @@ class Stripline:
             "domain_padding_factor",
         )
         _set_dielectric(self)
+        _set_metal_conductivity(self)
         if self.conductor_thickness >= self.ground_spacing:
             raise ConfigurationError(
                 "conductor_thickness must be smaller than ground_spacing."
@@ -203,6 +217,7 @@ class CoplanarWaveguide:
     epsilon_r: float = 3.55
     loss_tangent: float = 2.7e-3
     domain_padding_factor: float = 1.0
+    metal_conductivity: float | None = None
 
     def __post_init__(self) -> None:
         _set_positive(
@@ -215,6 +230,7 @@ class CoplanarWaveguide:
             "domain_padding_factor",
         )
         _set_dielectric(self)
+        _set_metal_conductivity(self)
 
     @property
     def complex_epsilon(self) -> complex:
@@ -270,6 +286,13 @@ _COMMON_PARAMETER_ALIASES = {
     "tandelta": "loss_tangent",
     "losstan": "loss_tangent",
     "dielectriclosstangent": "loss_tangent",
+    "conductivity": "metal_conductivity",
+    "conductorconductivity": "metal_conductivity",
+    "bulkconductivity": "metal_conductivity",
+    "sigma": "metal_conductivity",
+    "metalsigma": "metal_conductivity",
+    "conductorsigma": "metal_conductivity",
+    "metalconductance": "metal_conductivity",
 }
 
 _PARAMETER_ALIASES: dict[type[TransmissionLineSpec], dict[str, str]] = {
@@ -359,7 +382,7 @@ def spec_from_type(kind: str, **params: Any) -> TransmissionLineSpec:
 
     Names are case-insensitive and ignore spaces, underscores, and hyphens.
     Common microwave spellings such as ``cpw``, ``width``, ``eps_r``,
-    ``substrate_epsilon``, and ``tan_delta`` are accepted.
+    ``substrate_epsilon``, ``tan_delta``, and ``metal_sigma`` are accepted.
     """
 
     if not isinstance(kind, str) or not kind.strip():

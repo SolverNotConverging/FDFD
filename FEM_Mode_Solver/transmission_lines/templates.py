@@ -23,6 +23,7 @@ class BuiltTransmissionLine:
     signal_boundaries: tuple[str, ...]
     reference_boundaries: tuple[str, ...]
     label: str
+    metal_conductivity: float | None = None
 
 
 def _effective_index(epsilon: complex, *, homogeneous: bool) -> complex:
@@ -98,6 +99,7 @@ def _build_coaxial(spec: Coaxial, frequency: float) -> BuiltTransmissionLine:
         signal_boundaries=("signal",),
         reference_boundaries=("outer_conductor",),
         label="Coaxial",
+        metal_conductivity=spec.metal_conductivity,
     )
 
 
@@ -160,6 +162,7 @@ def _build_microstrip(spec: Microstrip, frequency: float) -> BuiltTransmissionLi
         signal_boundaries=("signal",),
         reference_boundaries=("ground",),
         label="Microstrip",
+        metal_conductivity=spec.metal_conductivity,
     )
 
 
@@ -210,6 +213,7 @@ def _build_stripline(spec: Stripline, frequency: float) -> BuiltTransmissionLine
         signal_boundaries=("signal",),
         reference_boundaries=("lower_ground", "upper_ground"),
         label="Stripline",
+        metal_conductivity=spec.metal_conductivity,
     )
 
 
@@ -281,7 +285,8 @@ def _build_cpw(
         solver=solver,
         signal_boundaries=("signal",),
         reference_boundaries=("left_ground", "right_ground"),
-        label="CPW odd (signal to tied grounds)",
+        label="CPW",
+        metal_conductivity=spec.metal_conductivity,
     )
 
 

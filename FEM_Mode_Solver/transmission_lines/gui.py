@@ -20,20 +20,31 @@ from .visualization import _draw_transverse_fields
 class _EntrySpec:
     key: str
     label: str
-    default: float
+    default: float | None
     si_scale: float
     strictly_positive: bool = True
+    optional: bool = False
 
 
 _GHZ = 1.0e9
 _MM = 1.0e-3
 _UM = 1.0e-6
+_MEGA = 1.0e6
+
+_METAL_CONDUCTIVITY = _EntrySpec(
+    "metal_conductivity",
+    "Metal σ (MS/m; blank=PEC)",
+    None,
+    _MEGA,
+    optional=True,
+)
 
 _COMMON_PREFIX = (_EntrySpec("frequency", "Frequency (GHz)", 10.0, _GHZ),)
 _COMMON_SUFFIX = (
     _EntrySpec("epsilon_r", "Relative permittivity", 3.55, 1.0),
     _EntrySpec("loss_tangent", "Loss tangent", 0.0027, 1.0, False),
-    _EntrySpec("max_element_size", "Mesh size (mm)", 0.12, _MM),
+    _METAL_CONDUCTIVITY,
+    _EntrySpec("max_element_size", "Mesh size (mm)", 1.00, _MM),
 )
 
 _LINE_ENTRIES: dict[str, tuple[str, tuple[_EntrySpec, ...]]] = {
@@ -53,7 +64,8 @@ _LINE_ENTRIES: dict[str, tuple[str, tuple[_EntrySpec, ...]]] = {
         + (
             _EntrySpec("epsilon_r", "Relative permittivity", 2.1, 1.0),
             _EntrySpec("loss_tangent", "Loss tangent", 0.0002, 1.0, False),
-            _EntrySpec("max_element_size", "Mesh size (mm)", 0.12, _MM),
+            _METAL_CONDUCTIVITY,
+            _EntrySpec("max_element_size", "Mesh size (mm)", 1.00, _MM),
         ),
     ),
     "Microstrip": (
@@ -78,7 +90,7 @@ _LINE_ENTRIES: dict[str, tuple[str, tuple[_EntrySpec, ...]]] = {
         )
         + _COMMON_SUFFIX,
     ),
-    "CPW odd (signal to tied grounds)": (
+    "CPW": (
         "coplanar_waveguide",
         _COMMON_PREFIX
         + (
@@ -112,19 +124,19 @@ class TransmissionLineCalculatorGUI:
 
     Dimensions are entered in the units printed next to each field and are
     converted to SI before being passed to ``TransmissionLineCalculator``.
-    CPW is intentionally restricted to its odd quasi-TEM mode: the center
-    signal is driven against the two tied ground conductors.
+    CPW drives the center signal against the two tied ground conductors.
     """
 
     line_labels = tuple(_LINE_ENTRIES)
 
     def __init__(self, *, show: bool = False) -> None:
         import matplotlib.pyplot as plt
-        from matplotlib.widgets import Button, RadioButtons, TextBox
+        from matplotlib.widgets import Button, CheckButtons, RadioButtons, TextBox
 
         self.figure = plt.figure(figsize=(14.0, 8.0))
         self.calculator: Any | None = None
         self.result: Any | None = None
+        self.mesh = False
         self.line_label = self.line_labels[0]
         self.line_kind = _LINE_ENTRIES[self.line_label][0]
         self._active_specs: tuple[_EntrySpec, ...] = ()
@@ -139,9 +151,18 @@ class TransmissionLineCalculatorGUI:
         selector_axes.set_title("Transmission line", fontsize=10)
 
         maximum_entries = max(len(entry_specs) for _, entry_specs in _LINE_ENTRIES.values())
+        entry_top = 0.682
+        entry_bottom = 0.218
+        entry_step = (
+            (entry_top - entry_bottom) / (maximum_entries - 1)
+            if maximum_entries > 1
+            else 0.0
+        )
         self._entry_rows: list[tuple[Any, Any]] = []
         for index in range(maximum_entries):
-            entry_axes = self.figure.add_axes((0.135, 0.682 - 0.052 * index, 0.102, 0.034))
+            entry_axes = self.figure.add_axes(
+                (0.135, entry_top - entry_step * index, 0.102, 0.034)
+            )
             box = TextBox(entry_axes, "", initial="")
             box.label.set_fontsize(8.5)
             box.on_text_change(
@@ -154,6 +175,12 @@ class TransmissionLineCalculatorGUI:
         refine_axes = self.figure.add_axes((0.137, 0.115, 0.102, 0.048))
         self.calculate_button = Button(calculate_axes, "Calculate FEM")
         self.refine_button = Button(refine_axes, "Refine x2")
+
+        mesh_axes = self.figure.add_axes((0.018, 0.174, 0.130, 0.032))
+        mesh_axes.set_frame_on(False)
+        self.mesh_control = CheckButtons(mesh_axes, ("Display mesh",), (self.mesh,))
+        for label in self.mesh_control.labels:
+            label.set_fontsize(8.5)
 
         self.axes = np.asarray(
             [
@@ -205,6 +232,7 @@ class TransmissionLineCalculatorGUI:
         self.line_control.on_clicked(self._select_line)
         self.calculate_button.on_clicked(self._calculate_clicked)
         self.refine_button.on_clicked(self._refine_clicked)
+        self.mesh_control.on_clicked(self._set_mesh)
         self._configure_entries(self.line_label)
         self._update_heading()
         if show:
@@ -227,7 +255,13 @@ class TransmissionLineCalculatorGUI:
                 spec = self._active_specs[index]
                 entry_axes.set_visible(True)
                 box.label.set_text(spec.label)
-                box.set_val(f"{spec.default:g}")
+                if spec.default is None:
+                    default_text = ""
+                elif spec.key == "max_element_size":
+                    default_text = f"{spec.default:.2f}"
+                else:
+                    default_text = f"{spec.default:g}"
+                box.set_val(default_text)
                 self.parameter_boxes[spec.key] = box
         finally:
             self._suspend_entry_callbacks = callbacks_were_suspended
@@ -271,10 +305,13 @@ class TransmissionLineCalculatorGUI:
         self._set_status(status)
         self.figure.canvas.draw_idle()
 
-    def _read_inputs(self) -> tuple[float, float, dict[str, float]]:
-        values: dict[str, float] = {}
+    def _read_inputs(self) -> tuple[float, float, dict[str, float | None]]:
+        values: dict[str, float | None] = {}
         for spec in self._active_specs:
             raw = self.parameter_boxes[spec.key].text.strip()
+            if not raw and spec.optional:
+                values[spec.key] = None
+                continue
             try:
                 displayed = float(raw)
             except ValueError as exc:
@@ -287,8 +324,8 @@ class TransmissionLineCalculatorGUI:
                 raise ValueError(f"{spec.label} must not be negative.")
             values[spec.key] = displayed * spec.si_scale
 
-        frequency = values.pop("frequency")
-        mesh_size = values.pop("max_element_size")
+        frequency = float(values.pop("frequency"))
+        mesh_size = float(values.pop("max_element_size"))
         return frequency, mesh_size, values
 
     @staticmethod
@@ -366,9 +403,20 @@ class TransmissionLineCalculatorGUI:
     def _refine_clicked(self, _event: Any) -> None:
         self.refine()
 
+    def _set_mesh(self, _label: str) -> None:
+        """Refresh the current field plots using the selected mesh overlay."""
+
+        self.mesh = bool(self.mesh_control.get_status()[0])
+        if self.result is not None:
+            self._show_result(self.result)
+        self.figure.canvas.draw_idle()
+
     def _show_result(self, result: Any) -> None:
+        resistance = _format_real_or_complex(result.resistance_per_length, "ohm/m")
         capacitance = _format_real_or_complex(result.capacitance_per_length, "F/m")
         inductance = _format_real_or_complex(result.inductance_per_length, "H/m")
+        conductance = _format_real_or_complex(result.conductance_per_length, "S/m")
+        attenuation = _format_real_or_complex(result.mode.alpha, "1/m")
         power = _format_real_or_complex(result.power, "W")
         self.results_text.set_text(
             "  ".join(
@@ -379,14 +427,23 @@ class TransmissionLineCalculatorGUI:
                 )
             )
             + "\n"
-            + "  ".join((f"C' = {capacitance}", f"L' = {inductance}", f"P = {power}"))
+            + "  ".join(
+                (
+                    f"R' = {resistance}",
+                    f"L' = {inductance}",
+                    f"G' = {conductance}",
+                    f"C' = {capacitance}",
+                )
+            )
+            + "\n"
+            + "  ".join((f"alpha = {attenuation}", f"P = {power}"))
         )
         _draw_transverse_fields(
             result,
             self.axes,
             self.colorbar_axes,
             phase=0.0,
-            mesh=False,
+            mesh=self.mesh,
             update_title=False,
         )
 

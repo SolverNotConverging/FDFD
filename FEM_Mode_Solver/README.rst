@@ -295,9 +295,8 @@ FEM transmission-line calculator
 
 The package also includes a two-potential quasi-TEM FEM calculator for
 coaxial, microstrip, stripline, and coplanar-waveguide cross-sections.  The CPW
-template exposes one mode only: the centre signal conductor against the tied
-left and right grounds, labelled ``CPW odd (signal to tied grounds)`` in the
-GUI so that the terminal definition is unambiguous.
+template drives the centre signal conductor against the tied left and right
+grounds and is labelled ``CPW`` in the GUI.
 
 The lifecycle follows the mode solvers:
 
@@ -313,6 +312,8 @@ The lifecycle follows the mode solvers:
        epsilon_r=3.55,
        loss_tangent=0.0027,
        domain_padding_factor=1.0,
+       # Optional bulk conductivity in S/m.  Omit it for ideal PEC metal.
+       metal_conductivity=59.6e6,
    )
    calculator.discretize(
        max_element_size=0.30e-3,
@@ -326,14 +327,20 @@ The lifecycle follows the mode solvers:
    print(result.wave_impedance)
    print(result.capacitance_per_length)
    print(result.inductance_per_length)
+   print(result.resistance_per_length)
+   print(result.conductance_per_length)
 
    # Per-element |Et| and |Ht| colour maps with uniform direction arrows.
    calculator.visualize_with_gui()
 
 The field colour in each native triangle carries magnitude; the white arrows
 are spatially distributed, phase-resolved unit vectors and therefore encode
-direction only.  A power-law colour normalization keeps weaker fringe fields
-visible without clipping the conductor-edge maximum.
+direction only.  An area-weighted adaptive cutoff omits arrows where the field
+is insignificant, while a power-law colour normalization keeps weaker fringe
+fields visible without clipping the conductor-edge maximum.  Translucent cyan
+shapes identify dielectrics and yellow shapes identify metal conductors.  The
+calculator's ``Display mesh`` option overlays the native triangular FEM mesh;
+its editable mesh-size field starts at ``1.00`` mm for every line type.
 
 ``refine(factor=2)`` remeshes the complete line, including material jumps,
 signal edges, and PEC walls, and invalidates the old result before the next
@@ -354,13 +361,54 @@ For a unit signal voltage, the dielectric FEM potential gives
    \qquad C'=\int_A \epsilon |\mathbf E_t|^2\,dA.
 
 A second solve with every dielectric replaced by vacuum gives ``C0'`` and the
-unit-current magnetic dual.  For the supported nonmagnetic quasi-TEM lines,
+unit-current magnetic dual.  With ideal PEC conductors (the default), the
+supported nonmagnetic quasi-TEM lines satisfy
 
 .. math::
 
    L'=\frac{1}{c_0^2 C'_0},\qquad
    n_\mathrm{eff}=\sqrt{\frac{C'}{C'_0}},\qquad
    Z_c=\sqrt{\frac{L'}{C'}}.
+
+Users can instead supply ``metal_conductivity`` as a finite positive bulk
+conductivity :math:`\sigma` in S/m.  ``None`` retains the ideal-PEC calculation
+for backward compatibility.  The GUI accepts the same quantity in MS/m; a
+blank field means PEC.  Conductivity :math:`\sigma` is a material property and
+must not be confused with the transmission-line shunt conductance :math:`G'`.
+
+Finite conductivity uses a first-order good-conductor surface-impedance model:
+
+.. math::
+
+   Z_s=(1+j)\sqrt{\frac{\pi f\mu_0}{\sigma}},\qquad
+   Z'_{\mathrm{cond}}=Z_s\int_{\Gamma_{\mathrm{metal}}}
+   |H_{t,I=1}|^2\,dl,
+
+where the integration includes the signal and every named ground metal.  This
+includes the bottom ground conductor in the microstrip template and both tied
+grounds in stripline and CPW; the artificial remote truncation wall is not a
+lossy metal.  The resulting line quantities follow
+
+.. math::
+
+   R'=\operatorname{Re}(Z'_{\mathrm{cond}}),\qquad
+   L'_{\mathrm{ext}}=\frac{1}{c_0^2 C'_0},\qquad
+   L'=L'_{\mathrm{ext}}+\frac{\operatorname{Im}(Z'_{\mathrm{cond}})}{\omega},
+
+.. math::
+
+   G'=-\omega\operatorname{Im}(C'),\qquad
+   Z'=R'+j\omega L',\qquad
+   Y'=G'+j\omega\operatorname{Re}(C')=j\omega C',
+
+.. math::
+
+   \beta=\sqrt{-Z'Y'},\qquad Z_c=\sqrt{\frac{Z'}{Y'}}.
+
+Thus the existing complex ``capacitance_per_length`` already contains
+dielectric loss; do not add ``G'`` to ``j*omega*C'`` a second time.  The public
+``resistance_per_length`` and ``conductance_per_length`` fields expose the
+standard :math:`R'` and :math:`G'` entries of the RLGC model.
 
 ``Zc`` is the circuit characteristic impedance.  It is intentionally kept
 separate from wave impedance.  The reported scalar wave impedance is the
@@ -389,9 +437,12 @@ or:
 
 The calculation is a frequency-tagged quasi-static FEM extraction, appropriate
 for TEM and quasi-TEM operation.  Open lines are approximated by the finite PEC
-truncation wall described above.  The calculator does not model radiation,
-conductor skin loss, higher-order dispersion, or magnetic materials; use the
-full-vector 2D mode solver when those effects are required.
+truncation wall described above.  The conductor correction assumes a smooth,
+nonmagnetic good conductor and is a first-order SIBC perturbation; it does not
+resolve fields inside the metal, roughness, or a conductor thinner than the
+skin-effect model permits.  The calculator also does not model radiation or
+higher-order dispersion; use the full-vector 2D mode solver when those effects
+are required.
 
 Results
 -------

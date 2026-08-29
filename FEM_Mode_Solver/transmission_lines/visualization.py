@@ -19,6 +19,12 @@ FloatArray = NDArray[np.float64]
 ComplexArray = NDArray[np.complex128]
 
 
+_DIELECTRIC_FACE_COLOR = (0.404, 0.910, 0.976, 0.16)
+_DIELECTRIC_EDGE_COLOR = (0.835, 0.965, 1.000, 0.90)
+_METAL_FACE_COLOR = (0.984, 0.749, 0.141, 0.92)
+_METAL_EDGE_COLOR = (0.443, 0.247, 0.071, 1.00)
+
+
 def _checked_result(result: Any) -> tuple[Any, Any, FloatArray, NDArray[np.int64]]:
     mode = getattr(result, "mode", None)
     fields = getattr(mode, "fields", None)
@@ -113,12 +119,74 @@ def _format_complex(value: complex, precision: int = 6) -> str:
     return f"{value.real:.{precision}g}{value.imag:+.{precision}g}j"
 
 
+def _adaptive_magnitude_cutoff(
+    magnitude: FloatArray,
+    cell_areas: FloatArray,
+    *,
+    retained_energy: float = 0.96,
+    robust_peak_fraction: float = 0.14,
+) -> float:
+    """Return a mesh-independent floor for visually meaningful glyphs.
+
+    The energy criterion discards weak regions that collectively contribute
+    little to the plotted field, while the area-weighted percentile avoids
+    making the cutoff depend on how densely a conductor edge was meshed.  In
+    particular, one singular-looking cell cannot set the scale for the whole
+    plot as it would with a fixed fraction of the absolute maximum.
+    """
+
+    values = np.asarray(magnitude, dtype=np.float64).reshape(-1)
+    areas = np.asarray(cell_areas, dtype=np.float64).reshape(-1)
+    if values.shape != areas.shape:
+        raise ValueError("magnitude and cell_areas must have equal shapes.")
+    valid = (
+        np.isfinite(values)
+        & (values > np.finfo(float).tiny)
+        & np.isfinite(areas)
+        & (areas > 0.0)
+    )
+    if not np.any(valid):
+        return np.inf
+
+    values = values[valid]
+    areas = areas[valid]
+    ascending = np.argsort(values, kind="stable")
+    ordered_values = values[ascending]
+    ordered_areas = areas[ascending]
+    area_position = np.searchsorted(
+        np.cumsum(ordered_areas),
+        0.98 * float(np.sum(ordered_areas)),
+        side="left",
+    )
+    robust_peak = float(ordered_values[min(area_position, values.size - 1)])
+
+    descending = ascending[::-1]
+    descending_values = values[descending]
+    # Winsorizing only the energy statistic prevents a single edge-field
+    # outlier from hiding the rest of a meaningful vector pattern.  The
+    # original (uncapped) magnitudes remain eligible for selection below.
+    energy_values = np.minimum(descending_values, 4.0 * robust_peak)
+    energy = areas[descending] * energy_values**2
+    total_energy = float(np.sum(energy))
+    if not np.isfinite(total_energy) or total_energy <= np.finfo(float).tiny:
+        return np.inf
+    energy_position = np.searchsorted(
+        np.cumsum(energy),
+        retained_energy * total_energy,
+        side="left",
+    )
+    energy_floor = float(
+        descending_values[min(energy_position, descending_values.size - 1)]
+    )
+    return max(energy_floor, robust_peak_fraction * robust_peak)
+
+
 def _direction_arrow_indices(
     centroids: FloatArray,
     magnitude: FloatArray,
     *,
-    maximum_arrows: int = 400,
-    relative_cutoff: float = 1.0e-2,
+    cell_areas: FloatArray | None = None,
+    maximum_arrows: int = 160,
 ) -> NDArray[np.int64]:
     """Choose strong, spatially distributed cells for direction glyphs."""
 
@@ -127,7 +195,18 @@ def _direction_arrow_indices(
     maximum = float(np.max(magnitude))
     if not np.isfinite(maximum) or maximum <= np.finfo(float).tiny:
         return np.empty(0, dtype=np.int64)
-    candidates = np.flatnonzero(magnitude >= relative_cutoff * maximum)
+    areas = (
+        np.ones_like(magnitude, dtype=np.float64)
+        if cell_areas is None
+        else np.asarray(cell_areas, dtype=np.float64)
+    )
+    cutoff = _adaptive_magnitude_cutoff(magnitude, areas)
+    candidates = np.flatnonzero(
+        np.isfinite(magnitude)
+        & np.isfinite(areas)
+        & (areas > 0.0)
+        & (magnitude >= cutoff)
+    )
     if candidates.size == 0:
         return np.empty(0, dtype=np.int64)
 
@@ -140,7 +219,10 @@ def _direction_arrow_indices(
             4.0,
         )
     )
-    columns = max(1, int(round(np.sqrt(maximum_arrows * aspect))))
+    columns = min(
+        maximum_arrows,
+        max(1, int(round(np.sqrt(maximum_arrows * aspect)))),
+    )
     rows = max(1, maximum_arrows // columns)
     lower = np.min(candidate_points, axis=0)
     safe_spans = np.maximum(spans, np.finfo(float).tiny)
@@ -168,10 +250,216 @@ def _direction_arrow_indices(
     return np.asarray(candidates[order[first_in_bin]], dtype=np.int64)
 
 
+def _stripline_dielectric_path(spec: Any, x_limits: tuple[float, float]) -> Any:
+    """Build the dielectric rectangle with the centre conductor cut out."""
+
+    from matplotlib.path import Path
+
+    x_minimum, x_maximum = x_limits
+    half_spacing = 0.5 * float(spec.ground_spacing)
+    half_width = 0.5 * float(spec.trace_width)
+    half_thickness = 0.5 * float(spec.conductor_thickness)
+    # Counter-clockwise exterior followed by a clockwise hole gives the
+    # nonzero winding rule an exact signal-conductor cutout.
+    vertices = np.asarray(
+        [
+            (x_minimum, -half_spacing),
+            (x_maximum, -half_spacing),
+            (x_maximum, half_spacing),
+            (x_minimum, half_spacing),
+            (x_minimum, -half_spacing),
+            (-half_width, -half_thickness),
+            (-half_width, half_thickness),
+            (half_width, half_thickness),
+            (half_width, -half_thickness),
+            (-half_width, -half_thickness),
+        ],
+        dtype=np.float64,
+    )
+    codes = np.asarray(
+        [
+            Path.MOVETO,
+            Path.LINETO,
+            Path.LINETO,
+            Path.LINETO,
+            Path.CLOSEPOLY,
+            Path.MOVETO,
+            Path.LINETO,
+            Path.LINETO,
+            Path.LINETO,
+            Path.CLOSEPOLY,
+        ],
+        dtype=np.uint8,
+    )
+    return Path(vertices, codes)
+
+
+def _draw_cross_section_regions(ax: Any, result: Any, points: FloatArray) -> None:
+    """Overlay exact dielectric and metal shapes for the solved cross-section."""
+
+    from matplotlib.patches import (
+        Circle as PlotCircle,
+        Patch,
+        PathPatch,
+        Rectangle as PlotRectangle,
+        Wedge,
+    )
+
+    from .specs import Coaxial, CoplanarWaveguide, Microstrip, Stripline
+
+    spec = getattr(result, "spec", None)
+    x_limits = (float(np.min(points[:, 0])), float(np.max(points[:, 0])))
+    dielectric_style = {
+        "facecolor": _DIELECTRIC_FACE_COLOR,
+        "edgecolor": _DIELECTRIC_EDGE_COLOR,
+        "linewidth": 1.25,
+        "zorder": 3,
+    }
+    metal_style = {
+        "facecolor": _METAL_FACE_COLOR,
+        "edgecolor": _METAL_EDGE_COLOR,
+        "linewidth": 0.75,
+        "zorder": 6,
+    }
+    if isinstance(spec, Coaxial):
+        dielectric_patch = Wedge(
+            (0.0, 0.0),
+            float(spec.outer_radius),
+            0.0,
+            360.0,
+            width=float(spec.outer_radius - spec.inner_radius),
+            **dielectric_style,
+        )
+        metal_patches = (
+            PlotCircle(
+                (0.0, 0.0),
+                float(spec.inner_radius),
+                **metal_style,
+            ),
+            Wedge(
+                (0.0, 0.0),
+                float(spec.outer_radius + spec.outer_conductor_thickness),
+                0.0,
+                360.0,
+                width=float(spec.outer_conductor_thickness),
+                **metal_style,
+            ),
+        )
+    elif isinstance(spec, Microstrip):
+        thickness = float(spec.conductor_thickness)
+        trace_width = float(spec.trace_width)
+        substrate_height = float(spec.substrate_height)
+        dielectric_patch = PlotRectangle(
+            (x_limits[0], 0.0),
+            x_limits[1] - x_limits[0],
+            substrate_height,
+            **dielectric_style,
+        )
+        metal_patches = (
+            PlotRectangle(
+                (x_limits[0], -thickness),
+                x_limits[1] - x_limits[0],
+                thickness,
+                **metal_style,
+            ),
+            PlotRectangle(
+                (-0.5 * trace_width, substrate_height),
+                trace_width,
+                thickness,
+                **metal_style,
+            ),
+        )
+    elif isinstance(spec, Stripline):
+        thickness = float(spec.conductor_thickness)
+        trace_width = float(spec.trace_width)
+        half_spacing = 0.5 * float(spec.ground_spacing)
+        dielectric_patch = PathPatch(
+            _stripline_dielectric_path(spec, x_limits),
+            **dielectric_style,
+        )
+        metal_patches = (
+            PlotRectangle(
+                (x_limits[0], -half_spacing - thickness),
+                x_limits[1] - x_limits[0],
+                thickness,
+                **metal_style,
+            ),
+            PlotRectangle(
+                (x_limits[0], half_spacing),
+                x_limits[1] - x_limits[0],
+                thickness,
+                **metal_style,
+            ),
+            PlotRectangle(
+                (-0.5 * trace_width, -0.5 * thickness),
+                trace_width,
+                thickness,
+                **metal_style,
+            ),
+        )
+    elif isinstance(spec, CoplanarWaveguide):
+        thickness = float(spec.conductor_thickness)
+        signal_edge = 0.5 * float(spec.center_width)
+        ground_inner_edge = signal_edge + float(spec.gap)
+        metal_half_width = ground_inner_edge + float(spec.ground_width)
+        dielectric_patch = PlotRectangle(
+            (x_limits[0], -float(spec.substrate_height)),
+            x_limits[1] - x_limits[0],
+            float(spec.substrate_height),
+            **dielectric_style,
+        )
+        metal_patches = (
+            PlotRectangle(
+                (-signal_edge, 0.0),
+                2.0 * signal_edge,
+                thickness,
+                **metal_style,
+            ),
+            PlotRectangle(
+                (-metal_half_width, 0.0),
+                float(spec.ground_width),
+                thickness,
+                **metal_style,
+            ),
+            PlotRectangle(
+                (ground_inner_edge, 0.0),
+                float(spec.ground_width),
+                thickness,
+                **metal_style,
+            ),
+        )
+    else:
+        return
+
+    ax.add_patch(dielectric_patch)
+    for metal_patch in metal_patches:
+        ax.add_patch(metal_patch)
+    epsilon = float(spec.epsilon_r)
+    dielectric_handle = Patch(
+        facecolor=_DIELECTRIC_FACE_COLOR,
+        edgecolor=_DIELECTRIC_EDGE_COLOR,
+        label=rf"dielectric $\epsilon_r={epsilon:g}$",
+    )
+    metal_handle = Patch(
+        facecolor=_METAL_FACE_COLOR,
+        edgecolor=_METAL_EDGE_COLOR,
+        label="metal",
+    )
+    legend = ax.legend(
+        handles=(dielectric_handle, metal_handle),
+        loc="upper right",
+        borderaxespad=0.35,
+        framealpha=0.72,
+        fontsize=7.5,
+    )
+    legend.set_zorder(10)
+
+
 def _draw_vector_panel(
     ax: Any,
     colorbar_ax: Any,
     *,
+    result: Any,
     points: FloatArray,
     triangles: NDArray[np.int64],
     first: ComplexArray,
@@ -185,6 +473,13 @@ def _draw_vector_panel(
 
     triangulation = Triangulation(points[:, 0], points[:, 1], triangles)
     centroids = np.mean(points[triangles], axis=1)
+    triangle_points = points[triangles]
+    first_edges = triangle_points[:, 1] - triangle_points[:, 0]
+    second_edges = triangle_points[:, 2] - triangle_points[:, 0]
+    cell_areas = 0.5 * np.abs(
+        first_edges[:, 0] * second_edges[:, 1]
+        - first_edges[:, 1] * second_edges[:, 0]
+    )
     magnitude = np.sqrt(np.abs(first) ** 2 + np.abs(second) ** 2)
     maximum = float(np.max(magnitude)) if magnitude.size else 0.0
     colour_maximum = maximum if maximum > np.finfo(float).tiny else 1.0
@@ -200,6 +495,7 @@ def _draw_vector_panel(
         norm=PowerNorm(gamma=0.55, vmin=0.0, vmax=colour_maximum),
         zorder=1,
     )
+    _draw_cross_section_regions(ax, result, points)
 
     rotation = np.exp(1j * float(phase))
     first_phase = np.real(first * rotation)
@@ -208,6 +504,7 @@ def _draw_vector_panel(
     arrow_indices = _direction_arrow_indices(
         centroids,
         np.asarray(magnitude, dtype=np.float64),
+        cell_areas=np.asarray(cell_areas, dtype=np.float64),
     )
     if arrow_indices.size:
         selected_norm = instantaneous[arrow_indices]
@@ -235,7 +532,7 @@ def _draw_vector_panel(
             headwidth=3.2,
             headlength=4.2,
             alpha=0.93,
-            zorder=5,
+            zorder=7,
         )
     if mesh:
         ax.triplot(
@@ -243,7 +540,7 @@ def _draw_vector_panel(
             color="black",
             alpha=0.28,
             linewidth=0.42,
-            zorder=8,
+            zorder=4,
         )
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
@@ -286,6 +583,7 @@ def _draw_transverse_fields(
     electric_bar = _draw_vector_panel(
         field_axes[0],
         bars[0],
+        result=result,
         points=points,
         triangles=triangles,
         first=averages["Ex"],
@@ -297,6 +595,7 @@ def _draw_transverse_fields(
     magnetic_bar = _draw_vector_panel(
         field_axes[1],
         bars[1],
+        result=result,
         points=points,
         triangles=triangles,
         first=averages["Hx"],
