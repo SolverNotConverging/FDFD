@@ -11,13 +11,13 @@ dependence is ``exp(i k_y y)``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Callable, Mapping, TypeAlias
 import warnings
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import MatrixRankWarning, norm as sparse_norm
 from skfem import (
@@ -114,6 +114,20 @@ class MixedFEMSystem:
     parameters: MaxwellParameters
     physical_mesh: MeshTri
     length_scale: float = 1.0
+    internal_pec_facets: NDArray[np.int64] = field(
+        default_factory=lambda: np.empty(0, dtype=np.int64)
+    )
+
+    def __post_init__(self) -> None:
+        raw = np.asarray(self.internal_pec_facets)
+        if raw.ndim != 1 or (raw.size and raw.dtype.kind not in "iu"):
+            raise ValueError("internal_pec_facets must be a one-dimensional integer array.")
+        facets = np.unique(np.asarray(raw, dtype=np.int64))
+        if np.any(facets < 0) or np.any(facets >= self.basis.mesh.nfacets):
+            raise ValueError("internal_pec_facets contains an out-of-range facet index.")
+        if facets.size and np.any(self.basis.mesh.f2t[1, facets] < 0):
+            raise ValueError("internal_pec_facets must contain interior mesh facets only.")
+        object.__setattr__(self, "internal_pec_facets", facets)
 
     @property
     def ndofs(self) -> int:
@@ -123,9 +137,16 @@ class MixedFEMSystem:
 
     @property
     def pec_dofs(self) -> NDArray[np.integer]:
-        """Boundary DOFs imposing ``E_y = 0`` and ``E_t . t = 0``."""
+        """Outer and internal DOFs imposing zero tangential electric field."""
 
-        return self.basis.get_dofs().all()
+        outer = np.asarray(self.basis.get_dofs().all(), dtype=np.int64)
+        if not self.internal_pec_facets.size:
+            return outer
+        internal = np.asarray(
+            self.basis.get_dofs(facets=self.internal_pec_facets).all(),
+            dtype=np.int64,
+        )
+        return np.union1d(outer, internal)
 
     @property
     def dimensionless_k0(self) -> float:
@@ -355,6 +376,7 @@ def assemble_mixed_system(
     *,
     intorder: int = 4,
     length_scale: float = 1.0,
+    internal_pec_facets: ArrayLike = (),
 ) -> MixedFEMSystem:
     """Create the mixed basis and assemble its sparse Maxwell matrix.
 
@@ -362,6 +384,11 @@ def assemble_mixed_system(
     computational coordinate unit.  Supplying (for example) ``1 / k0``
     nondimensionalizes micron-scale meshes, keeping Nedelec and H1 blocks
     comparably scaled without changing the public SI material callbacks.
+
+    ``internal_pec_facets`` identifies conforming interior facets on which
+    both mixed-space tangential electric traces are constrained.  The normal
+    electric component remains free, as required for surface charge on an
+    infinitesimally thin PEC sheet.
     """
 
     length_scale = float(length_scale)
@@ -397,6 +424,7 @@ def assemble_mixed_system(
         parameters=parameters,
         physical_mesh=mesh,
         length_scale=length_scale,
+        internal_pec_facets=np.asarray(internal_pec_facets),
     )
 
 
@@ -425,7 +453,7 @@ def solve_homogeneous_pec(
     *,
     residual_tolerance: float = 1e-7,
 ) -> MixedFieldSolution:
-    """Solve with homogeneous PEC conditions on the complete outer boundary."""
+    """Solve with homogeneous PEC conditions on outer and registered facets."""
 
     if not np.isfinite(residual_tolerance) or residual_tolerance <= 0.0:
         raise ValueError("residual_tolerance must be finite and positive.")

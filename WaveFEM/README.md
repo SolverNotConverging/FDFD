@@ -14,7 +14,7 @@ The current MVP provides:
 
 - a mixed first-order Nedelec + continuous P1 Maxwell discretization;
 - fixed-frequency, fixed-`ky` full-vector lead modes;
-- a permittivity-contrast scattered-field source;
+- permittivity-contrast and released-background-PEC slot sources;
 - transformation-optics PMLs in `x` and `z`;
 - electromagnetic power-Gram modal projection;
 - S-parameters, sampled E/H fields, and structured power diagnostics;
@@ -117,7 +117,55 @@ result in memory. An existing result can be written later with
 
 See `examples/weak_index_perturbation.py`, `examples/slab_mode.py`, and
 `examples/oblique_ky.py` for runnable variants. The frequency-sweep workflow
-is shown in `examples/frequency_sweep.py`.
+is shown in `examples/frequency_sweep.py`; a grounded dielectric surface wave
+scattered by a finite ground-plane slot is in
+`examples/grounded_slab_slot.py`.
+
+## Grounded-slab PEC slot
+
+A zero-thickness ground plane inside the solve domain is a z-invariant
+background PEC sheet. Cut a finite opening only from the actual device:
+
+```python
+sim = wf.Scattering2D(
+    frequency=20.0e9,
+    ky=0.0,
+    x_span=(-12e-3, 20e-3),
+    z_span=(-30e-3, 30e-3),
+)
+sim.add_rectangle(
+    x=(0.0, 4e-3), z="all", eps=4.0,
+    background=True, name="dielectric_slab",
+)
+ground = sim.add_pec(
+    x=0.0, z="all", background=True, name="ground_plane",
+)
+sim.add_slot(pec=ground, z=(-1e-3, 1e-3), name="ground_slot")
+sim.add_pml(x=4e-3, z=6e-3)
+sim.set_monitors(left=-12e-3, right=12e-3)
+sim.mesh(max_element_size=1e-3)
+modes = sim.solve_modes(num_modes=1, neff_guess=1.8, num_elements=96)
+sim.set_incident_mode(modes[0])
+result = sim.run(h5_path="grounded_slab_slot.h5")
+```
+
+The mode port contains the complete PEC sheet. In the 2D actual solve the
+slot facets are released, and their two one-sided incident magnetic reactions
+drive the scattered field. This is a boundary source: a valid slot solve has
+`result.solve_info["source_active_fraction"] == 0` when no material changes,
+but `released_pec_facet_count > 0` and a nonzero scattered field. In the HDF5
+scene, the yellow ground line is split around the aperture.
+
+Run the example from the `WaveFEM` directory:
+
+```powershell
+conda run --name RF_Engineering_env python examples/grounded_slab_slot.py
+conda run --name RF_Engineering_env python examples/grounded_slab_slot.py --sweep
+```
+
+The first command writes `grounded_slab_slot.h5`. The second independently
+solves 19, 20, and 21 GHz and writes
+`grounded_slab_slot_sweep.h5`; both files open in `wavefem-viewer`.
 
 ## Domain layout
 
@@ -136,6 +184,30 @@ An open transverse structure additionally uses left/right x-PMLs. The
 background straight-guide profile continues into the z-PML, and the physical
 actual/background material contrast remains zero there; the PML is not an
 equivalent scattering source.
+
+## Material- and PEC-aware meshing
+
+`sim.mesh()` uses local physical-wavelength sizing by default. High-index
+dielectrics receive smaller triangles than the exterior, while a smooth
+distance field further refines the actual PEC sheets and slot rims:
+
+```python
+sim.mesh(
+    wavelength_elements=10,
+    dielectric_refinement_factor=0.5,
+    pec_refinement_factor=0.5,
+    pec_refinement_distance=1.5e-3,
+)
+```
+
+The dielectric factor scales non-exterior regions before applying their local
+wavelength ratio. The PEC factor is relative to the smallest material target;
+omit the distance to use an automatic transition width of three local target
+lengths. Material
+boundaries, PEC lines, slot endpoints, monitors, and PML interfaces remain
+mesh-conforming even when `refine_interfaces=False` disables the local size
+fields. See `API_REFERENCE.md` for the complete sizing rules and low-level
+`generate_mesh()` controls.
 
 ## Numerical formulation
 
@@ -162,6 +234,13 @@ L_{\mathrm{actual}}\mathbf E_{\mathrm{sc}}
 `result.E_scattered` and `result.E_total` are both retained. Permeability
 perturbations are rejected explicitly until the corresponding curl-contrast
 source is implemented.
+
+For a finite slot cut from a background PEC sheet, the material contrast is
+zero and the volume term above vanishes. WaveFEM instead releases the actual
+slot facets and assembles the doubled planar-screen reaction from the two
+one-sided incident magnetic traces. The remaining sheet facets retain
+homogeneous scattered-field PEC conditions because the background mode
+already has zero tangential electric field there.
 
 The one-dimensional lead solve uses the full-vector quadratic eigenproblem
 

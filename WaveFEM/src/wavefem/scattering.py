@@ -16,7 +16,15 @@ from .constants import EPSILON_0, ETA_0, MU_0
 from .exceptions import ConfigurationError, ModeProjectionError, ModeSolverError
 from .fem import MaxwellParameters, assemble_mixed_system, evaluate_diagonal_coefficient
 from .frequency import Frequency, resolve_frequency
-from .geometry import Circle, GeometryModel, Polygon, Rectangle, Region
+from .geometry import (
+    Circle,
+    GeometryModel,
+    PECSlot,
+    PECSheet,
+    Polygon,
+    Rectangle,
+    Region,
+)
 from .incident import IncidentMode
 from .materials import Material
 from .mesh import Mesh2D, generate_mesh
@@ -199,6 +207,8 @@ class Scattering2D:
             # Regions and their shape/material records are immutable; copy the
             # list so sweep points cannot mutate the source simulation.
             clone.geometry.regions = list(self.geometry.regions)
+            clone.geometry.pec_sheets = list(self.geometry.pec_sheets)
+            clone.geometry.pec_slots = list(self.geometry.pec_slots)
         clone.pml = self.pml
         clone.left_monitor = self.left_monitor
         clone.right_monitor = self.right_monitor
@@ -214,6 +224,15 @@ class Scattering2D:
         if self._material_actual is not None:
             raise ConfigurationError(
                 "Geometry primitives cannot be mixed with from_material_function callbacks."
+            )
+
+    def _validate_integrated_pec_geometry(self) -> None:
+        unsupported = [sheet.name for sheet in self.geometry.pec_sheets if not sheet.background]
+        if unsupported:
+            raise ConfigurationError(
+                "Scattering2D supports z-invariant background PEC sheets only; "
+                "actual-only PEC sheets require a nonhomogeneous boundary source. "
+                f"Unsupported sheet(s): {', '.join(unsupported)}."
             )
 
     def add_rectangle(
@@ -287,6 +306,56 @@ class Scattering2D:
         )
         self._invalidate()
         return region
+
+    def add_pec(
+        self,
+        *,
+        x: float,
+        z: Literal["all"] = "all",
+        background: bool = True,
+        name: str | None = None,
+    ) -> PECSheet:
+        """Add a z-invariant background PEC sheet at constant x.
+
+        The ideal sheet has zero thickness and is represented by conforming
+        interior mesh facets.  It belongs to both the unperturbed lead and the
+        actual device until finite openings are cut with :meth:`add_slot`.
+        Actual-only PEC insertion is intentionally rejected because it would
+        require a different nonhomogeneous scattered-field boundary source.
+        """
+
+        self._require_region_geometry()
+        if not isinstance(background, (bool, np.bool_)) or not bool(background):
+            raise ConfigurationError(
+                "Scattering2D.add_pec currently supports background=True only."
+            )
+        sheet = self.geometry.add_pec(
+            x=x,
+            z=z,
+            background=True,
+            name=name,
+        )
+        self._invalidate()
+        return sheet
+
+    def add_slot(
+        self,
+        *,
+        pec: PECSheet | str,
+        z: Sequence[float],
+        name: str | None = None,
+    ) -> PECSlot:
+        """Cut a finite slot from a background PEC sheet in the actual device.
+
+        The background guide retains the complete PEC sheet for modal
+        excitation.  In the actual solve, facets inside ``z`` are released and
+        driven by the two one-sided incident magnetic reactions.
+        """
+
+        self._require_region_geometry()
+        slot = self.geometry.add_slot(pec=pec, z=z, name=name)
+        self._invalidate()
+        return slot
 
     def add_pml(
         self,
@@ -411,6 +480,14 @@ class Scattering2D:
                 "right wave port",
             ),
         ]
+        lines.extend(
+            SceneLine(
+                "pec",
+                ((segment.x, segment.z[0]), (segment.x, segment.z[1])),
+                segment.name,
+            )
+            for segment in self.geometry.pec_segments(profile="actual")
+        )
         pml_x, pml_z = self.pml.interfaces(self.x_span, self.z_span)
         lines.extend(
             SceneLine("pml", ((x, zmin), (x, zmax)), "x-PML interface")
@@ -432,10 +509,28 @@ class Scattering2D:
     def _perturbation_z_bounds(self) -> tuple[float, float] | None:
         if self._material_actual is not None:
             return None
-        if not self.geometry.perturbations:
-            return None
         bounds = [_shape_bounds(region)[1] for region in self.geometry.perturbations]
+        bounds.extend(slot.z for slot in self.geometry.pec_slots)
+        if not bounds:
+            return None
         return min(item[0] for item in bounds), max(item[1] for item in bounds)
+
+    def _pec_coordinates_at(
+        self,
+        z: float,
+        *,
+        profile: Literal["actual", "background"],
+    ) -> tuple[float, ...]:
+        tolerance = 64.0 * np.finfo(float).eps * max(
+            1.0, abs(z), *(abs(value) for value in self.z_span)
+        )
+        return tuple(
+            sorted(
+                segment.x
+                for segment in self.geometry.pec_segments(profile=profile)
+                if segment.z[0] - tolerance <= z <= segment.z[1] + tolerance
+            )
+        )
 
     def _choose_monitors(self) -> None:
         _, (z0, z1) = self._interior_spans()
@@ -461,6 +556,12 @@ class Scattering2D:
             background, _ = self._physical_material(sample_x, np.full_like(sample_x, monitor), profile="background")
             if not np.allclose(actual, background, rtol=1e-12, atol=1e-14):
                 raise ConfigurationError(f"The {label} monitor is not inside a uniform lead.")
+            if self._pec_coordinates_at(monitor, profile="actual") != self._pec_coordinates_at(
+                monitor, profile="background"
+            ):
+                raise ConfigurationError(
+                    f"The {label} monitor intersects a PEC boundary perturbation."
+                )
 
     def _maximum_index(self) -> float:
         if self._material_actual is None:
@@ -478,16 +579,65 @@ class Scattering2D:
         max_element_size: float | None = None,
         wavelength_elements: int = 10,
         refine_interfaces: bool = True,
+        dielectric_refinement_factor: float = 0.5,
+        pec_refinement_factor: float = 0.5,
+        pec_refinement_distance: float | None = None,
     ) -> Mesh2D:
         """Generate the Gmsh mesh and reveal the selected maximum edge size.
 
-        Material and PML boundaries are always conforming.  The
-        ``refine_interfaces`` flag is reserved for a future local size field;
-        it never removes interfaces required by monitors or power accounting.
+        Material, PEC, and PML boundaries are always conforming.  With
+        ``refine_interfaces=True``, local wavelength sizing refines dielectric
+        regions and a distance field refines the neighbourhood of actual PEC.
         """
 
         if not isinstance(refine_interfaces, bool):
             raise ConfigurationError("refine_interfaces must be a boolean.")
+        if isinstance(dielectric_refinement_factor, bool):
+            raise ConfigurationError(
+                "dielectric_refinement_factor must be in the interval (0, 1]."
+            )
+        try:
+            dielectric_factor = float(dielectric_refinement_factor)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError(
+                "dielectric_refinement_factor must be in the interval (0, 1]."
+            ) from exc
+        if not np.isfinite(dielectric_factor) or not 0.0 < dielectric_factor <= 1.0:
+            raise ConfigurationError(
+                "dielectric_refinement_factor must be in the interval (0, 1]."
+            )
+        if isinstance(pec_refinement_factor, bool):
+            raise ConfigurationError(
+                "pec_refinement_factor must be in the interval (0, 1]."
+            )
+        try:
+            pec_factor = float(pec_refinement_factor)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError(
+                "pec_refinement_factor must be in the interval (0, 1]."
+            ) from exc
+        if not np.isfinite(pec_factor) or not 0.0 < pec_factor <= 1.0:
+            raise ConfigurationError(
+                "pec_refinement_factor must be in the interval (0, 1]."
+            )
+        if pec_refinement_distance is None:
+            pec_distance = None
+        else:
+            if isinstance(pec_refinement_distance, bool):
+                raise ConfigurationError(
+                    "pec_refinement_distance must be finite and positive."
+                )
+            try:
+                pec_distance = float(pec_refinement_distance)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ConfigurationError(
+                    "pec_refinement_distance must be finite and positive."
+                ) from exc
+            if not np.isfinite(pec_distance) or pec_distance <= 0.0:
+                raise ConfigurationError(
+                    "pec_refinement_distance must be finite and positive."
+                )
+        self._validate_integrated_pec_geometry()
         try:
             valid_density = (
                 not isinstance(wavelength_elements, bool)
@@ -499,11 +649,30 @@ class Scattering2D:
         if not valid_density:
             raise ConfigurationError("wavelength_elements must be an integer of at least four.")
         self._choose_monitors()
-        derived = self.frequency.wavelength / (wavelength_elements * max(self._maximum_index(), 1.0))
+        maximum_index = max(self._maximum_index(), 1.0)
+        sizing_index = maximum_index
+        if self._material_actual is None and refine_interfaces:
+            exterior = self.geometry.exterior
+            local_reference_index = max(
+                float(np.sqrt(abs(exterior.eps_r * exterior.mu_r))),
+                1.0,
+            )
+        else:
+            # Callback materials cannot be assigned reliable local Gmsh fields,
+            # so retain conservative global sizing by their sampled maximum.
+            local_reference_index = maximum_index
+        derived = self.frequency.wavelength / (wavelength_elements * sizing_index)
         selected = derived if max_element_size is None else min(float(max_element_size), derived)
         if not np.isfinite(selected) or selected <= 0.0:
             raise ConfigurationError("max_element_size must be finite and positive.")
-        self._mesh_size = selected
+        self._mesh_size = selected * (
+            min(
+                1.0,
+                dielectric_factor * local_reference_index / maximum_index,
+            )
+            if refine_interfaces and self._material_actual is None
+            else 1.0
+        )
         for axis, pml in (("x", self.pml.x), ("z", self.pml.z)):
             if pml is not None and pml.thickness < 3.0 * selected:
                 warnings.warn(
@@ -537,6 +706,11 @@ class Scattering2D:
             # conforming in the Gmsh geometry.
             x_partitions=x_partitions,
             z_partitions=z_partitions,
+            refine_dielectrics=refine_interfaces,
+            dielectric_refinement_factor=dielectric_factor,
+            refine_pec=refine_interfaces,
+            pec_refinement_factor=pec_factor,
+            pec_refinement_distance=pec_distance,
         )
         self.modes = None
         self.incident = None
@@ -544,6 +718,7 @@ class Scattering2D:
         return self.mesh_data
 
     def _cross_section(self) -> CrossSection:
+        self._validate_integrated_pec_geometry()
         if self._material_background is not None:
             raise ConfigurationError(
                 "Mode solving from arbitrary material callbacks requires an explicit CrossSection."
@@ -578,6 +753,9 @@ class Scattering2D:
             if not isinstance(region.shape, Rectangle):
                 raise ConfigurationError("Background guide regions must be z-invariant rectangles.")
             cross_section.add_layer(x=region.shape.x, material=region.material, name=region.name)
+        for sheet in self.geometry.pec_sheets:
+            if sheet.background:
+                cross_section.add_pec(x=sheet.x, name=sheet.name)
         return cross_section
 
     def _is_bound_guided_mode(self, mode: Mode) -> bool:
@@ -604,7 +782,10 @@ class Scattering2D:
         return (
             mode.is_propagating
             and mode.neff.real > light_line + margin
-            and abs(mode.neff.imag) <= 1e-7 * max(1.0, abs(mode.neff.real))
+            # A weakly confined surface mode can overlap the finite PML enough
+            # to acquire a small positive numerical attenuation.  Keep such a
+            # mode while rejecting the much more strongly damped PML spectrum.
+            and abs(mode.neff.imag) <= 1e-3 * max(1.0, abs(mode.neff.real))
         )
 
     def set_modes(self, modes: ModeSet) -> ModeSet:
@@ -892,6 +1073,7 @@ class Scattering2D:
 
         if self.mesh_data is None:
             raise ConfigurationError("mesh() must be called before solve().")
+        self._validate_integrated_pec_geometry()
         if (
             self.modes is None
             or self.incident is None
@@ -917,12 +1099,15 @@ class Scattering2D:
             parameters,
             intorder=self.solver_options.quadrature_order,
             length_scale=length_scale,
+            internal_pec_facets=self.mesh_data.actual_pec_facets,
         )
         scattered = solve_scattered_pec(
             system,
             eps_background=self._eps_background,
             mu_background=self._mu_background,
             incident=self.incident,
+            released_pec_facets=self.mesh_data.released_pec_facets,
+            incident_magnetic=self.incident.H,
             residual_tolerance=self.solver_options.tolerance,
         )
         coefficients = scattered.field.coefficients
@@ -1145,6 +1330,7 @@ class Scattering2D:
                 **dict(scattered.field.solve_info),
                 "length_scale": length_scale,
                 "source_active_fraction": scattered.source.active_quadrature_fraction,
+                "released_pec_facet_count": scattered.source.released_pec_facet_count,
                 "left_projection_residual": left_projection.relative_residual,
                 "right_projection_residual": right_projection.relative_residual,
                 "projected_incoming_amplitude": projected_incoming,

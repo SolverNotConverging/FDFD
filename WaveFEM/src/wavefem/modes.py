@@ -95,6 +95,14 @@ class Layer:
     name: str
 
 
+@dataclass(frozen=True, slots=True)
+class PECBoundary:
+    """One zero-thickness, z-invariant internal PEC sheet."""
+
+    x: float
+    name: str
+
+
 @dataclass(slots=True)
 class CrossSection:
     """A one-dimensional material profile for a z-uniform lead.
@@ -112,6 +120,10 @@ class CrossSection:
     pml:
         Optional symmetric transverse PML placed inside both ends of
         ``x_span``.  The PML is terminated by the explicit outer PEC wall.
+    pec_boundaries:
+        Zero-thickness internal PEC sheets at physical x coordinates.  Each
+        sheet constrains tangential ``E_y`` and ``E_z`` while retaining the
+        normal ``E_x`` trace on both sides.
     """
 
     x_span: tuple[float, float]
@@ -119,6 +131,7 @@ class CrossSection:
     boundary: BoundaryKind | None = None
     layers: list[Layer] = field(default_factory=list)
     pml: PML | None = None
+    pec_boundaries: list[PECBoundary] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.x_span = _finite_span(self.x_span, "x_span")
@@ -138,6 +151,57 @@ class CrossSection:
                 raise ConfigurationError(
                     "Two transverse PMLs leave no non-PML cross-section interior."
                 )
+        raw_pec_boundaries = tuple(self.pec_boundaries)
+        self.pec_boundaries = []
+        for item in raw_pec_boundaries:
+            if not isinstance(item, PECBoundary):
+                raise ConfigurationError(
+                    "pec_boundaries must contain PECBoundary instances; "
+                    "prefer CrossSection.add_pec()."
+                )
+            self.add_pec(x=item.x, name=item.name)
+
+    def add_pec(self, *, x: float, name: str | None = None) -> PECBoundary:
+        """Add and return a zero-thickness internal PEC sheet.
+
+        The coordinate must lie strictly inside :attr:`x_span`.  Mode
+        assembly removes the nodal ``E_y`` and ``E_z`` degrees of freedom at
+        the conforming sheet node.  Cellwise ``E_x`` remains free because it
+        is normal to the sheet and may be discontinuous across it.
+        """
+
+        if isinstance(x, (bool, np.bool_)):
+            raise ConfigurationError("PEC x must be a finite real coordinate.")
+        try:
+            coordinate = float(x)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError("PEC x must be a finite real coordinate.") from exc
+        if not np.isfinite(coordinate):
+            raise ConfigurationError("PEC x must be a finite real coordinate.")
+        tolerance = 64.0 * np.finfo(float).eps * max(
+            1.0, *(abs(value) for value in self.x_span)
+        )
+        if not self.x_span[0] + tolerance < coordinate < self.x_span[1] - tolerance:
+            raise ConfigurationError(
+                "An internal PEC x coordinate must lie strictly inside x_span; "
+                f"got x={coordinate!r} for x_span={self.x_span}."
+            )
+        if any(
+            abs(coordinate - existing.x) <= tolerance
+            for existing in self.pec_boundaries
+        ):
+            raise ConfigurationError(
+                f"An internal PEC boundary already exists at x={coordinate!r}."
+            )
+        boundary_name = name or f"pec_{len(self.pec_boundaries) + 1}"
+        if not boundary_name or any(
+            existing.name == boundary_name for existing in self.pec_boundaries
+        ):
+            raise ConfigurationError(f"PEC boundary name {boundary_name!r} is not unique.")
+        result = PECBoundary(coordinate, boundary_name)
+        self.pec_boundaries.append(result)
+        self.pec_boundaries.sort(key=lambda item: item.x)
+        return result
 
     def add_layer(
         self,
@@ -175,9 +239,13 @@ class CrossSection:
 
     @property
     def interfaces(self) -> tuple[float, ...]:
-        """Sorted material-interface coordinates, including outer bounds."""
+        """Sorted material, PEC, and PML interfaces, including outer bounds."""
 
-        points = {self.x_span[0], self.x_span[1]}
+        points = {
+            self.x_span[0],
+            self.x_span[1],
+            *(boundary.x for boundary in self.pec_boundaries),
+        }
         for layer in self.layers:
             points.update(layer.x)
         if self.pml is not None:
@@ -867,18 +935,58 @@ class ModeSolver:
         ey_slice = slice(nx, nx + nt)
         ez_slice = slice(nx + nt, nx + 2 * nt)
         full_size = nx + 2 * nt
+        interior = np.arange(1, nt - 1, dtype=np.int64)
+        pec_coordinates = np.asarray(
+            [item.x for item in self.cross_section.pec_boundaries], dtype=float
+        )
+        pec_nodes = np.asarray(
+            [int(np.searchsorted(x_nodes, coordinate)) for coordinate in pec_coordinates],
+            dtype=np.int64,
+        )
+        coordinate_tolerance = (
+            64.0
+            * np.finfo(float).eps
+            * max(1.0, float(np.max(np.abs(x_nodes))))
+        )
+        if pec_nodes.size and not np.allclose(
+            x_nodes[pec_nodes],
+            pec_coordinates,
+            rtol=0.0,
+            atol=coordinate_tolerance,
+        ):
+            raise ModeSolverError(
+                "The mode mesh does not conform to an internal PEC boundary."
+            )
+
+        constrained_tangential = pec_nodes
         if boundary == "pec":
-            interior = np.arange(1, nt - 1, dtype=np.int64)
-            free_dofs = np.concatenate(
-                (
-                    np.arange(nx, dtype=np.int64),
-                    nx + interior,
-                    nx + nt + interior,
+            constrained_tangential = np.unique(
+                np.concatenate(
+                    (
+                        np.asarray((0, nt - 1), dtype=np.int64),
+                        constrained_tangential,
+                    )
                 )
             )
-        else:
-            interior = np.arange(1, nt - 1, dtype=np.int64)
-            free_dofs = np.arange(full_size, dtype=np.int64)
+        free_tangential = np.setdiff1d(
+            np.arange(nt, dtype=np.int64),
+            constrained_tangential,
+            assume_unique=True,
+        )
+        free_dofs = np.concatenate(
+            (
+                # E_x is normal to x=constant PEC sheets, so every one-sided
+                # P0 trace remains an unconstrained unknown.
+                np.arange(nx, dtype=np.int64),
+                nx + free_tangential,
+                nx + nt + free_tangential,
+            )
+        )
+        divergence_test_dofs = np.setdiff1d(
+            interior,
+            pec_nodes,
+            assume_unique=True,
+        )
 
         reduced = tuple(
             matrix[free_dofs][:, free_dofs].tocsr() for matrix in (a0, a1, a2)
@@ -897,7 +1005,7 @@ class ModeSolver:
             divergence_x=dpx_tx.tocsr(),
             epsilon_mass=mpy_t.tocsr(),
             epsilon_mass_z=mpz_t.tocsr(),
-            divergence_test_dofs=interior,
+            divergence_test_dofs=divergence_test_dofs,
             frequency=self.frequency,
             ky=self.ky,
             eta=eta,
@@ -1312,4 +1420,5 @@ __all__ = [
     "ModeFEMSystem",
     "ModeSet",
     "ModeSolver",
+    "PECBoundary",
 ]

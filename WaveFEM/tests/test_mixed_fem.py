@@ -180,6 +180,35 @@ def test_si_mesh_nondimensionalization_reproduces_unit_problem() -> None:
     assert relative < 1e-13
 
 
+def test_internal_pec_facets_extend_the_constrained_dof_set() -> None:
+    mesh = _mesh(4)
+    facets = mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.5))
+    system = assemble_mixed_system(
+        mesh,
+        MaxwellParameters(k0=_K0, ky=_KY, eps_r=_EPS_R),
+        internal_pec_facets=facets,
+    )
+
+    outer = np.asarray(system.basis.get_dofs().all(), dtype=np.int64)
+    sheet = np.asarray(
+        system.basis.get_dofs(facets=facets).all(), dtype=np.int64
+    )
+    np.testing.assert_array_equal(system.pec_dofs, np.union1d(outer, sheet))
+    assert np.setdiff1d(sheet, outer).size > 0
+    assert np.intersect1d(sheet, system.basis.split_indices()[0]).size > 0
+    assert np.intersect1d(sheet, system.basis.split_indices()[1]).size > 0
+
+
+def test_internal_pec_facets_must_be_interior_integer_indices() -> None:
+    mesh = _mesh(2)
+    parameters = MaxwellParameters(k0=_K0, eps_r=_EPS_R)
+    boundary = mesh.boundary_facets()[:1]
+    with pytest.raises(ValueError, match="interior mesh facets"):
+        assemble_mixed_system(mesh, parameters, internal_pec_facets=boundary)
+    with pytest.raises(ValueError, match="integer array"):
+        assemble_mixed_system(mesh, parameters, internal_pec_facets=[1.5])
+
+
 def test_manufactured_solution_converges_in_mixed_space() -> None:
     parameters = MaxwellParameters(k0=_K0, ky=_KY, eps_r=_EPS_R, mu_r=1.0)
     combined_errors: list[float] = []

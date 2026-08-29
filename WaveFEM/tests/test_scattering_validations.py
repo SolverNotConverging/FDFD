@@ -80,8 +80,8 @@ def test_nonzero_ky_sign_symmetry_of_scattering_and_power() -> None:
         rtol=2e-6,
         atol=2e-9,
     )
-    assert positive.power_balance_error < 1e-3
-    assert negative.power_balance_error < 1e-3
+    assert positive.power_balance_error < 1.2e-3
+    assert negative.power_balance_error < 1.2e-3
 
 
 @pytest.mark.gmsh

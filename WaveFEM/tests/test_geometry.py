@@ -37,3 +37,66 @@ def test_region_names_and_physical_tags_are_stable() -> None:
     np.testing.assert_array_equal(
         geometry.region_tag_at(np.array([1.0, 0.4, 0.0]), np.zeros(3)), [1, 2, 3]
     )
+
+
+def test_background_pec_sheet_and_actual_slot_profiles_are_distinct() -> None:
+    geometry = GeometryModel((-1.0, 1.0), (-4.0, 4.0), Material())
+    ground = geometry.add_pec(
+        x=-0.25,
+        z="all",
+        background=True,
+        name="ground",
+    )
+    first = geometry.add_slot(pec=ground, z=(-0.6, 0.6), name="main_slot")
+    second = geometry.add_slot(pec="ground", z=(1.0, 1.4), name="side_slot")
+
+    assert ground.x == pytest.approx(-0.25)
+    assert geometry.slots_in(ground) == (first, second)
+    assert [segment.z for segment in geometry.pec_segments(profile="background")] == [
+        (-4.0, 4.0)
+    ]
+    assert [segment.z for segment in geometry.pec_segments(profile="actual")] == [
+        (-4.0, -0.6),
+        (0.6, 1.0),
+        (1.4, 4.0),
+    ]
+
+
+def test_background_pec_sheet_must_be_z_invariant() -> None:
+    geometry = GeometryModel((-1.0, 1.0), (-2.0, 2.0), Material())
+    with pytest.raises(ConfigurationError, match="z-invariant"):
+        geometry.add_pec(
+            x=0.0,
+            z=(-1.0, 1.0),
+            background=True,
+        )
+
+
+def test_pec_slot_must_be_compact_disjoint_and_on_background_sheet() -> None:
+    geometry = GeometryModel((-1.0, 1.0), (-2.0, 2.0), Material())
+    ground = geometry.add_pec(x=0.0, background=True, name="ground")
+    geometry.add_slot(pec=ground, z=(-0.5, 0.5), name="first")
+
+    with pytest.raises(ConfigurationError, match="compact"):
+        geometry.add_slot(pec=ground, z=(-2.0, -1.5))
+    with pytest.raises(ConfigurationError, match="overlaps or touches"):
+        geometry.add_slot(pec=ground, z=(0.5, 0.8))
+
+    finite = geometry.add_pec(
+        x=0.5,
+        z=(-1.0, 1.0),
+        background=False,
+        name="actual_only",
+    )
+    with pytest.raises(ConfigurationError, match="background PEC"):
+        geometry.add_slot(pec=finite, z=(-0.2, 0.2))
+
+
+def test_internal_pec_cannot_duplicate_the_numerical_outer_boundary() -> None:
+    geometry = GeometryModel((-1.0, 1.0), (-2.0, 2.0), Material())
+    with pytest.raises(ConfigurationError, match="strictly inside x_span"):
+        geometry.add_pec(
+            x=-1.0,
+            background=True,
+            name="outer",
+        )

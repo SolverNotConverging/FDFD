@@ -1,12 +1,14 @@
 """Scattered-field equivalent-source assembly.
 
-For unchanged permeability, the relative-unit equation is
+For unchanged permeability, the relative-unit volume equation is
 
 ``L_actual E_sc = k0**2 (eps_actual - eps_background) E_inc``.
 
 The material difference is evaluated directly at quadrature points so its
 support is exactly the user-defined perturbation rather than a projected or
-smoothed approximation.
+smoothed approximation.  Removing part of a background PEC sheet is a
+boundary perturbation instead.  Its load is assembled from the two one-sided
+incident magnetic tractions on the released mesh facets.
 """
 
 from __future__ import annotations
@@ -15,8 +17,11 @@ from dataclasses import dataclass
 from typing import Callable, TypeAlias
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
+from skfem import InteriorFacetBasis, LinearForm, asm
 
+from .constants import ETA_0
+from .exceptions import ConfigurationError
 from .fem import (
     ConstitutiveCoefficient,
     MixedFEMSystem,
@@ -25,7 +30,7 @@ from .fem import (
     evaluate_diagonal_coefficient,
     solve_homogeneous_pec,
 )
-from .exceptions import ConfigurationError
+from .operators import electric_field_vector
 
 
 IncidentField: TypeAlias = Callable[
@@ -66,6 +71,7 @@ class EquivalentSource:
     load: NDArray[np.complex128]
     active_quadrature_fraction: float
     maximum_delta_eps: float
+    released_pec_facet_count: int = 0
 
     @property
     def is_zero(self) -> bool:
@@ -80,14 +86,123 @@ class ScatteredFieldSolution:
     source: EquivalentSource
 
 
+@LinearForm(dtype=np.complex128)
+def _released_pec_form(vt: object, vy: object, w: object) -> object:
+    test_field = electric_field_vector(vt, vy)
+    return np.sum(np.conj(test_field) * w.traction_values, axis=0)
+
+
+def _validated_interior_facets(
+    system: MixedFEMSystem,
+    facets: ArrayLike,
+) -> NDArray[np.int64]:
+    raw = np.asarray(facets)
+    if raw.ndim != 1 or (raw.size and raw.dtype.kind not in "iu"):
+        raise ValueError("released_pec_facets must be a one-dimensional integer array.")
+    result = np.unique(np.asarray(raw, dtype=np.int64))
+    if np.any(result < 0) or np.any(result >= system.basis.mesh.nfacets):
+        raise ValueError("released_pec_facets contains an out-of-range facet index.")
+    if result.size and np.any(system.basis.mesh.f2t[1, result] < 0):
+        raise ValueError("released_pec_facets must contain interior mesh facets only.")
+    if np.intersect1d(result, system.internal_pec_facets).size:
+        raise ValueError(
+            "A released PEC facet cannot also be constrained as an actual PEC facet."
+        )
+    return result
+
+
+def assemble_released_pec_source(
+    system: MixedFEMSystem,
+    *,
+    released_pec_facets: ArrayLike,
+    incident_magnetic: IncidentField,
+) -> NDArray[np.complex128]:
+    """Assemble the aperture load created by removing background PEC facets.
+
+    The background guide is split into the two subdomains adjacent to each
+    zero-thickness PEC sheet.  On a released facet, the scattered-field weak
+    load is the negative sum of their incident reactions,
+
+    ``-2i*k0*L*ETA_0 * integral(conj(V) . (H_inc x n)) ds``.
+
+    Here ``n`` is the outward normal of each adjacent element, ``L`` is the
+    system length scale, and both one-sided magnetic traces are evaluated by
+    probing infinitesimally inside their respective elements.  The factor two
+    is the planar PEC image-equivalence factor for releasing the screen into
+    the two-sided solve domain.  Consequently a PEC slot can scatter even when
+    actual and background permittivities are identical everywhere.
+    """
+
+    if not callable(incident_magnetic):
+        raise ValueError("incident_magnetic must be callable.")
+    facets = _validated_interior_facets(system, released_pec_facets)
+    load = np.zeros(system.ndofs, dtype=np.complex128)
+    if not facets.size:
+        return load
+
+    for side in (0, 1):
+        facet_basis = InteriorFacetBasis(
+            system.basis.mesh,
+            system.basis.elem,
+            facets=facets,
+            side=side,
+            quadrature=system.basis.quadrature,
+        )
+        coordinates = np.asarray(facet_basis.global_coordinates(), dtype=float)
+        # scikit-fem stores the side-0 outward orientation for both interior
+        # traces.  Reverse it for side 1 to obtain that element's outward n.
+        normal = np.asarray(facet_basis.normals, dtype=float)
+        if side == 1:
+            normal = -normal
+        element_size = np.asarray(facet_basis.mesh_parameters(), dtype=float)
+        roundoff = 256.0 * np.finfo(float).eps * np.maximum(
+            1.0, np.max(np.abs(coordinates), axis=0)
+        )
+        trace_offset = np.maximum(1e-9 * element_size, roundoff)
+        probe = coordinates - normal * trace_offset[np.newaxis, ...]
+        magnetic = _incident_values(
+            incident_magnetic,
+            system.length_scale * probe[0],
+            system.length_scale * probe[1],
+        )
+        nx, nz = normal[0], normal[1]
+        hx, hy, hz = magnetic
+        magnetic_cross_normal = np.asarray(
+            (hy * nz, hz * nx - hx * nz, -hy * nx),
+            dtype=np.complex128,
+        )
+        traction = (
+            -2j
+            * system.dimensionless_k0
+            * ETA_0
+            * magnetic_cross_normal
+        )
+        load += np.asarray(
+            asm(
+                _released_pec_form,
+                facet_basis,
+                traction_values=traction,
+            ),
+            dtype=np.complex128,
+        )
+    return load
+
+
 def assemble_equivalent_source(
     system: MixedFEMSystem,
     *,
     eps_background: ConstitutiveCoefficient,
     mu_background: ConstitutiveCoefficient = 1.0,
     incident: IncidentField,
+    released_pec_facets: ArrayLike = (),
+    incident_magnetic: IncidentField | None = None,
 ) -> EquivalentSource:
-    """Assemble ``k0^2 Delta-eps E_inc`` for unchanged permeability."""
+    """Assemble volume contrast and optional released-PEC aperture loads.
+
+    ``incident`` supplies electric fields for the volume term.  When
+    ``released_pec_facets`` is nonempty, ``incident_magnetic`` must supply the
+    corresponding one-sided-capable magnetic field callback.
+    """
 
     coordinates = system.physical_coordinates()
     x, z = coordinates[0], coordinates[1]
@@ -130,12 +245,24 @@ def assemble_equivalent_source(
             * _incident_values(incident, x_request, z_request)
         )
 
+    facets = _validated_interior_facets(system, released_pec_facets)
     load = assemble_load_vector(system.basis, source_at_quadrature)
+    if facets.size:
+        if incident_magnetic is None:
+            raise ConfigurationError(
+                "incident_magnetic is required when released_pec_facets is nonempty."
+            )
+        load += assemble_released_pec_source(
+            system,
+            released_pec_facets=facets,
+            incident_magnetic=incident_magnetic,
+        )
     active = np.any(np.abs(delta) > 0.0, axis=0)
     return EquivalentSource(
         load=np.asarray(load, dtype=np.complex128),
         active_quadrature_fraction=float(np.count_nonzero(active) / active.size),
         maximum_delta_eps=float(np.max(np.abs(delta))),
+        released_pec_facet_count=int(facets.size),
     )
 
 
@@ -145,15 +272,19 @@ def solve_scattered_pec(
     eps_background: ConstitutiveCoefficient,
     mu_background: ConstitutiveCoefficient = 1.0,
     incident: IncidentField,
+    released_pec_facets: ArrayLike = (),
+    incident_magnetic: IncidentField | None = None,
     residual_tolerance: float = 1e-7,
 ) -> ScatteredFieldSolution:
-    """Solve the scattered field with homogeneous outer PEC truncation."""
+    """Solve with homogeneous actual PEC and optional released-background PEC."""
 
     source = assemble_equivalent_source(
         system,
         eps_background=eps_background,
         mu_background=mu_background,
         incident=incident,
+        released_pec_facets=released_pec_facets,
+        incident_magnetic=incident_magnetic,
     )
     field = solve_homogeneous_pec(
         system,
@@ -168,5 +299,6 @@ __all__ = [
     "IncidentField",
     "ScatteredFieldSolution",
     "assemble_equivalent_source",
+    "assemble_released_pec_source",
     "solve_scattered_pec",
 ]

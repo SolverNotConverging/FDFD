@@ -137,7 +137,8 @@ The latter four are `None` until the corresponding workflow stage completes.
 
 The integrated API accepts passive physical materials, requires lossless
 uniform leads for modal power projection, supports compact material loss,
-and supports permittivity perturbations only.
+and supports two perturbation types: volume permittivity contrast and finite
+slots released from z-invariant zero-thickness background PEC sheets.
 
 #### `Scattering2D.from_material_function`
 
@@ -276,6 +277,60 @@ Adds a finite polygonal perturbation. `points` contains at least three
 ordered `(x, z)` vertices in metres. The polygon must lie inside the domain.
 Self-intersection is not repaired or inferred; provide a simple polygon.
 
+#### `add_pec`
+
+```python
+sim.add_pec(
+    *,
+    x: float,
+    z: Literal["all"] = "all",
+    background: bool = True,
+    name: str | None = None,
+) -> wavefem.geometry.PECSheet
+```
+
+Adds an ideal zero-thickness PEC sheet at constant x and returns its immutable
+`PECSheet` record. Coordinates are in metres. The sheet must lie strictly
+inside `x_span`; numerical outer PEC walls already exist and are not geometry
+objects. In the integrated solver the sheet must be a z-invariant background
+feature, so `z="all"` and `background=True` are required. It is therefore
+present in both the modal background and the actual device before slots are
+cut. `background=False` is rejected explicitly because inserting an
+actual-only PEC would require a different nonhomogeneous scattered-field
+boundary source.
+
+The mesh conforms to the sheet. Its Nedelec tangential edge DOFs and nodal
+`E_y` DOFs are constrained, while normal `E_x` remains free and may jump
+across the two faces. The same coordinate is added to the one-dimensional
+wave-port cross-section. Adding a sheet invalidates existing mesh, modes, and
+incident state.
+
+#### `add_slot`
+
+```python
+sim.add_slot(
+    *,
+    pec: wavefem.geometry.PECSheet | str,
+    z: Sequence[float],
+    name: str | None = None,
+) -> wavefem.geometry.PECSlot
+```
+
+Cuts a finite opening from the actual-device copy of a background PEC sheet.
+`pec` is either the exact `PECSheet` returned by this simulation's `add_pec`
+or its unique name. `z=(z_min, z_max)` is a finite, strictly increasing span
+in metres that must lie strictly inside the sheet; slots on one sheet may not
+overlap or touch. The background profile deliberately retains the complete
+sheet, so its lead modes remain z-invariant.
+
+Meshing inserts both slot endpoints as conforming partitions. Facets inside
+the opening are omitted from the actual PEC constraint set and recorded as
+released-background facets. During `solve`, their doubled two-sided magnetic
+reaction is assembled from the incident mode. This boundary source remains
+nonzero even when actual and background permittivities are identical
+everywhere. Adding a slot invalidates existing mesh, modes, and incident
+state.
+
 #### `add_pml`
 
 ```python
@@ -325,22 +380,44 @@ sim.mesh(
     max_element_size: float | None = None,
     wavelength_elements: int = 10,
     refine_interfaces: bool = True,
+    dielectric_refinement_factor: float = 0.5,
+    pec_refinement_factor: float = 0.5,
+    pec_refinement_distance: float | None = None,
 ) -> wavefem.mesh.Mesh2D
 ```
 
 Generates a conforming first-order triangular Gmsh mesh.
 
-The derived maximum edge is
-`vacuum_wavelength / (wavelength_elements * maximum_material_index)`.
-When `max_element_size` is supplied, WaveFEM uses the smaller of the user
-value and the derived value; it never silently makes the mesh coarser.
-`wavelength_elements` must be at least four. Callback-based automatic sizing
-uses a finite sampling grid, so narrow features require an explicit
-`max_element_size`.
+The derived conservative base edge target is
+`vacuum_wavelength / (wavelength_elements * maximum_material_index)`. For
+geometry-defined materials with `refine_interfaces=True`, each material
+region additionally receives a wavelength-scaled local target. A region of
+index `n` uses the base target multiplied by
+`min(1, dielectric_refinement_factor * exterior_index / n)`.
+`dielectric_refinement_factor` must be in `(0, 1]`; its default halves the
+target before applying the local wavelength ratio. This preserves the
+previous global resolution cap while making explicitly modeled material
+regions finer than the exterior. Material callbacks retain global sizing
+because their samples cannot be mapped to reliable Gmsh surfaces.
+Callback-based maximum-index estimation uses a finite sampling grid, so
+narrow features require an explicit `max_element_size`.
 
-Material boundaries, monitor lines, and PML interfaces are always
-mesh-conforming. `refine_interfaces` is currently a reserved compatibility
-flag; it does not yet activate a separate local size field.
+When `max_element_size` is supplied, WaveFEM uses the smaller of that value
+and the derived base value; local dielectric and PEC targets may be smaller.
+`wavelength_elements` must be an integer of at least four.
+
+Material boundaries, monitor lines, PML interfaces, internal PEC sheets, and
+every PEC-slot endpoint are always mesh-conforming, independent of sizing
+fields. With `refine_interfaces=True`, dielectric local-wavelength fields and
+an actual-PEC distance field are both enabled. `pec_refinement_factor` is the
+PEC edge target as a fraction in `(0, 1]` of the smallest local material
+target. `pec_refinement_distance` is the physical distance over which that
+target transitions back to the base size; `None` selects three times the
+smallest material target. Setting `refine_interfaces=False` disables both
+local fields but does not remove conforming interfaces or PEC facets.
+
+The returned `Mesh2D` identifies background, actual, and released PEC facet
+sets so low-level workflows do not need geometric reclassification.
 
 The returned `Mesh2D.info.requested_maximum_edge` reveals the selected target.
 Warnings are issued when a PML spans fewer than three requested edge lengths
@@ -368,6 +445,9 @@ families near `neff_guess`.
 - `num_elements` controls the 1D cross-section mesh. When omitted, it is
   derived from the 2D target size with a minimum of 40 elements.
 - Geometry-backed background layers must be z-invariant rectangles.
+- Geometry-backed background PEC sheets become internal PEC points in the
+  one-dimensional port problem. At each point `E_y` and `E_z` are zero while
+  the two one-sided normal `E_x` traces remain unknown.
 - Lead materials must be lossless.
 - Open guides require an x-PML. With one present, the integrated workflow
   filters PML/radiation candidates and retains bound modes above the exterior
@@ -430,9 +510,10 @@ sim.solve(
 ) -> wf.ScatteringResult
 ```
 
-Assembles the mixed Maxwell system, forms the permittivity-contrast source,
-solves the outgoing scattered field, reconstructs total E and H, projects
-both lead monitors onto forward/backward modes, and computes power terms.
+Assembles the mixed Maxwell system, forms both the volume
+permittivity-contrast source and any released-PEC aperture source, solves the
+outgoing scattered field, reconstructs total E and H, projects both lead
+monitors onto forward/backward modes, and computes power terms.
 
 Preconditions:
 
@@ -493,10 +574,11 @@ sim.sweep_frequencies(
 
 Runs independent scattering simulations at a nonempty, strictly increasing
 sequence of positive ordinary frequencies in hertz. The source `sim` acts as
-a physical-configuration template and is not mutated: geometry regions,
-material callbacks, PMLs, monitors, transverse boundary, `ky`, and solver
-options are copied into a new simulation for every frequency. Each point is
-then meshed, given a fresh compatible mode set, launched, and solved.
+a physical-configuration template and is not mutated: material regions, PEC
+sheets and slots, material callbacks, PMLs, monitors, transverse boundary,
+`ky`, and solver options are copied into a new simulation for every
+frequency. Each point is then meshed, given a fresh compatible mode set,
+launched, and solved.
 
 Parameters:
 
@@ -650,6 +732,7 @@ Current integrated metadata keys include:
 | `method`, `relative_residual` | Linear-solver method and free-DOF residual |
 | `length_scale` | Metres represented by one computational unit |
 | `source_active_fraction` | Fraction of quadrature points with nonzero contrast source |
+| `released_pec_facet_count` | Number of background PEC facets released as finite slots |
 | `left_projection_residual`, `right_projection_residual` | Weighted E/H reconstruction errors |
 | `projected_incoming_amplitude`, `prescribed_incoming_amplitude` | Independent projection check against the launched amplitude |
 | `incoming_projection_relative_error` | Relative mismatch of those two amplitudes |
@@ -998,7 +1081,9 @@ homogeneous PEC, two `"wave_port"` segments at modal projection monitors,
 and every enabled internal PML interface as `"pml"`. The `"pmc"` kind is
 supported for future/custom scene producers; the current high-level
 scattering solve rejects a PMC transverse boundary instead of fabricating
-one.
+one. Internal actual PEC sheets are written as additional `"pec"` segments.
+A finite slot therefore appears as collinear yellow ground segments separated
+by the actual opening, rather than as an unbroken background-sheet line.
 
 Construction defensively copies `points`, `triangles`, and `eps_r` and marks
 them read-only. It validates finite values, exact integer connectivity,
@@ -1206,6 +1291,7 @@ wf.CrossSection(
     boundary: Literal["pec", "pmc"] | None = None,
     layers: list[wavefem.modes.Layer] = [],
     pml: wf.PML | None = None,
+    pec_boundaries: list[wavefem.modes.PECBoundary] = [],
 )
 ```
 
@@ -1219,6 +1305,9 @@ Represents a z-uniform one-dimensional material profile.
   directly pre-populating this list bypasses its overlap/name checks.
 - `pml` places equal transverse PMLs inside both ends. A mode PML requires
   a PEC outer wall and must leave a physical interior.
+- `pec_boundaries` contains zero-thickness internal PEC points. Prefer
+  `add_pec`; directly supplied entries must be `PECBoundary` instances and
+  are revalidated during construction.
 
 #### `add_layer`
 
@@ -1234,10 +1323,33 @@ cross_section.add_layer(
 Adds a non-overlapping, mesh-conforming material interval. The interval must
 be inside `x_span` and its name must be unique.
 
+#### `add_pec`
+
+```python
+cross_section.add_pec(
+    *,
+    x: float,
+    name: str | None = None,
+) -> wavefem.modes.PECBoundary
+```
+
+Adds a named, zero-thickness PEC sheet invariant in z. `x` is a finite
+physical coordinate strictly inside `x_span`; duplicate coordinates and
+duplicate PEC names raise `ConfigurationError`. The returned immutable
+`PECBoundary(x, name)` record is retained in the sorted
+`cross_section.pec_boundaries` list.
+
+The coordinate is guaranteed to be a mode-mesh node. Assembly constrains the
+nodal tangential components `E_y` and `E_z` at that node for either PEC or PMC
+outer truncation. Every cellwise `E_x` DOF remains free, preserving independent
+normal traces and surface charge on the two sheet faces. The sheet node is
+also omitted from bulk divergence-test rows, because the surface charge makes
+a volume Gauss-law residual inappropriate there.
+
 #### `interfaces`
 
-Returns sorted outer boundaries, material interfaces, and PML interfaces in
-metres. The mode mesh always conforms to these coordinates.
+Returns sorted outer boundaries and all material, internal-PEC, and PML
+interfaces in metres. The mode mesh always conforms to these coordinates.
 
 #### `material_at`
 
@@ -1704,6 +1816,26 @@ Associates a material and stable physical tag with a shape. `background=True`
 means the region is present in both the actual and unperturbed profiles.
 `contains(x,z)` delegates to its shape.
 
+### `PECSheet`, `PECSlot`, and `PECSegment`
+
+```python
+PECSheet(name: str, x: float, z: tuple[float, float], background: bool)
+PECSlot(name: str, sheet_name: str, z: tuple[float, float])
+PECSegment(name: str, x: float, z: tuple[float, float])
+```
+
+These are frozen topology records; use `GeometryModel.add_pec` and
+`GeometryModel.add_slot` instead of constructing them manually.
+
+- `PECSheet` describes one ideal constant-x sheet. `background=True` means
+  the sheet belongs to the straight guide and, before subtraction, the actual
+  device.
+- `PECSlot` names a compact z interval removed only from the actual profile
+  of `sheet_name`.
+- `PECSegment` is a derived closed line segment returned by
+  `GeometryModel.pec_segments`. A slotted actual sheet becomes multiple
+  segments, whereas its background form remains one complete segment.
+
 ### `GeometryModel`
 
 ```python
@@ -1712,6 +1844,8 @@ GeometryModel(
     z_span: tuple[float, float],
     exterior: Material,
     regions: list[Region] = [],
+    pec_sheets: list[PECSheet] = [],
+    pec_slots: list[PECSlot] = [],
 )
 ```
 
@@ -1723,6 +1857,23 @@ Maintains the actual/background distinction and stable insertion-order tags.
   circles.
 - `add_polygon(..., material, background=False, name=None)` rejects
   background polygons.
+- `add_pec(x, z="all", background=False, name=None) -> PECSheet` adds an
+  ideal constant-x sheet. Its coordinate must lie strictly inside `x_span`;
+  coincident overlapping sheets and duplicate geometry names are rejected.
+  A background sheet must be z-invariant and therefore requires `z="all"`.
+  The lower-level geometry can describe an actual-only finite sheet, but the
+  integrated `Scattering2D.add_pec` deliberately permits only the supported
+  z-invariant background form.
+- `add_slot(pec, z, name=None) -> PECSlot` subtracts a compact interval from
+  the actual copy of a background sheet. `pec` is a sheet owned by this model
+  or its name. The span must lie strictly inside the sheet, and slots on the
+  same sheet cannot overlap or touch.
+- `slots_in(pec) -> tuple[PECSlot, ...]` resolves a sheet and returns its
+  slots sorted by increasing z.
+- `pec_segments(profile="actual"|"background") -> tuple[PECSegment, ...]`
+  derives non-overlapping sheet segments. The background profile contains
+  only complete background sheets. The actual profile includes every sheet
+  with its finite slots subtracted. An unknown profile raises `ValueError`.
 - `background_regions` and `perturbations` return immutable tuples.
 - `material_at(x,z,profile="actual"|"background")` returns scalar
   `(eps_r,mu_r)` arrays. The actual profile applies all background regions
@@ -1754,11 +1905,29 @@ Mesh2D(
     element_tags: ndarray,
     physical_names: dict[int, str],
     info: MeshInfo,
+    background_pec_facets: ndarray = empty,
+    actual_pec_facets: ndarray = empty,
+    released_pec_facets: ndarray = empty,
+    pec_slot_facets: dict[str, ndarray] = {},
 )
 ```
 
 `elements_in(region: str | int)` returns zero-based triangle indices matching
 a physical name or tag and raises `MeshError` for an unknown name.
+
+PEC arrays contain sorted global `MeshTri` facet indices:
+
+- `background_pec_facets` is the union of complete z-invariant background
+  sheets;
+- `actual_pec_facets` is the constraint set after finite slots are removed;
+- `released_pec_facets` is exactly `background - actual` and is the aperture
+  source support;
+- `pec_slot_facets` maps every slot name to its released subset.
+
+`pec_facets(profile)` returns the actual or background array.
+`facets_in_slot(name)` returns one named slot array and raises `MeshError` for
+an unknown name. The arrays are topology metadata; material triangle tags do
+not encode a zero-thickness PEC.
 
 ### `generate_mesh`
 
@@ -1769,14 +1938,40 @@ generate_mesh(
     max_element_size: float,
     x_partitions: tuple[float, ...] = (),
     z_partitions: tuple[float, ...] = (),
+    refine_dielectrics: bool = True,
+    dielectric_refinement_factor: float = 0.5,
+    refine_pec: bool = True,
+    pec_refinement_factor: float = 0.5,
+    pec_refinement_distance: float | None = None,
 ) -> Mesh2D
 ```
 
 Creates a first-order conforming triangular mesh using Gmsh OCC fragments.
 Partition coordinates strictly inside the domain become conforming grid
-lines. Material tags are evaluated from the actual geometry at triangle
-centroids. Gmsh failures are wrapped in `MeshError`. On Windows, invoke
-Python through `conda run` so Gmsh DLLs are discoverable.
+lines. All PEC x coordinates and all sheet/slot z endpoints are inserted
+automatically in addition to explicit partitions.
+
+`max_element_size` is the exterior/base target. With
+`refine_dielectrics=True`, each physical material surface receives a
+restricted size field proportional to its local wavelength; material index
+is evaluated as `sqrt(abs(eps_r * mu_r))`.
+`dielectric_refinement_factor` must be in `(0, 1]` and multiplies every
+non-exterior material-region target before the wavelength ratio. With
+`refine_pec=True`, the actual PEC curves receive a distance-threshold field.
+`pec_refinement_factor` must be in `(0, 1]` and multiplies the smallest
+material target at the PEC.
+`pec_refinement_distance` must be positive when supplied and controls the
+physical transition distance; its default is three smallest-material target
+lengths. The two fields are combined by pointwise minimum, so PEC refinement
+also applies inside a dielectric. Disabling a field changes element sizes,
+not topological conformance.
+
+After conversion to
+`MeshTri`, constant-x facets are classified against actual and background
+segments; failure of the released-facet union to equal the named-slot union
+raises `MeshError`. Material tags are evaluated from the actual geometry at
+triangle centroids. Gmsh failures are wrapped in `MeshError`. On Windows,
+invoke Python through `conda run` so Gmsh DLLs are discoverable.
 
 ## Advanced material tensors
 
@@ -1874,9 +2069,14 @@ Stores:
 - `parameters`: physical `MaxwellParameters`;
 - `physical_mesh`: original SI `MeshTri`;
 - `length_scale`: metres per computational coordinate unit.
+- `internal_pec_facets`: sorted unique interior-facet indices on which the
+  actual electric tangential trace is constrained.
 
 Properties `ndofs`, `pec_dofs`, `dimensionless_k0`, and
 `dimensionless_ky` expose assembly sizes/scales.
+`pec_dofs` is the union of the complete outer-boundary DOF set and every
+Nedelec/P1 trace DOF on `internal_pec_facets`; normal electric traces are not
+part of the facet constraint.
 `physical_coordinates()` returns quadrature coordinates in metres.
 
 ### `MixedFieldSolution`
@@ -1944,12 +2144,17 @@ assemble_mixed_system(
     *,
     intorder: int = 4,
     length_scale: float = 1.0,
+    internal_pec_facets: ArrayLike = (),
 ) -> MixedFEMSystem
 ```
 
 Creates the basis and matrix. `length_scale` is the number of physical metres
 per computational coordinate unit. Material callbacks still receive physical
 metres. The high-level solver uses `length_scale = 1/k0` for conditioning.
+`internal_pec_facets` must be a one-dimensional integer array of valid
+interior facets. Indices are topology-preserving under mesh rescaling and are
+stored on the returned system; boundary facets, noninteger arrays, and
+out-of-range indices raise `ValueError`.
 
 #### `assemble_load_vector`
 
@@ -1971,9 +2176,9 @@ solve_homogeneous_pec(
 ) -> MixedFieldSolution
 ```
 
-Condenses all outer PEC DOFs, performs a SciPy direct solve, and validates the
-relative residual on free DOFs. Singular/resonant systems and non-finite
-solutions raise `SolverError`.
+Condenses all outer PEC DOFs and every registered actual internal-PEC DOF,
+performs a SciPy direct solve, and validates the relative residual on free
+DOFs. Singular/resonant systems and non-finite solutions raise `SolverError`.
 
 #### `relative_hermiticity_error`
 
@@ -1987,8 +2192,10 @@ zero matrix.
 ## Advanced equivalent-source API
 
 `IncidentField` is the `wavefem.sources` callback type
-`Callable[[x_array, z_array], object]`. It must return three electric-field
-components in `(x,y,z)` order.
+`Callable[[x_array, z_array], object]`. Depending on the argument name it
+supplies electric or magnetic incident fields, always as three components in
+`(x,y,z)` order. A result may have shape `(3,)`, `(3,*x.shape)`, or
+`(*x.shape,3)` and must be finite.
 
 ### `EquivalentSource`
 
@@ -1997,12 +2204,48 @@ EquivalentSource(
     load: complex ndarray,
     active_quadrature_fraction: float,
     maximum_delta_eps: float,
+    released_pec_facet_count: int = 0,
 )
 ```
 
 Stores the assembled RHS, fraction of quadrature points where material
-contrast is nonzero, and maximum absolute permittivity contrast. `is_zero`
-reports whether every assembled load entry is zero.
+contrast is nonzero, maximum absolute permittivity contrast, and the number
+of released PEC facets contributing a boundary load. `is_zero` reports
+whether every assembled load entry is zero. A boundary-only slot source can
+therefore have zero contrast fraction and zero `maximum_delta_eps` while
+`is_zero` is false.
+
+### `assemble_released_pec_source`
+
+```python
+assemble_released_pec_source(
+    system: MixedFEMSystem,
+    *,
+    released_pec_facets: ArrayLike,
+    incident_magnetic: IncidentField,
+) -> complex ndarray
+```
+
+Assembles the scattered-field aperture load for facets that are PEC in the
+background guide but open in the actual device. For each facet it creates
+both `InteriorFacetBasis` traces, orients an outward normal for each adjacent
+element, and samples `incident_magnetic` an infinitesimal distance inside
+that element. This preserves a discontinuous one-sided magnetic trace at the
+background sheet; evaluating exactly at the coordinate would incorrectly
+select the same mode cell on both sides.
+
+On the dimensionless mesh the planar PEC image-equivalent weak load is
+
+```text
+-2 i (k0 * length_scale) ETA_0
+    * sum_s integral_Gamma conj(V) dot (H_inc,s x n_s) ds.
+```
+
+The two is the planar screen image-equivalence factor, and the sum is over
+the two adjacent element sides. A continuous magnetic field gives cancelling
+opposite-normal contributions. Facets must be unique valid interior indices
+and disjoint from `system.internal_pec_facets`; otherwise `ValueError` is
+raised. An empty array returns an exact all-zero vector.
 
 ### `ScatteredFieldSolution`
 
@@ -2025,13 +2268,18 @@ assemble_equivalent_source(
     eps_background,
     mu_background=1.0,
     incident: IncidentField,
+    released_pec_facets: ArrayLike = (),
+    incident_magnetic: IncidentField | None = None,
 ) -> EquivalentSource
 ```
 
 Assembles `k0**2 * (eps_actual-eps_background) * E_inc` using quadrature
 values. `incident(x,z)` returns three components. Actual and background
 permeability must agree to numerical tolerance; otherwise
-`ConfigurationError` is raised.
+`ConfigurationError` is raised. When `released_pec_facets` is nonempty, the
+function also adds `assemble_released_pec_source`; `incident_magnetic` then
+becomes mandatory. The returned diagnostics report volume and boundary
+support separately.
 
 ### `solve_scattered_pec`
 
@@ -2042,13 +2290,17 @@ solve_scattered_pec(
     eps_background,
     mu_background=1.0,
     incident: IncidentField,
+    released_pec_facets: ArrayLike = (),
+    incident_magnetic: IncidentField | None = None,
     residual_tolerance: float = 1e-7,
 ) -> ScatteredFieldSolution
 ```
 
-Forms the equivalent source and calls the homogeneous outer-PEC field solver.
-In the high-level workflow the physical outgoing condition is supplied by
-constitutive PML tensors inside that outer PEC boundary.
+Forms the combined volume/aperture equivalent source and calls the
+homogeneous actual-PEC field solver. `released_pec_facets` must not be in the
+system's actual constraint set. In the high-level workflow the physical
+outgoing condition is supplied by constitutive PML tensors inside the outer
+PEC boundary.
 
 ## Advanced monitor API
 
@@ -2196,11 +2448,23 @@ Layer(x: tuple[float, float], material: Material, name: str)
 
 The immutable interval record returned by `CrossSection.add_layer`.
 
+### `PECBoundary`
+
+```python
+PECBoundary(x: float, name: str)
+```
+
+The immutable internal-sheet record returned by `CrossSection.add_pec`.
+Constructing one directly is supported only as an entry in the
+`CrossSection.pec_boundaries` initializer; `CrossSection.__post_init__`
+revalidates its coordinate and name through the same public addition path.
+
 ### `ModeFEMSystem`
 
 Stores the 1D mode mesh, dimensionless nodes, sparse `A0/A1/A2` pencil,
 free-DOF mapping, component slices, divergence operators, frequency, `ky`,
-`eta=ky/k0`, and boundary kind.
+`eta=ky/k0`, and boundary kind. Internal PEC nodes are represented in the
+free-DOF mapping and excluded from `divergence_test_dofs`.
 
 - `ndofs`: reduced unconstrained electric DOFs.
 - `elements`: number of 1D cells.
@@ -2221,7 +2485,9 @@ may evolve faster than the top-level workflow.
 
 - Physical public materials are scalar and isotropic; internal PML tensors
   are diagonal.
-- The scattered-field source supports permittivity contrast only.
+- The scattered-field source supports volume permittivity contrast and finite
+  slots released from z-invariant background PEC sheets. Permeability
+  contrast and actual-only PEC insertion are not implemented.
 - `Scattering2D` supports passive reciprocal problems, compact loss, one
   incident mode, and left incidence.
 - Uniform leads must be lossless for the integrated projection/power path.

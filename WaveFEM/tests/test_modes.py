@@ -6,8 +6,9 @@ from scipy.sparse import diags
 from scipy.sparse.linalg import norm as sparse_norm
 
 from wavefem.constants import ETA_0
+from wavefem.exceptions import ConfigurationError
 from wavefem.materials import Material
-from wavefem.modes import CrossSection, ModeSolver
+from wavefem.modes import CrossSection, ModeSolver, PECBoundary
 
 
 WAVELENGTH = 1.0
@@ -177,3 +178,93 @@ def test_passive_loss_uses_positive_imaginary_beta_for_minus_iwt() -> None:
     assert mode.neff.imag > 0.0
     assert mode.direction == "forward"
     assert mode.power == pytest.approx(1.0, rel=2e-9)
+
+
+def test_internal_pec_is_a_conforming_named_cross_section_interface() -> None:
+    cross_section = CrossSection(
+        x_span=(-0.5, 0.5),
+        background=Material(eps_r=2.25),
+        boundary="pec",
+        pec_boundaries=[PECBoundary(0.137, "ground")],
+    )
+
+    assert cross_section.pec_boundaries == [PECBoundary(0.137, "ground")]
+    assert 0.137 in cross_section.interfaces
+    system = ModeSolver(
+        cross_section,
+        wavelength=1.0,
+        num_elements=8,
+        dense_linearization_limit=256,
+    ).assemble()
+    np.testing.assert_allclose(
+        system.x_nodes[np.argmin(np.abs(system.x_nodes - 0.137))],
+        0.137,
+        rtol=0.0,
+        atol=2e-15,
+    )
+
+
+@pytest.mark.parametrize("outer_boundary", ("pec", "pmc"))
+def test_internal_pec_removes_only_tangential_node_dofs(
+    outer_boundary: str,
+) -> None:
+    cross_section = CrossSection(
+        x_span=(-0.5, 0.5),
+        background=Material(eps_r=2.25),
+        boundary=outer_boundary,
+    )
+    cross_section.add_pec(x=0.0, name="ground")
+    system = ModeSolver(
+        cross_section,
+        wavelength=1.0,
+        num_elements=10,
+        dense_linearization_limit=256,
+    ).assemble()
+
+    nx = system.ex_slice.stop - system.ex_slice.start
+    nt = system.ey_slice.stop - system.ey_slice.start
+    pec_node = int(np.flatnonzero(system.x_nodes == 0.0)[0])
+    free = set(system.free_dofs.tolist())
+
+    # Every P0 E_x unknown remains free: E_x is normal to the sheet and has
+    # independent left/right cell traces.  The two nodal tangential fields are
+    # exactly constrained at the PEC coordinate.
+    assert set(range(nx)) <= free
+    assert nx + pec_node not in free
+    assert nx + nt + pec_node not in free
+    assert pec_node not in system.divergence_test_dofs
+
+    expanded = system.expand(np.ones(system.ndofs, dtype=np.complex128))
+    np.testing.assert_allclose(expanded[system.ex_slice], 1.0)
+    assert expanded[system.ey_slice][pec_node] == 0.0
+    assert expanded[system.ez_slice][pec_node] == 0.0
+
+    if outer_boundary == "pec":
+        assert nx not in free
+        assert nx + nt - 1 not in free
+        assert nx + nt not in free
+        assert nx + 2 * nt - 1 not in free
+    else:
+        assert nx in free
+        assert nx + nt - 1 in free
+        assert nx + nt in free
+        assert nx + 2 * nt - 1 in free
+
+
+def test_internal_pec_coordinates_and_names_are_validated() -> None:
+    cross_section = CrossSection(
+        x_span=(-0.5, 0.5),
+        background=Material(),
+        boundary="pec",
+    )
+    boundary = cross_section.add_pec(x=0.0, name="ground")
+    assert boundary == PECBoundary(0.0, "ground")
+
+    with pytest.raises(ConfigurationError, match="strictly inside"):
+        cross_section.add_pec(x=-0.5)
+    with pytest.raises(ConfigurationError, match="finite real"):
+        cross_section.add_pec(x=np.inf)
+    with pytest.raises(ConfigurationError, match="already exists"):
+        cross_section.add_pec(x=0.0, name="second_ground")
+    with pytest.raises(ConfigurationError, match="not unique"):
+        cross_section.add_pec(x=0.2, name="ground")
