@@ -9,6 +9,9 @@ The repository is organised by problem type. Each solver folder contains the sol
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
 | `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
+| `TransmissionLineCalculator/` | Native Qt quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.md`](TransmissionLineCalculator/README.md) |
+| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.md`](WaveFEM/README.md) |
+| `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.md`](WaveFEMViewer/README.md) |
 | `Mode_Solver_1D/` | `ModeSolver1D` | TE/TM modes of 1D slab waveguides | [`README.rst`](Mode_Solver_1D/README.rst) |
 | `Mode_Solver_2D/` | `ModeSolver2D` | Full-vector modes of 2D waveguide cross-sections | [`README.rst`](Mode_Solver_2D/README.rst) |
 | `Periodic_Solver_2D/` | `PeriodicModeSolver2D` | 2D Bloch-periodic TE/TM unit-cell modes | [`README.rst`](Periodic_Solver_2D/README.rst) |
@@ -32,6 +35,41 @@ Some visualizers use Tk through Matplotlib. If GUI windows do not open, install 
 The standalone FEM mode package additionally needs scikit-fem and Gmsh; its
 isolated installation and environment are documented in
 [`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst).
+
+The two native C++20 applications support MSVC on Windows, AppleClang on
+macOS, and GCC or Clang on Linux. Both use Qt 6.2 or newer. The transmission
+line calculator additionally needs Eigen 3.4 or newer and Gmsh; the WaveFEM
+viewer needs HDF5 1.10 or newer. Platform-specific dependency and build
+commands are documented in the
+[`TransmissionLineCalculator`](TransmissionLineCalculator/README.md) and
+[`WaveFEMViewer`](WaveFEMViewer/README.md) READMEs.
+
+### Build both native applications
+
+When the dependencies are in CMake's normal search path, configure both from
+the repository root with any single-configuration generator:
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+For Visual Studio and other multi-configuration generators, select the
+configuration at build and test time:
+
+```powershell
+cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build-msvc --config Release --parallel
+ctest --test-dir build-msvc -C Release --output-on-failure
+```
+
+The root build can be limited to one application with
+`-DFDFD_BUILD_TRANSMISSION_LINE_CALCULATOR=OFF` or
+`-DFDFD_BUILD_WAVEFEM_VIEWER=OFF`. `CMAKE_PREFIX_PATH` may be supplied when
+Qt or the other libraries are installed outside the platform's standard
+locations.
 
 ## Basic Workflow
 

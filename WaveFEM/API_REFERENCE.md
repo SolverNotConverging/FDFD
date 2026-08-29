@@ -1183,13 +1183,14 @@ scalars and labels such as `beta`, `neff`, `power`, `complex_power`, `ky`,
 
 The GUI is intentionally not part of the `wavefem` Python distribution.
 The sibling [WaveFEMViewer project](../WaveFEMViewer/README.md) owns its
-source, package metadata, `wavefem-viewer` executable, independent HDF5
-reader, plotting helpers, tests, and user documentation. It does not import
-or depend on `wavefem` and can therefore inspect result files on a machine
-without the FEM solver installed.
+native C++20/Qt source, `wavefem-viewer` executable, lazy HDF5 reader, cached
+QPainter renderer, deployment scripts, and user documentation. It does not
+import or depend on Python, NumPy, h5py, Matplotlib, or `wavefem`, and can
+therefore inspect result files on a machine without the FEM solver installed.
 
-Its README documents installation, uninstallation, CLI and module launch,
-file-picker workflow, tab controls, supported schema data, and plotting API.
+Its README documents cross-platform CMake builds, installation, direct-path
+launch, file-picker workflow, tab controls, supported schema data, and the
+headless inspection/benchmark utility.
 For every 2D vector/material plot it displays `z` horizontally and `x`
 vertically while leaving file storage in `(x, z)` order. Dielectric material
 is grey, PEC is yellow, PMC is blue, wave ports are red, and PML interfaces

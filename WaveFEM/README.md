@@ -256,23 +256,19 @@ print(point.modes[0].E.shape, point.modes[0].H.shape)
 print(point.scene.x_span, point.scene.z_span)  # None only for legacy files
 ```
 
-The viewer is a separate sibling project with its own source code,
-dependencies, executable, tests, and documentation. Install it from
-`../WaveFEMViewer` and then launch it with:
+The viewer is a separate native C++20/Qt 6 sibling project with its own
+source code, HDF5 dependency, executable, deployment scripts, and
+documentation. Build or install it from `../WaveFEMViewer` and launch it with:
 
 ```powershell
-wavefem-viewer frequency_sweep.h5
-```
-
-The equivalent standalone module command is:
-
-```powershell
-python -m wavefem_viewer frequency_sweep.h5
+& "$env:LOCALAPPDATA\WaveFEMViewer\bin\wavefem-viewer.exe" frequency_sweep.h5
 ```
 
 See the [WaveFEMViewer README](../WaveFEMViewer/README.md) for complete
 installation, uninstallation, command-line, file-picker, and GUI usage
-instructions. The viewer reads HDF5 only; no FEM solve is started. Its 2D
+instructions. Its lazy native reader indexes a sweep first and loads only the
+selected frequency's large field arrays. The viewer reads HDF5 only; no FEM
+solve is started. Its 2D
 plots put `z` on the horizontal axis and `x` on the vertical axis and render
 the stored dielectric, PEC, PMC, wave-port, and PML scene styles.
 
