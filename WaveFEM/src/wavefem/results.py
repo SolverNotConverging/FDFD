@@ -13,6 +13,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .modes import Mode
+from .scene import Scene2D
 
 
 ComplexArray = NDArray[np.complex128]
@@ -151,8 +152,11 @@ class ScatteringResult:
     ky: float | None = None
     modes: tuple[Mode, ...] = field(default_factory=tuple)
     h5_path: Path | None = None
+    scene: Scene2D | None = None
 
     def __post_init__(self) -> None:
+        if self.scene is not None and not isinstance(self.scene, Scene2D):
+            raise ValueError("scene must be a Scene2D instance or None.")
         raw_coordinates = np.asarray(self.coordinates)
         if np.iscomplexobj(raw_coordinates) and np.any(np.imag(raw_coordinates) != 0.0):
             raise ValueError("coordinates must contain real values.")
@@ -433,7 +437,9 @@ class ScatteringResult:
 
         # Exact duplicate sample locations are averaged only for visualization;
         # the stored FEM samples remain untouched.
-        points = np.asarray(self.coordinates.T, dtype=float)
+        # Stored samples use (x, z), while all 2D visualizations place z on
+        # the horizontal axis and x on the vertical axis.
+        points = np.asarray(self.coordinates[[1, 0]].T, dtype=float)
         unique_points, inverse = np.unique(points, axis=0, return_inverse=True)
         counts = np.bincount(inverse)
         values = np.bincount(inverse, weights=values) / counts
@@ -474,8 +480,8 @@ class ScatteringResult:
                 cmap=selected_cmap,
             )
 
-        ax.set_xlabel("x (m)")
-        ax.set_ylabel("z (m)")
+        ax.set_xlabel("z (m)")
+        ax.set_ylabel("x (m)")
         ax.set_aspect("equal")
         ax.set_title(f"{part} {component}: {quantity}")
         if colorbar:

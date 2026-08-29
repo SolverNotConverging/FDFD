@@ -6,7 +6,6 @@ import wavefem
 from wavefem import (
     constants,
     exceptions,
-    gui,
     hdf5,
     incident,
     materials,
@@ -14,6 +13,7 @@ from wavefem import (
     monitors,
     projection,
     results,
+    scene,
     sources,
     sweep,
 )
@@ -37,7 +37,6 @@ def test_api_reference_covers_module_exports() -> None:
     documented_modules = (
         constants,
         exceptions,
-        gui,
         hdf5,
         incident,
         materials,
@@ -45,6 +44,7 @@ def test_api_reference_covers_module_exports() -> None:
         monitors,
         projection,
         results,
+        scene,
         sources,
         sweep,
     )

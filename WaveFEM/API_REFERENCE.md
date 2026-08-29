@@ -83,6 +83,7 @@ The following names are available directly from `wavefem`:
 | Scattering | `Scattering2D`, `SolverOptions`, `ScatteringResult`, `FrequencySweepResult` |
 | Modes | `CrossSection`, `ModeSolver`, `ModeSet`, `Mode`, `IncidentMode` |
 | Materials and PML | `Material`, `PML`, `PMLLayout` |
+| Visualization scene | `Scene2D`, `SceneLine` |
 | Frequency | `Frequency`, `resolve_frequency` |
 | HDF5 | `H5FileData`, `H5ResultData`, `H5ModeData`, `load_h5`, `save_result_h5`, `save_sweep_h5` |
 | Diagnostics | `Diagnostic`, `DiagnosticReport` |
@@ -598,6 +599,7 @@ wf.ScatteringResult(
     ky: float | None = None,
     modes: tuple[wf.Mode, ...] = (),
     h5_path: pathlib.Path | None = None,
+    scene: wf.Scene2D | None = None,
 )
 ```
 
@@ -629,6 +631,7 @@ constructed results raise `ValueError`.
 | `ky` | Prescribed invariant-direction wavenumber in rad/m, or `None` when unknown |
 | `modes` | Tuple of lead modes sampled into HDF5 when the result is persisted |
 | `h5_path` | Absolute persisted-file path associated by an integrated run, otherwise `None` |
+| `scene` | Optional full-domain `Scene2D` material mesh and visualization overlays |
 
 The coordinates are flattened FEM quadrature samples inside the non-PML
 control volume, not mesh nodes or an arbitrary evaluation grid. Duplicate
@@ -665,7 +668,8 @@ Modal traces are evaluated against that common phase plane, which makes a
 uniform guide's initial transmission close to `1+0j`.
 
 The dataclass is frozen, and its mappings are copied into read-only proxies.
-The contained NumPy arrays are not made recursively immutable.
+The sampled field arrays are not made recursively immutable. Arrays owned by
+`scene`, when present, are defensive read-only copies.
 
 #### `E_total` and `H_total`
 
@@ -757,7 +761,8 @@ Plots a scalar field and returns the Matplotlib axes without calling
 cloud and falls back to a scatter plot for collinear or unsuitable samples.
 Duplicate coordinates are averaged only for visualization. Default colormaps
 are `"twilight"` for phase, `"RdBu_r"` for real/imaginary parts, and
-`"viridis"` otherwise.
+`"viridis"` otherwise. The display convention is `z` on the horizontal axis
+and `x` on the vertical axis; stored coordinates remain ordered `(x, z)`.
 
 #### `save_h5`
 
@@ -768,7 +773,9 @@ result.save_h5(path: str | os.PathLike[str]) -> pathlib.Path
 Persists the result with `save_result_h5`, including sampled incident,
 scattered, and total E/H fields; indexed S-parameters; all five power terms;
 solve, mesh, projection, reference-plane, and beta metadata; and every mode in
-`result.modes`. The return value is the resolved absolute destination path.
+`result.modes`. When `result.scene` is present, it also persists the complete
+material mesh and boundary/port/PML overlays. The return value is the resolved
+absolute destination path.
 
 `ScatteringResult` is frozen, so calling `save_h5` does not change
 `result.h5_path`. By contrast, `Scattering2D.run` and
@@ -928,6 +935,77 @@ wf.DiagnosticReport(diagnostics: tuple[wf.Diagnostic, ...])
 - `ok` is true when no item has severity `"error"`.
 - `warnings` returns only items whose severity is `"warning"`.
 
+## Visualization scene API
+
+Scene records are solver-neutral data persisted with a result for accurate
+post-processing. They use physical `(x, z)` storage order and SI metres. A
+viewer may transpose that presentation to put `z` horizontally, but it must
+not transpose the stored arrays. `SceneKind` is the module-level type alias
+`Literal["pec", "pmc", "wave_port", "pml"]`.
+
+### `SceneLine`
+
+```python
+wf.SceneLine(
+    kind: str,
+    endpoints: ArrayLike,
+    label: str = "",
+)
+```
+
+A frozen line-overlay record:
+
+- `kind` is case-normalized to one of `"pec"`, `"pmc"`, `"wave_port"`,
+  or `"pml"`. Other strings raise `ValueError`.
+- `endpoints` has shape `(2, 2)`. Each row is one endpoint and each row is
+  ordered `(x, z)` in metres. Values must be finite, real, and distinct.
+- `label` is optional human-readable text stored in HDF5 and available to
+  inspection tools.
+
+Construction makes an owned, read-only `float64` copy of `endpoints`.
+Malformed shapes, complex/non-finite coordinates, zero-length segments, and
+non-text kinds or labels raise `ValueError`.
+
+### `Scene2D`
+
+```python
+wf.Scene2D(
+    points: ArrayLike,
+    triangles: ArrayLike,
+    eps_r: ArrayLike,
+    x_span: tuple[float, float],
+    z_span: tuple[float, float],
+    lines: tuple[wf.SceneLine, ...] = (),
+)
+```
+
+A frozen full-domain material mesh and its overlay segments:
+
+| Field | Shape and meaning |
+|---|---|
+| `points` | `(2, N)` real mesh vertices in stored `(x, z)` order, metres |
+| `triangles` | `(3, M)` integer vertex connectivity, one triangle per column |
+| `eps_r` | `(M,)` complex physical relative permittivity at element centroids |
+| `x_span` | Strictly increasing full-domain x limits in metres |
+| `z_span` | Strictly increasing full-domain z limits in metres |
+| `lines` | Tuple of `SceneLine` boundary, port, and PML overlays |
+
+`eps_r` is the actual, untransformed physical material; the complex PML
+stretch is deliberately not folded into it. This lets a viewer shade
+dielectrics independently of the PML interface. The integrated solver writes
+four outer `"pec"` segments because its complete numerical outer boundary is
+homogeneous PEC, two `"wave_port"` segments at modal projection monitors,
+and every enabled internal PML interface as `"pml"`. The `"pmc"` kind is
+supported for future/custom scene producers; the current high-level
+scattering solve rejects a PMC transverse boundary instead of fabricating
+one.
+
+Construction defensively copies `points`, `triangles`, and `eps_r` and marks
+them read-only. It validates finite values, exact integer connectivity,
+in-range and distinct indices, nondegenerate triangle area, one material
+value per triangle, strictly increasing spans, vertices and lines inside the
+domain, and that every line is a `SceneLine`. Violations raise `ValueError`.
+
 ## HDF5 persistence API
 
 WaveFEM HDF5 files use `SCHEMA_NAME` with value `"wavefem"` and integer
@@ -941,6 +1019,13 @@ Single and sweep files contain sampled fields and observables, not executable
 FEM objects. `load_h5` therefore works without reconstructing a geometry,
 mesh, sparse matrix, or solver backend. Writing and loading require a working
 `h5py` installation.
+
+Each result may additionally contain an additive `scene` group with
+`points`, `triangles`, `eps_r`, `x_span`, `z_span`, and
+`lines/{kind,endpoints,label}` datasets. The scene subgroup has format
+`"wavefem-scene"`, version `1`, and coordinate order `"x,z"`. This extension
+does not change the root schema version: files created before scene support
+remain valid, and their loaded `H5ResultData.scene` is `None`.
 
 ### `save_result_h5`
 
@@ -956,8 +1041,11 @@ wf.save_result_h5(
 Writes one duck-typed scattering result using schema version 1 and returns
 the resolved absolute path. The object must expose the same field arrays,
 S-parameter mapping, five power values, and result metadata as a
-`ScatteringResult`. Optional `frequency_hz`, `ky`, and `modes` attributes are
-used when available. Explicit `modes` takes precedence; the convenience
+`ScatteringResult`. Optional `frequency_hz`, `ky`, `modes`, and `scene`
+attributes are used when available. An optional scene may be a `Scene2D` or a
+duck-typed equivalent exposing the same fields and line attributes; it is
+fully normalized and validated before writing. Explicit `modes` takes
+precedence; the convenience
 `ScatteringResult.save_h5` passes `result.modes` here.
 
 If explicit frequency metadata is unavailable, the writer may recover the
@@ -1007,7 +1095,8 @@ portable in-memory records. Validation covers format name, supported schema
 version, single/sweep kind, result count, frequencies, field shapes and
 finiteness, the identities `E_total = E_incident + E_scattered` and
 `H_total = H_incident + H_scattered`, S-parameter keys, nonnegative powers,
-mode shapes, and metadata types. A missing file, corrupt HDF5 container,
+mode shapes, metadata types, and every optional scene mesh/span/overlay.
+A missing file, corrupt HDF5 container,
 foreign format, unsupported schema version, or inconsistent dataset raises
 `ValueError`. An unloadable `h5py` runtime raises `ConfigurationError`.
 
@@ -1051,6 +1140,7 @@ wf.H5ResultData(
     powers,
     modes,
     metadata,
+    scene: wf.Scene2D | None = None,
 )
 ```
 
@@ -1061,7 +1151,9 @@ and every E/H field has shape `(3, N)` in `(x,y,z)` component order.
 `powers` maps `reflected_power`, `transmitted_power`, `radiated_power`,
 `absorbed_power`, and `incident_power` to W/m. `modes` is a tuple of
 `H5ModeData`; `metadata` contains the serializable result metadata collected
-from the original object.
+from the original object. `scene` is the validated full-domain material and
+overlay record, or `None` for an older/schema-v1 file without the optional
+group. Scene arrays and line endpoints are detached read-only copies.
 
 Unlike `ScatteringResult`, this record intentionally has no solver,
 de-embedding, or FEM interpolation methods. Plot it through the viewer/helper
@@ -1087,164 +1179,21 @@ scalars and labels such as `beta`, `neff`, `power`, `complex_power`, `ky`,
 `x_nodes`, cellwise `E_x`, nodal `E_y/E_z`, magnetic samples, and endpoint
 `H_x` traces for research inspection.
 
-## HDF5 viewer and plotting API
+## Separate HDF5 viewer project
 
-Launch the desktop viewer with either command:
+The GUI is intentionally not part of the `wavefem` Python distribution.
+The sibling [WaveFEMViewer project](../WaveFEMViewer/README.md) owns its
+source, package metadata, `wavefem-viewer` executable, independent HDF5
+reader, plotting helpers, tests, and user documentation. It does not import
+or depend on `wavefem` and can therefore inspect result files on a machine
+without the FEM solver installed.
 
-```text
-wavefem-viewer [optional-result.h5]
-python -m wavefem.gui [optional-result.h5]
-```
-
-With no path, use the **Open HDF5** button. A sweep file enables a frequency
-selector. The S-parameter tab combines a complex-value table and sweep plot;
-the modal E/H tabs select mode, component, and plotted part; and the vector
-E/H tabs select incident/scattered/total field and real/imaginary x-z
-projection. Viewer import is headless-safe: Tkinter and the TkAgg Matplotlib
-backend are loaded only when `H5ViewerApp` or `main` starts the GUI.
-
-### `H5ViewerApp`
-
-```python
-from wavefem.gui import H5ViewerApp
-
-app = H5ViewerApp(root)
-```
-
-Builds the Tk application in an existing `tkinter.Tk` root, creates the five
-visualization tabs, and starts with no file loaded. Applications embedding the
-viewer remain responsible for calling `root.mainloop()`.
-
-Public methods:
-
-- `open_file() -> None`: opens the native file chooser and loads the selected
-  `.h5` or `.hdf5` path.
-- `load_path(path, *, show_error=True) -> bool`: calls `load_h5`, refreshes
-  selectors and plots, and returns `True` on success. On failure it returns
-  `False`; with `show_error=True` it also displays a Tk error dialog.
-
-The private `_runtime` constructor argument exists only for GUI testing and
-should not be used by applications.
-
-### `main`
-
-```python
-from wavefem.gui import main
-
-main(argv: Sequence[str] | None = None) -> int
-```
-
-Command-line entry point for the viewer. `argv` may contain zero arguments or
-one HDF5 path. It creates the Tk root, optionally loads the path, runs the
-event loop, and returns `0` after the window closes.
-
-### `SParameterRow`
-
-```python
-from wavefem.gui import SParameterRow
-
-SParameterRow(side, out_mode, in_mode, value, magnitude, phase_deg)
-```
-
-Frozen numeric table record used by the viewer. `side`, zero-based output and
-input mode indices, complex `value`, absolute `magnitude`, and phase in
-degrees are stored separately for formatting and programmatic use.
-
-### `s_parameter_label`
-
-```python
-s_parameter_label(key: tuple[str, int, int]) -> str
-```
-
-Validates a `(side, out_mode, in_mode)` key and returns an unambiguous label.
-Fundamental left/right keys are prefixed `S11`/`S21`; every label also
-contains the side and explicit indices.
-
-### `s_parameter_rows`
-
-```python
-s_parameter_rows(result_or_mapping: object) -> tuple[SParameterRow, ...]
-```
-
-Accepts an S-parameter mapping directly or an object with a
-`s_parameters` mapping. Keys and finite scalar values are validated,
-normalized sides are lower-cased, and rows are sorted by left/right/other
-side, output mode, then input mode.
-
-### `plot_s_parameters`
-
-```python
-plot_s_parameters(
-    ax,
-    frequencies_hz,
-    results,
-    *,
-    quantity="magnitude_db",
-    keys=None,
-) -> tuple[matplotlib.lines.Line2D, ...]
-```
-
-Plots selected indexed S-parameters across one or more portable or live
-results on caller-provided Matplotlib axes. `quantity` accepts
-`"magnitude_db"`, `"magnitude"`, `"phase_deg"`, `"real"`, or `"imag"`
-(`"db"`, `"abs"`, and `"phase"` are also accepted aliases). Exact zeros use
-a `-300 dB` finite display floor. With `keys=None`, the union of keys across
-all results is plotted; a key missing at one frequency creates a NaN gap.
-Frequencies remain in hertz, and the created line objects are returned.
-
-#### `plot_s_parameter_sweep`
-
-`plot_s_parameter_sweep(*args, **kwargs)` is an exact alias for
-`plot_s_parameters`; it accepts and returns the same objects and performs no
-additional conversion.
-
-### `plot_modal_field`
-
-```python
-plot_modal_field(
-    ax,
-    x,
-    field,
-    *,
-    field_name="E",
-    component="norm",
-    quantity="abs",
-) -> matplotlib.lines.Line2D
-```
-
-Plots one sampled modal field of shape `(3, n)` against its transverse x grid.
-`field_name` labels `"E"` or `"H"`; `component` selects `"x"`, `"y"`,
-`"z"`, or vector `"norm"`; and `quantity` selects `"abs"`, `"real"`, or
-`"imag"`. For a norm, real/imaginary quantities are norms of the respective
-component parts. The helper validates shapes/finiteness and returns the line.
-
-### `plot_vector_field_2d`
-
-```python
-plot_vector_field_2d(
-    ax,
-    coordinates,
-    field,
-    *,
-    field_name="E",
-    quantity="real",
-    max_arrows=900,
-) -> matplotlib.quiver.Quiver
-```
-
-Draws a quiver plot of the x-z projection from coordinates shaped `(2, N)`
-and a complex field shaped `(3, N)`. `quantity` is `"real"` or `"imag"`;
-the omitted y component is not projected into the computational plane.
-Duplicate FEM sample coordinates are averaged for display, then uniformly
-subsampled to at most the positive integer `max_arrows`. The original arrays
-are not modified, and the quiver artist is returned.
-
-#### `plot_vector_field`
-
-`plot_vector_field(*args, **kwargs)` is an exact alias for
-`plot_vector_field_2d`; it accepts and returns the same objects and performs
-no additional conversion.
-
+Its README documents installation, uninstallation, CLI and module launch,
+file-picker workflow, tab controls, supported schema data, and plotting API.
+For every 2D vector/material plot it displays `z` horizontally and `x`
+vertically while leaving file storage in `(x, z)` order. Dielectric material
+is grey, PEC is yellow, PMC is blue, wave ports are red, and PML interfaces
+are green dashed lines.
 ## Standalone mode API
 
 ### `CrossSection`

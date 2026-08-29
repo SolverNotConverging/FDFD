@@ -17,6 +17,8 @@ def test_documented_top_level_api_is_importable() -> None:
         "ModeSet",
         "ModeSolver",
         "PML",
+        "Scene2D",
+        "SceneLine",
         "Scattering2D",
         "ScatteringResult",
         "SolverOptions",

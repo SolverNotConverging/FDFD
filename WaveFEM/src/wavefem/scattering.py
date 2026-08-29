@@ -26,6 +26,7 @@ from .operators import electric_field_vector, modified_curl
 from .pml import PML, PMLLayout
 from .projection import ElectromagneticProjector, ModalTrace, modal_power_from_gram
 from .results import ScatteringResult
+from .scene import Scene2D, SceneLine
 from .sources import solve_scattered_pec
 from .sweep import FrequencySweepResult
 
@@ -375,6 +376,58 @@ class Scattering2D:
             z0 += self.pml.z.thickness
             z1 -= self.pml.z.thickness
         return (x0, x1), (z0, z1)
+
+    def _visualization_scene(self) -> Scene2D:
+        """Return full-domain material and overlay data for persisted results."""
+
+        if self.mesh_data is None:
+            raise ConfigurationError("A mesh is required to build visualization data.")
+        if self.left_monitor is None or self.right_monitor is None:
+            raise ConfigurationError("Monitor lines are required to build visualization data.")
+
+        points = np.asarray(self.mesh_data.mesh.p, dtype=np.float64)
+        triangles = np.asarray(self.mesh_data.mesh.t, dtype=np.int64)
+        centroids = points[:, triangles].mean(axis=1)
+        eps_r, _ = self._physical_material(
+            centroids[0], centroids[1], profile="actual"
+        )
+
+        xmin, xmax = self.x_span
+        zmin, zmax = self.z_span
+        (port_xmin, port_xmax), _ = self._interior_spans()
+        lines: list[SceneLine] = [
+            SceneLine("pec", ((xmin, zmin), (xmin, zmax)), "PEC outer boundary"),
+            SceneLine("pec", ((xmax, zmin), (xmax, zmax)), "PEC outer boundary"),
+            SceneLine("pec", ((xmin, zmin), (xmax, zmin)), "PEC outer boundary"),
+            SceneLine("pec", ((xmin, zmax), (xmax, zmax)), "PEC outer boundary"),
+            SceneLine(
+                "wave_port",
+                ((port_xmin, self.left_monitor), (port_xmax, self.left_monitor)),
+                "left wave port",
+            ),
+            SceneLine(
+                "wave_port",
+                ((port_xmin, self.right_monitor), (port_xmax, self.right_monitor)),
+                "right wave port",
+            ),
+        ]
+        pml_x, pml_z = self.pml.interfaces(self.x_span, self.z_span)
+        lines.extend(
+            SceneLine("pml", ((x, zmin), (x, zmax)), "x-PML interface")
+            for x in pml_x
+        )
+        lines.extend(
+            SceneLine("pml", ((xmin, z), (xmax, z)), "z-PML interface")
+            for z in pml_z
+        )
+        return Scene2D(
+            points=points,
+            triangles=triangles,
+            eps_r=np.asarray(eps_r, dtype=np.complex128),
+            x_span=self.x_span,
+            z_span=self.z_span,
+            lines=tuple(lines),
+        )
 
     def _perturbation_z_bounds(self) -> tuple[float, float] | None:
         if self._material_actual is not None:
@@ -1125,6 +1178,7 @@ class Scattering2D:
             frequency_hz=self.frequency.frequency,
             ky=self.ky,
             modes=forward_modes,
+            scene=self._visualization_scene(),
         )
         if h5_path is not None:
             written = result.save_h5(h5_path)

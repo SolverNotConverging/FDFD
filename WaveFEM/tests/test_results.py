@@ -265,10 +265,19 @@ def test_plot_field_returns_axes_for_sampled_magnetic_field() -> None:
     matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
 
-    axes = make_result().plot_field("Hz", quantity="abs", colorbar=False)
-    assert axes.get_xlabel() == "x (m)"
-    assert axes.get_ylabel() == "z (m)"
+    result = replace(
+        make_result(),
+        coordinates=np.asarray(
+            ((-1.0, -0.5, 0.0, 0.5, 1.0), (2.0, 2.25, 2.5, 2.75, 3.0))
+        ),
+    )
+    axes = result.plot_field("Hz", quantity="abs", colorbar=False)
+    assert axes.get_xlabel() == "z (m)"
+    assert axes.get_ylabel() == "x (m)"
     assert axes.collections
+    np.testing.assert_array_equal(
+        axes.collections[0].get_offsets(), result.coordinates[[1, 0]].T
+    )
     plt.close(axes.figure)
 
 

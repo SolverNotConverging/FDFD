@@ -19,7 +19,7 @@ The current MVP provides:
 - electromagnetic power-Gram modal projection;
 - S-parameters, sampled E/H fields, and structured power diagnostics;
 - single-run and frequency-sweep HDF5 result persistence;
-- a dedicated desktop HDF5 viewer for S-parameters, modal E/H, and 2D E/H;
+- a separate `WaveFEMViewer` desktop application for persisted HDF5 results;
 - Gmsh geometry and conforming triangular meshes.
 
 The public API uses SI units. Ordinary `frequency` in hertz is the preferred
@@ -207,7 +207,9 @@ result.S("right", out_mode=1, in_mode=0)
 Every persisted file uses a versioned WaveFEM schema. A single-run file
 contains the frequency and `ky`, sampled incident/scattered/total E and H,
 all indexed modal S-parameters, power terms, lead-mode E/H samples, mesh
-metadata, and solve diagnostics. A sweep file contains the same complete
+metadata, solve diagnostics, and a full-domain material/overlay scene. The
+scene stores the conforming dielectric mesh, outer PEC boundary, wave-port
+monitor lines, and PML interfaces. A sweep file contains the same complete
 record for every frequency point; it is not limited to summary curves.
 
 Run a strictly increasing ordinary-frequency sweep in hertz with:
@@ -251,26 +253,28 @@ point = saved.results[0]
 print(point.s_parameters)
 print(point.E_total.shape, point.H_total.shape)
 print(point.modes[0].E.shape, point.modes[0].H.shape)
+print(point.scene.x_span, point.scene.z_span)  # None only for legacy files
 ```
 
-Launch the dedicated desktop viewer after installing WaveFEM:
+The viewer is a separate sibling project with its own source code,
+dependencies, executable, tests, and documentation. Install it from
+`../WaveFEMViewer` and then launch it with:
 
 ```powershell
 wavefem-viewer frequency_sweep.h5
 ```
 
-The equivalent module command is:
+The equivalent standalone module command is:
 
 ```powershell
-python -m wavefem.gui frequency_sweep.h5
+python -m wavefem_viewer frequency_sweep.h5
 ```
 
-The viewer has a frequency selector for sweep files, a numeric and plotted
-S-parameter tab, separate modal E and H tabs, and separate 2D vector E and H
-tabs. Modal plots can select mode, Cartesian component, and absolute/real/
-imaginary quantity. Vector plots can select incident, scattered, or total
-fields and display the real or imaginary x-z projection. It reads the HDF5
-file only; no FEM solve is started.
+See the [WaveFEMViewer README](../WaveFEMViewer/README.md) for complete
+installation, uninstallation, command-line, file-picker, and GUI usage
+instructions. The viewer reads HDF5 only; no FEM solve is started. Its 2D
+plots put `z` on the horizontal axis and `x` on the vertical axis and render
+the stored dielectric, PEC, PMC, wave-port, and PML scene styles.
 
 ## Power and fields
 

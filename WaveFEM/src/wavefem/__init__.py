@@ -33,6 +33,7 @@ from .materials import Material
 from .modes import CrossSection, Mode, ModeSet, ModeSolver
 from .pml import PML, PMLLayout
 from .results import Diagnostic, DiagnosticReport, ScatteringResult
+from .scene import Scene2D, SceneLine
 from .scattering import Scattering2D, SolverOptions
 from .sweep import FrequencySweepResult
 
@@ -65,6 +66,8 @@ __all__ = [
     "PMLLayout",
     "SCHEMA_NAME",
     "SCHEMA_VERSION",
+    "Scene2D",
+    "SceneLine",
     "Scattering2D",
     "ScatteringResult",
     "SolverOptions",

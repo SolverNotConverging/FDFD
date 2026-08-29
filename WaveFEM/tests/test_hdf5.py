@@ -19,11 +19,28 @@ from wavefem.hdf5 import (
 )
 from wavefem.modes import Mode
 from wavefem.results import ScatteringResult
+from wavefem.scene import Scene2D, SceneLine
 from wavefem.sweep import FrequencySweepResult
 
 
 FREQUENCY_HZ = 2.5e9
 KY = 3.25
+
+
+def make_scene() -> Scene2D:
+    return Scene2D(
+        points=np.asarray(((0.0, 1.0, 1.0, 0.0), (2.0, 2.0, 3.0, 3.0))),
+        triangles=np.asarray(((0, 0), (1, 2), (2, 3))),
+        eps_r=np.asarray((1.0 + 0.0j, 4.0 + 0.05j)),
+        x_span=(0.0, 1.0),
+        z_span=(2.0, 3.0),
+        lines=(
+            SceneLine("pec", ((0.0, 2.0), (1.0, 2.0)), "PEC boundary"),
+            SceneLine("pmc", ((0.0, 3.0), (1.0, 3.0)), "PMC boundary"),
+            SceneLine("wave_port", ((0.0, 2.4), (1.0, 2.4)), "left wave port"),
+            SceneLine("pml", ((0.2, 2.0), (0.2, 3.0)), "x-PML interface"),
+        ),
+    )
 
 
 def make_result(*, frequency_hz: float | None = FREQUENCY_HZ) -> ScatteringResult:
@@ -158,6 +175,62 @@ def test_single_result_round_trip_preserves_complex_fields_modes_and_metadata(
         s_values = handle["results/000000/s_parameters/value"]
         assert s_values.dtype.kind == "c"
         assert s_values.compression == "gzip"
+
+
+def test_scene_round_trip_preserves_material_mesh_spans_and_overlays(tmp_path) -> None:
+    source = replace(make_result(), scene=make_scene())
+    path = tmp_path / "scene.h5"
+
+    save_result_h5(source, path)
+    loaded = load_h5(path).results[0]
+
+    assert loaded.scene is not None
+    np.testing.assert_array_equal(loaded.scene.points, source.scene.points)
+    np.testing.assert_array_equal(loaded.scene.triangles, source.scene.triangles)
+    np.testing.assert_array_equal(loaded.scene.eps_r, source.scene.eps_r)
+    assert loaded.scene.x_span == source.scene.x_span
+    assert loaded.scene.z_span == source.scene.z_span
+    assert [line.kind for line in loaded.scene.lines] == [
+        "pec",
+        "pmc",
+        "wave_port",
+        "pml",
+    ]
+    assert [line.label for line in loaded.scene.lines] == [
+        line.label for line in source.scene.lines
+    ]
+    assert not loaded.scene.points.flags.writeable
+    assert not loaded.scene.triangles.flags.writeable
+    assert not loaded.scene.eps_r.flags.writeable
+    assert all(not line.endpoints.flags.writeable for line in loaded.scene.lines)
+
+    with h5py.File(path, "r") as handle:
+        scene_group = handle["results/000000/scene"]
+        assert scene_group.attrs["format"] == "wavefem-scene"
+        assert scene_group.attrs["version"] == 1
+        assert scene_group.attrs["coordinate_order"] == "x,z"
+        assert scene_group["points"].compression == "gzip"
+        assert scene_group["eps_r"].dtype.kind == "c"
+        assert scene_group["lines/endpoints"].shape == (4, 2, 2)
+
+
+def test_result_without_scene_remains_backward_compatible(tmp_path) -> None:
+    path = tmp_path / "legacy-no-scene.h5"
+    save_result_h5(make_result(), path)
+
+    with h5py.File(path, "r") as handle:
+        assert "scene" not in handle["results/000000"]
+    assert load_h5(path).results[0].scene is None
+
+
+def test_load_rejects_invalid_scene_connectivity(tmp_path) -> None:
+    path = tmp_path / "bad-scene.h5"
+    save_result_h5(replace(make_result(), scene=make_scene()), path)
+    with h5py.File(path, "r+") as handle:
+        handle["results/000000/scene/triangles"][0, 0] = 99
+
+    with pytest.raises(ValueError, match="scene.*vertex index"):
+        load_h5(path)
 
 
 def test_single_result_allows_explicitly_unknown_frequency_and_ky(tmp_path) -> None:

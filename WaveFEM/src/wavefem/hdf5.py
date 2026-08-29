@@ -3,7 +3,9 @@
 Schema version 1 stores either one result or an ordered frequency sweep.  The
 loader deliberately returns lightweight frozen records instead of recreating
 live FEM objects, so files remain useful without a mesh, solver backend, or
-the exact WaveFEM class version that produced them.
+the exact WaveFEM class version that produced them.  Each result may include
+an additive scene subgroup containing a full-domain material mesh and line
+overlays; older schema-v1 files without that subgroup remain valid.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .constants import C0
 from .exceptions import ConfigurationError
+from .scene import Scene2D, SceneLine
 
 
 SCHEMA_NAME = "wavefem"
@@ -95,7 +98,11 @@ class H5ModeData:
 
 @dataclass(frozen=True, slots=True)
 class H5ResultData:
-    """Portable fields, observables, modes, and metadata for one result."""
+    """Portable fields, observables, modes, metadata, and optional scene.
+
+    ``scene`` is a validated :class:`~wavefem.scene.Scene2D` when the file
+    contains visualization data and ``None`` for legacy schema-v1 results.
+    """
 
     frequency_hz: float | None
     ky: float | None
@@ -110,6 +117,7 @@ class H5ResultData:
     powers: Mapping[str, float]
     modes: tuple[H5ModeData, ...]
     metadata: Mapping[str, Any]
+    scene: Scene2D | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +154,7 @@ class _PreparedResult:
     powers: Mapping[str, float]
     modes: tuple[_PreparedMode, ...]
     metadata: Mapping[str, Any]
+    scene: Scene2D | None
 
 
 def _require_h5py() -> Any:
@@ -448,6 +457,33 @@ def _result_metadata(result: object) -> Mapping[str, Any]:
     return MappingProxyType(metadata)
 
 
+def _prepare_scene(result: object) -> Scene2D | None:
+    """Normalize optional duck-typed scene data without coupling the writer."""
+
+    if not hasattr(result, "scene") or getattr(result, "scene") is None:
+        return None
+    source = getattr(result, "scene")
+    try:
+        prepared_lines = tuple(
+            SceneLine(
+                kind=getattr(line, "kind"),
+                endpoints=getattr(line, "endpoints"),
+                label=getattr(line, "label", ""),
+            )
+            for line in getattr(source, "lines")
+        )
+        return Scene2D(
+            points=getattr(source, "points"),
+            triangles=getattr(source, "triangles"),
+            eps_r=getattr(source, "eps_r"),
+            x_span=getattr(source, "x_span"),
+            z_span=getattr(source, "z_span"),
+            lines=prepared_lines,
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ConfigurationError(f"result.scene is invalid: {exc}") from exc
+
+
 def _prepare_result(
     result: object,
     modes: object,
@@ -503,6 +539,7 @@ def _prepare_result(
         powers=_prepare_powers(result),
         modes=mode_data,
         metadata=_result_metadata(result),
+        scene=_prepare_scene(result),
     )
 
 
@@ -639,6 +676,37 @@ def _write_mode(group: Any, mode: _PreparedMode) -> None:
         _write_array(raw_group, name, array)
 
 
+def _write_scene(group: Any, scene: Scene2D) -> None:
+    group.attrs["format"] = "wavefem-scene"
+    group.attrs["version"] = 1
+    group.attrs["coordinate_order"] = "x,z"
+    _write_array(group, "points", np.asarray(scene.points, dtype=np.float64))
+    _write_array(group, "triangles", np.asarray(scene.triangles, dtype=np.int64))
+    _write_array(group, "eps_r", np.asarray(scene.eps_r, dtype=np.complex128))
+    _write_array(group, "x_span", np.asarray(scene.x_span, dtype=np.float64))
+    _write_array(group, "z_span", np.asarray(scene.z_span, dtype=np.float64))
+
+    line_group = group.create_group("lines")
+    _write_array(
+        line_group,
+        "kind",
+        np.asarray([line.kind.encode("ascii") for line in scene.lines], dtype="S9"),
+    )
+    endpoints = (
+        np.stack([line.endpoints for line in scene.lines])
+        if scene.lines
+        else np.empty((0, 2, 2), dtype=np.float64)
+    )
+    _write_array(line_group, "endpoints", np.asarray(endpoints, dtype=np.float64))
+    encoded_labels = [line.label.encode("utf-8") for line in scene.lines]
+    label_width = max((len(label) for label in encoded_labels), default=1)
+    _write_array(
+        line_group,
+        "label",
+        np.asarray(encoded_labels, dtype=f"S{label_width}"),
+    )
+
+
 def _write_result(group: Any, result: _PreparedResult, index: int) -> None:
     group.attrs["index"] = index
     if result.frequency_hz is not None:
@@ -690,6 +758,8 @@ def _write_result(group: Any, result: _PreparedResult, index: int) -> None:
     mode_group.attrs["count"] = len(result.modes)
     for mode_index, mode in enumerate(result.modes):
         _write_mode(mode_group.create_group(f"{mode_index:06d}"), mode)
+    if result.scene is not None:
+        _write_scene(group.create_group("scene"), result.scene)
 
 
 def _write_file(
@@ -959,6 +1029,99 @@ def _load_s_parameters(group: Any) -> Mapping[PortKey, complex]:
     return MappingProxyType(result)
 
 
+def _loaded_integer_array(dataset: Any, name: str) -> NDArray[np.int64]:
+    try:
+        raw = np.asarray(dataset[...])
+    except Exception as exc:
+        raise ValueError(f"Could not read HDF5 dataset {name!r}.") from exc
+    if raw.dtype.kind not in "iu" or raw.dtype.kind == "b":
+        raise ValueError(f"HDF5 dataset {name!r} must use integer storage.")
+    result = np.array(raw, dtype=np.int64, copy=True)
+    result.setflags(write=False)
+    return result
+
+
+def _loaded_text_array(dataset: Any, name: str) -> tuple[str, ...]:
+    try:
+        raw = np.asarray(dataset[...])
+    except Exception as exc:
+        raise ValueError(f"Could not read HDF5 dataset {name!r}.") from exc
+    if raw.ndim != 1:
+        raise ValueError(f"HDF5 dataset {name!r} must be one-dimensional text.")
+    result: list[str] = []
+    for item in raw:
+        try:
+            if isinstance(item, (bytes, np.bytes_)):
+                result.append(bytes(item).decode("utf-8"))
+            elif isinstance(item, str):
+                result.append(item)
+            else:
+                raise TypeError
+        except (TypeError, UnicodeDecodeError) as exc:
+            raise ValueError(f"HDF5 dataset {name!r} must contain UTF-8 text.") from exc
+    return tuple(result)
+
+
+def _load_scene(group: Any) -> Scene2D:
+    if _attribute_text(group.attrs.get("format"), f"{group.name}.format") != "wavefem-scene":
+        raise ValueError(f"HDF5 scene {group.name!r} has an invalid format attribute.")
+    try:
+        version = integer_index(group.attrs["version"])
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"HDF5 scene {group.name!r} has no valid version.") from exc
+    if version != 1:
+        raise ValueError(f"Unsupported HDF5 scene version {version}; expected version 1.")
+    if _attribute_text(
+        group.attrs.get("coordinate_order"), f"{group.name}.coordinate_order"
+    ) != "x,z":
+        raise ValueError("HDF5 scene coordinate_order must be 'x,z'.")
+
+    points = _loaded_array(
+        _require_member(group, "points"), f"{group.name}/points", complex_values=False
+    )
+    triangles = _loaded_integer_array(
+        _require_member(group, "triangles"), f"{group.name}/triangles"
+    )
+    eps_r = _loaded_array(
+        _require_member(group, "eps_r"), f"{group.name}/eps_r", complex_values=True
+    )
+    x_span = _loaded_array(
+        _require_member(group, "x_span"), f"{group.name}/x_span", complex_values=False
+    )
+    z_span = _loaded_array(
+        _require_member(group, "z_span"), f"{group.name}/z_span", complex_values=False
+    )
+    line_group = _require_member(group, "lines")
+    kinds = _loaded_text_array(
+        _require_member(line_group, "kind"), f"{line_group.name}/kind"
+    )
+    endpoints = _loaded_array(
+        _require_member(line_group, "endpoints"),
+        f"{line_group.name}/endpoints",
+        complex_values=False,
+    )
+    labels = _loaded_text_array(
+        _require_member(line_group, "label"), f"{line_group.name}/label"
+    )
+    if endpoints.shape != (len(kinds), 2, 2) or len(labels) != len(kinds):
+        raise ValueError(f"HDF5 scene lines in {line_group.name!r} are inconsistent.")
+    try:
+        lines = tuple(
+            SceneLine(kind, endpoints[index], labels[index])
+            for index, kind in enumerate(kinds)
+        )
+        return Scene2D(
+            points=points,
+            triangles=triangles,
+            eps_r=eps_r,
+            x_span=x_span,
+            z_span=z_span,
+            lines=lines,
+        )
+    except ValueError as exc:
+        raise ValueError(f"HDF5 scene {group.name!r} is invalid: {exc}") from exc
+
+
 def _load_result(group: Any, root_frequency: float) -> H5ResultData:
     coordinates = _loaded_array(
         _require_member(group, "coordinates"),
@@ -1060,6 +1223,7 @@ def _load_result(group: Any, root_frequency: float) -> H5ResultData:
         powers=MappingProxyType(powers),
         modes=tuple(modes),
         metadata=_metadata_attribute(group),
+        scene=_load_scene(group["scene"]) if "scene" in group else None,
     )
 
 
