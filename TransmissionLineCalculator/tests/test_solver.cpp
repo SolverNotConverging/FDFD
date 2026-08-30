@@ -166,7 +166,7 @@ void testAllDefaults() {
     }
 }
 
-void testPythonParityAtGuiDefaults() {
+void testPythonParityAtReferenceInputs() {
     struct PythonAnchor {
         tl::LineType type;
         std::string_view name;
@@ -218,9 +218,12 @@ void testPythonParityAtGuiDefaults() {
 
     for (const auto& anchor : anchors) {
         auto parameters = tl::defaultParameters(anchor.type);
+        if (anchor.type != tl::LineType::Coaxial) {
+            parameters.domainPaddingFactor = 1.0;
+        }
         check(
             parameters.maxElementSize == 1.0e-3,
-            "Python parity anchors require the default GUI mesh size of 1 mm"
+            "Python parity anchors require the 1 mm reference mesh size"
         );
         const auto result = tl::solve(parameters);
 
@@ -251,6 +254,58 @@ void testPythonParityAtGuiDefaults() {
             "C0"
         );
         checkParity(result.inductancePerLength, anchor.inductance, "L");
+    }
+}
+
+void testOpenDomainDefaultPaddingIsConverged() {
+    struct OpenCase {
+        tl::LineType type;
+        std::string_view name;
+    };
+    constexpr std::array cases{
+        OpenCase{tl::LineType::Microstrip, "microstrip"},
+        OpenCase{tl::LineType::Stripline, "stripline"},
+        OpenCase{tl::LineType::CoplanarWaveguide, "coplanar waveguide"},
+    };
+    constexpr double residualTolerance = 0.015;
+
+    for (const auto& testCase : cases) {
+        auto parameters = tl::defaultParameters(testCase.type);
+        check(
+            parameters.domainPaddingFactor == 3.0,
+            std::string(testCase.name) + " must use the converged padding-3 default"
+        );
+        const auto defaultResult = tl::solve(parameters);
+
+        parameters.domainPaddingFactor = 4.0;
+        const auto expandedResult = tl::solve(parameters);
+        const auto checkStable = [&](const double defaultValue,
+                                     const double expandedValue,
+                                     const std::string_view quantity) {
+            check(
+                relativeError(defaultValue, expandedValue) <= residualTolerance,
+                std::string(testCase.name) + " " + std::string(quantity)
+                    + " changes by more than 1.5% from padding 3 to 4"
+            );
+        };
+        checkStable(
+            defaultResult.neff.real(), expandedResult.neff.real(), "neff.real"
+        );
+        checkStable(
+            defaultResult.characteristicImpedance.real(),
+            expandedResult.characteristicImpedance.real(),
+            "Zc.real"
+        );
+        checkStable(
+            defaultResult.vacuumCapacitancePerLength,
+            expandedResult.vacuumCapacitancePerLength,
+            "C0"
+        );
+        checkStable(
+            defaultResult.inductancePerLength,
+            expandedResult.inductancePerLength,
+            "L"
+        );
     }
 }
 
@@ -336,6 +391,7 @@ void testFiniteConductivity() {
 
 void testMicrostripProjectedConductorLoss() {
     auto parameters = tl::defaultParameters(tl::LineType::Microstrip);
+    parameters.domainPaddingFactor = 1.0;
     parameters.metalConductivity = 59.6e6;
     const auto result = tl::solve(parameters);
 
@@ -505,7 +561,8 @@ using Test = std::pair<std::string_view, std::function<void()>>;
 int main() {
     const std::vector<Test> tests {
         {"all four defaults", testAllDefaults},
-        {"Python 1 mm numerical parity", testPythonParityAtGuiDefaults},
+        {"Python padding-1 numerical parity", testPythonParityAtReferenceInputs},
+        {"open-domain default padding convergence", testOpenDomainDefaultPaddingIsConverged},
         {"ideal coax exact TEM", testIdealCoaxAgainstExactTem},
         {"lossy passive branch", testLossyPassiveBranch},
         {"finite conductor loss", testFiniteConductivity},

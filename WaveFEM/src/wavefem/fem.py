@@ -117,8 +117,20 @@ class MixedFEMSystem:
     internal_pec_facets: NDArray[np.int64] = field(
         default_factory=lambda: np.empty(0, dtype=np.int64)
     )
+    quadrature_order: int = 4
 
     def __post_init__(self) -> None:
+        try:
+            valid_quadrature_order = (
+                not isinstance(self.quadrature_order, (bool, np.bool_))
+                and int(self.quadrature_order) == self.quadrature_order
+                and self.quadrature_order >= 1
+            )
+        except (TypeError, ValueError, OverflowError):
+            valid_quadrature_order = False
+        if not valid_quadrature_order:
+            raise ValueError("quadrature_order must be a positive integer.")
+        object.__setattr__(self, "quadrature_order", int(self.quadrature_order))
         raw = np.asarray(self.internal_pec_facets)
         if raw.ndim != 1 or (raw.size and raw.dtype.kind not in "iu"):
             raise ValueError("internal_pec_facets must be a one-dimensional integer array.")
@@ -425,6 +437,7 @@ def assemble_mixed_system(
         physical_mesh=mesh,
         length_scale=length_scale,
         internal_pec_facets=np.asarray(internal_pec_facets),
+        quadrature_order=int(intorder),
     )
 
 
@@ -447,13 +460,20 @@ def assemble_load_vector(
     )
 
 
-def solve_homogeneous_pec(
+def solve_prescribed_pec(
     system: MixedFEMSystem,
     load: NDArray[np.generic],
     *,
+    boundary_values: ArrayLike,
     residual_tolerance: float = 1e-7,
 ) -> MixedFieldSolution:
-    """Solve with homogeneous PEC conditions on outer and registered facets."""
+    """Solve with prescribed values on outer and registered PEC trace DOFs.
+
+    ``boundary_values`` is a full mixed-space coefficient vector.  Entries on
+    :attr:`MixedFEMSystem.pec_dofs` are imposed strongly; all other entries
+    must be zero.  This supports scattered-field PEC insertions, where the
+    constrained trace is ``E_sc,t = -E_inc,t`` instead of zero.
+    """
 
     if not np.isfinite(residual_tolerance) or residual_tolerance <= 0.0:
         raise ValueError("residual_tolerance must be finite and positive.")
@@ -462,11 +482,32 @@ def solve_homogeneous_pec(
         raise ValueError(
             f"load must have shape ({system.ndofs},), received {rhs.shape}."
         )
+    prescribed = np.asarray(boundary_values, dtype=np.complex128)
+    if prescribed.shape != (system.ndofs,):
+        raise ValueError(
+            "boundary_values must have shape "
+            f"({system.ndofs},), received {prescribed.shape}."
+        )
+    if not np.isfinite(prescribed).all():
+        raise ValueError("boundary_values contains a non-finite value.")
+    constrained = np.asarray(system.pec_dofs, dtype=np.int64)
+    free = np.setdiff1d(
+        np.arange(system.ndofs, dtype=np.int64),
+        constrained,
+        assume_unique=False,
+    )
+    if np.any(prescribed[free] != 0.0):
+        raise ValueError("boundary_values must be zero outside the PEC DOF set.")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", MatrixRankWarning)
             coefficients = solve(
-                *condense(system.matrix, rhs, D=system.pec_dofs)
+                *condense(
+                    system.matrix,
+                    rhs,
+                    x=prescribed,
+                    D=constrained,
+                )
             )
     except (MatrixRankWarning, RuntimeError, ValueError) as exc:
         raise SolverError(
@@ -476,13 +517,11 @@ def solve_homogeneous_pec(
     coefficients = np.asarray(coefficients, dtype=np.complex128)
     if not np.isfinite(coefficients).all():
         raise SolverError("The PEC Maxwell solve returned non-finite coefficients.")
-    free = np.setdiff1d(
-        np.arange(system.ndofs, dtype=np.int64),
-        np.asarray(system.pec_dofs, dtype=np.int64),
-        assume_unique=False,
-    )
     residual = system.matrix @ coefficients - rhs
-    denominator = np.linalg.norm(rhs[free])
+    effective_rhs = rhs[free] - system.matrix[free][:, constrained] @ prescribed[
+        constrained
+    ]
+    denominator = np.linalg.norm(effective_rhs)
     relative_residual = float(
         np.linalg.norm(residual[free]) / denominator
         if denominator > 0.0
@@ -496,7 +535,27 @@ def solve_homogeneous_pec(
     return MixedFieldSolution(
         basis=system.basis,
         coefficients=coefficients,
-        solve_info={"method": "scipy-direct", "relative_residual": relative_residual},
+        solve_info={
+            "method": "scipy-direct",
+            "relative_residual": relative_residual,
+            "prescribed_pec_dof_count": int(np.count_nonzero(prescribed[constrained])),
+        },
+    )
+
+
+def solve_homogeneous_pec(
+    system: MixedFEMSystem,
+    load: NDArray[np.generic],
+    *,
+    residual_tolerance: float = 1e-7,
+) -> MixedFieldSolution:
+    """Solve with homogeneous PEC conditions on outer and registered facets."""
+
+    return solve_prescribed_pec(
+        system,
+        load,
+        boundary_values=np.zeros(system.ndofs, dtype=np.complex128),
+        residual_tolerance=residual_tolerance,
     )
 
 

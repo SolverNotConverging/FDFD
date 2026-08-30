@@ -119,9 +119,9 @@ void drawArrow(QPainter& painter, const QPointF& centre, double x, double y) {
     }
     // Screen y grows downwards, while the field's y component grows upwards.
     const QPointF direction{x / norm, -y / norm};
-    constexpr double length = 17.0;
-    constexpr double headLength = 5.2;
-    constexpr double headWidth = 3.4;
+    constexpr double length = 15.0;
+    constexpr double headLength = 4.5;
+    constexpr double headWidth = 2.9;
     const auto start = centre - 0.5 * length * direction;
     const auto end = centre + 0.5 * length * direction;
     const QPointF normal{-direction.y(), direction.x()};
@@ -132,10 +132,10 @@ void drawArrow(QPainter& painter, const QPointF& centre, double x, double y) {
     path.lineTo(end - headLength * direction + headWidth * normal);
     path.moveTo(end);
     path.lineTo(end - headLength * direction - headWidth * normal);
-    painter.setPen(QPen(QColor(0, 0, 0, 175), 3.0, Qt::SolidLine,
+    painter.setPen(QPen(QColor(0, 0, 0, 175), 2.5, Qt::SolidLine,
                         Qt::RoundCap, Qt::RoundJoin));
     painter.drawPath(path);
-    painter.setPen(QPen(QColor(255, 255, 255, 235), 1.25, Qt::SolidLine,
+    painter.setPen(QPen(QColor(255, 255, 255, 235), 1.0, Qt::SolidLine,
                         Qt::RoundCap, Qt::RoundJoin));
     painter.drawPath(path);
 }
@@ -251,7 +251,7 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
     }
 
     const auto maximumArrows = std::max<std::size_t>(1,
-        static_cast<std::size_t>(plotArea.width() * plotArea.height() / 2400.0));
+        static_cast<std::size_t>(plotArea.width() * plotArea.height() / 2000.0));
     const auto stride = std::max<std::size_t>(1,
         (result_->samples.size() + maximumArrows - 1) / maximumArrows);
     for (std::size_t index = 0; index < result_->samples.size(); index += stride) {

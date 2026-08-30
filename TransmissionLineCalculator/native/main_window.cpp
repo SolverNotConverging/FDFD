@@ -71,6 +71,38 @@ template <typename Value>
     throw std::invalid_argument(utf8.constData());
 }
 
+[[nodiscard]] bool nearlyEqual(const double left, const double right) {
+    return std::abs(left - right) <=
+           1.0e-12 * std::max({1.0, std::abs(left), std::abs(right)});
+}
+
+[[nodiscard]] bool sameParameters(const Parameters& left,
+                                  const Parameters& right) {
+    const bool conductivityMatches =
+        left.metalConductivity.has_value() ==
+            right.metalConductivity.has_value() &&
+        (!left.metalConductivity.has_value() ||
+         nearlyEqual(*left.metalConductivity, *right.metalConductivity));
+    return left.type == right.type && conductivityMatches &&
+           nearlyEqual(left.frequencyHz, right.frequencyHz) &&
+           nearlyEqual(left.maxElementSize, right.maxElementSize) &&
+           nearlyEqual(left.refinementFactor, right.refinementFactor) &&
+           nearlyEqual(left.innerRadius, right.innerRadius) &&
+           nearlyEqual(left.outerRadius, right.outerRadius) &&
+           nearlyEqual(left.outerConductorThickness,
+                       right.outerConductorThickness) &&
+           nearlyEqual(left.traceWidth, right.traceWidth) &&
+           nearlyEqual(left.substrateHeight, right.substrateHeight) &&
+           nearlyEqual(left.conductorThickness, right.conductorThickness) &&
+           nearlyEqual(left.groundSpacing, right.groundSpacing) &&
+           nearlyEqual(left.centerWidth, right.centerWidth) &&
+           nearlyEqual(left.gap, right.gap) &&
+           nearlyEqual(left.groundWidth, right.groundWidth) &&
+           nearlyEqual(left.epsilonR, right.epsilonR) &&
+           nearlyEqual(left.lossTangent, right.lossTangent) &&
+           nearlyEqual(left.domainPaddingFactor, right.domainPaddingFactor);
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -83,7 +115,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 }
 
 void MainWindow::calculateForSmokeTest() {
+    lineTypeCombo_->setCurrentIndex(1);
     calculate();
+}
+
+bool MainWindow::defaultsMatchForSmokeTest() {
+    const int originalIndex = lineTypeCombo_->currentIndex();
+    bool matches = true;
+    for (int index = 0; index < lineTypeCombo_->count(); ++index) {
+        lineTypeCombo_->setCurrentIndex(index);
+        const auto parameters = readParameters();
+        matches = matches &&
+                  sameParameters(parameters, defaultParameters(selectedLineType()));
+    }
+    lineTypeCombo_->setCurrentIndex(originalIndex);
+    return matches;
 }
 
 bool MainWindow::solveInProgress() const noexcept {
@@ -231,7 +277,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::TraceWidth, "Trace width (mm)", "3", 1.0e-3},
             {InputKey::SubstrateHeight, "Substrate h (mm)", "1.524", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "1", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
             epsilon,
             loss,
             conductivity,
@@ -243,7 +289,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::TraceWidth, "Trace width (mm)", "0.8", 1.0e-3},
             {InputKey::GroundSpacing, "Ground gap (mm)", "1.524", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "1", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
             epsilon,
             loss,
             conductivity,
@@ -257,7 +303,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::GroundWidth, "Ground width (mm)", "1.5", 1.0e-3},
             {InputKey::SubstrateHeight, "Substrate h (mm)", "0.8", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "1", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
             epsilon,
             loss,
             conductivity,

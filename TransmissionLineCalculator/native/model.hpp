@@ -41,7 +41,7 @@ struct Parameters {
 
     double epsilonR{3.55};
     double lossTangent{2.7e-3};
-    double domainPaddingFactor{1.0};
+    double domainPaddingFactor{3.0};
     std::optional<double> metalConductivity{};
 };
 

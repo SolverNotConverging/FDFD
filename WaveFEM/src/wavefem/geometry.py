@@ -297,7 +297,8 @@ class GeometryModel:
 
         ``background=True`` makes the sheet part of both the unperturbed guide
         and the actual device.  Such a sheet must use ``z="all"``.  Finite
-        actual-only openings are then introduced with :meth:`add_slot`.
+        openings are then introduced with :meth:`add_slot`.  With
+        ``background=False``, a finite z span describes an actual-only plate.
         """
 
         if isinstance(x, (bool, np.bool_)):

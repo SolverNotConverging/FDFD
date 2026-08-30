@@ -22,15 +22,24 @@ def test_grounded_pec_slot_is_preserved_in_modes_and_frequency_clones() -> None:
     assert clone.geometry.pec_slots is not simulation.geometry.pec_slots
 
 
-def test_high_level_pec_api_rejects_unsupported_actual_only_sheet() -> None:
+def test_high_level_pec_api_accepts_only_compact_actual_only_sheet() -> None:
     simulation = wf.Scattering2D(
         frequency=10.0e9,
         x_span=(-10.0 * MM, 10.0 * MM),
         z_span=(-20.0 * MM, 20.0 * MM),
         transverse_boundary="pec",
     )
-    with pytest.raises(wf.ConfigurationError, match="background=True only"):
-        simulation.add_pec(x=0.0, background=False)
+    plate = simulation.add_pec(
+        x=1.0 * MM,
+        z=(-2.0 * MM, 3.0 * MM),
+        background=False,
+        name="finite_plate",
+    )
+    assert plate.background is False
+    assert simulation._perturbation_z_bounds() == plate.z
+
+    with pytest.raises(wf.ConfigurationError, match="must be compact"):
+        simulation.add_pec(x=2.0 * MM, background=False)
 
 
 @pytest.mark.gmsh

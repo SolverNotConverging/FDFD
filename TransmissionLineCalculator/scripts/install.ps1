@@ -19,6 +19,10 @@ $gmshConfig = Join-Path $MsysPrefix 'lib\cmake\gmsh\gmshConfig.cmake'
 $gmshHeader = Join-Path $MsysPrefix 'include\gmsh.h'
 $gmshImportLibrary = Join-Path $MsysPrefix 'lib\libgmsh.dll.a'
 $gmshRuntime = Join-Path $mingwBin 'libgmsh.dll'
+$ftxuiConfig = Join-Path $MsysPrefix 'lib\cmake\ftxui\ftxui-config.cmake'
+$ftxuiComponentRuntime = Join-Path $mingwBin 'libftxui-component.dll'
+$ftxuiDomRuntime = Join-Path $mingwBin 'libftxui-dom.dll'
+$ftxuiScreenRuntime = Join-Path $mingwBin 'libftxui-screen.dll'
 
 $requiredTools = @(
     $cmake,
@@ -28,7 +32,11 @@ $requiredTools = @(
     $gmshConfig,
     $gmshHeader,
     $gmshImportLibrary,
-    $gmshRuntime
+    $gmshRuntime,
+    $ftxuiConfig,
+    $ftxuiComponentRuntime,
+    $ftxuiDomRuntime,
+    $ftxuiScreenRuntime
 )
 if (-not $SkipTests) {
     $requiredTools += $ctest
@@ -69,10 +77,19 @@ foreach ($executable in @($calculator, $cli)) {
 & $windeployqt --release --no-translations --no-system-d3d-compiler $calculator
 if ($LASTEXITCODE -ne 0) { throw 'Qt runtime deployment failed.' }
 
-# Gmsh is a direct native dependency of the statically linked tl-core. Copy it
-# explicitly as well as discovering dependencies below, so deployment remains
-# robust if the ldd output format changes.
-Copy-Item -LiteralPath $gmshRuntime -Destination (Join-Path $binRoot 'libgmsh.dll') -Force
+# Gmsh and FTXUI are direct native dependencies. Copy them explicitly as well
+# as discovering transitive dependencies below, so deployment remains robust
+# if the ldd output format changes.
+foreach ($runtime in @(
+    $gmshRuntime,
+    $ftxuiComponentRuntime,
+    $ftxuiDomRuntime,
+    $ftxuiScreenRuntime
+)) {
+    Copy-Item -LiteralPath $runtime `
+        -Destination (Join-Path $binRoot (Split-Path -Leaf $runtime)) `
+        -Force
+}
 
 $runtimeNames = [System.Collections.Generic.HashSet[string]]::new(
     [System.StringComparer]::OrdinalIgnoreCase
@@ -106,6 +123,28 @@ foreach ($name in $runtimeNames) {
     }
 }
 
+# Prove that the staged TUI is self-contained instead of accidentally finding
+# MinGW DLLs through the build environment. Keep only its own bin directory and
+# standard Windows locations on PATH for the smoke test, then restore PATH.
+$originalPath = $env:Path
+$windowsRoot = [System.IO.Path]::GetFullPath($env:SystemRoot)
+$sanitizedPathEntries = @(
+    $binRoot,
+    (Join-Path $windowsRoot 'System32'),
+    $windowsRoot,
+    (Join-Path $windowsRoot 'System32\Wbem'),
+    (Join-Path $windowsRoot 'System32\WindowsPowerShell\v1.0')
+) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+try {
+    $env:Path = ($sanitizedPathEntries | Select-Object -Unique) -join ';'
+    & $cli --smoke-test
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Staged interactive TUI smoke test failed.'
+    }
+} finally {
+    $env:Path = $originalPath
+}
+
 Write-Host "Transmission Line Calculator installed in $destinationRoot"
 Write-Host "GUI: $calculator"
-Write-Host "CLI: $cli --help"
+Write-Host "Interactive TUI: $cli"

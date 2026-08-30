@@ -28,6 +28,7 @@ public:
     // These hooks make the asynchronous application path available to the
     // offscreen smoke runner without exposing individual widgets.
     void calculateForSmokeTest();
+    [[nodiscard]] bool defaultsMatchForSmokeTest();
     [[nodiscard]] bool solveInProgress() const noexcept;
     [[nodiscard]] bool hasResult() const noexcept;
 

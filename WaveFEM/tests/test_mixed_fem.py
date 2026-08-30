@@ -13,6 +13,7 @@ from wavefem.fem import (
     create_mixed_basis,
     relative_hermiticity_error,
     solve_homogeneous_pec,
+    solve_prescribed_pec,
 )
 from wavefem.operators import electric_field_vector, modified_curl
 
@@ -207,6 +208,42 @@ def test_internal_pec_facets_must_be_interior_integer_indices() -> None:
         assemble_mixed_system(mesh, parameters, internal_pec_facets=boundary)
     with pytest.raises(ValueError, match="integer array"):
         assemble_mixed_system(mesh, parameters, internal_pec_facets=[1.5])
+
+
+def test_prescribed_pec_values_are_imposed_and_residual_uses_effective_load() -> None:
+    mesh = _mesh(4)
+    facets = mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.5))
+    system = assemble_mixed_system(
+        mesh,
+        MaxwellParameters(k0=_K0, ky=_KY, eps_r=_EPS_R),
+        internal_pec_facets=facets,
+    )
+    constrained = np.asarray(system.pec_dofs, dtype=np.int64)
+    internal = np.asarray(
+        system.basis.get_dofs(facets=facets).all(), dtype=np.int64
+    )
+    prescribed = np.zeros(system.ndofs, dtype=np.complex128)
+    prescribed[internal] = 0.25 - 0.1j
+
+    solution = solve_prescribed_pec(
+        system,
+        np.zeros(system.ndofs, dtype=np.complex128),
+        boundary_values=prescribed,
+    )
+
+    np.testing.assert_allclose(solution.coefficients[constrained], prescribed[constrained])
+    assert solution.solve_info["relative_residual"] < 1e-12
+    assert solution.solve_info["prescribed_pec_dof_count"] == internal.size
+
+    invalid = np.array(prescribed, copy=True)
+    free = np.setdiff1d(np.arange(system.ndofs), constrained)
+    invalid[free[0]] = 1.0
+    with pytest.raises(ValueError, match="outside the PEC DOF set"):
+        solve_prescribed_pec(
+            system,
+            np.zeros(system.ndofs, dtype=np.complex128),
+            boundary_values=invalid,
+        )
 
 
 def test_manufactured_solution_converges_in_mixed_space() -> None:

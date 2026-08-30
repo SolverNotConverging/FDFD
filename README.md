@@ -9,7 +9,7 @@ The repository is organised by problem type. Each solver folder contains the sol
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
 | `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
-| `TransmissionLineCalculator/` | Native Qt quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.md`](TransmissionLineCalculator/README.md) |
+| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.md`](TransmissionLineCalculator/README.md) |
 | `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.md`](WaveFEM/README.md) |
 | `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.md`](WaveFEMViewer/README.md) |
 | `Mode_Solver_1D/` | `ModeSolver1D` | TE/TM modes of 1D slab waveguides | [`README.rst`](Mode_Solver_1D/README.rst) |
@@ -38,9 +38,9 @@ isolated installation and environment are documented in
 
 The two native C++20 applications support MSVC on Windows, AppleClang on
 macOS, and GCC or Clang on Linux. Both use Qt 6.2 or newer. The transmission
-line calculator additionally needs Eigen 3.4 or newer and Gmsh; the WaveFEM
-viewer needs HDF5 1.10 or newer. Platform-specific dependency and build
-commands are documented in the
+line calculator additionally needs FTXUI, Eigen 3.4 or newer, and Gmsh; the
+WaveFEM viewer needs HDF5 1.10 or newer. Platform-specific dependency and
+build commands are documented in the
 [`TransmissionLineCalculator`](TransmissionLineCalculator/README.md) and
 [`WaveFEMViewer`](WaveFEMViewer/README.md) READMEs.
 

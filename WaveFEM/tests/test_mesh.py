@@ -170,6 +170,40 @@ def test_background_pec_sheet_and_slot_are_conforming_mesh_facets() -> None:
 
 
 @pytest.mark.gmsh
+def test_finite_actual_only_pec_is_classified_as_inserted_facets() -> None:
+    geometry = GeometryModel((-1.0, 1.0), (-2.0, 2.0), Material())
+    ground = geometry.add_pec(x=-0.4, background=True, name="ground")
+    geometry.add_slot(pec=ground, z=(-0.25, 0.25), name="aperture")
+    plate = geometry.add_pec(
+        x=0.35,
+        z=(-0.7, 0.6),
+        background=False,
+        name="finite_plate",
+    )
+
+    mesh = generate_mesh(geometry, max_element_size=0.25)
+
+    assert mesh.inserted_pec_facets.size > 0
+    assert not np.intersect1d(
+        mesh.inserted_pec_facets, mesh.background_pec_facets
+    ).size
+    np.testing.assert_array_equal(
+        mesh.actual_pec_facets,
+        np.union1d(
+            np.setdiff1d(
+                mesh.background_pec_facets,
+                mesh.released_pec_facets,
+            ),
+            mesh.inserted_pec_facets,
+        ),
+    )
+    facet_points = mesh.mesh.p[:, mesh.mesh.facets[:, mesh.inserted_pec_facets]]
+    np.testing.assert_allclose(facet_points[0], plate.x, atol=1e-13)
+    assert facet_points[1].min() >= plate.z[0] - 1e-13
+    assert facet_points[1].max() <= plate.z[1] + 1e-13
+
+
+@pytest.mark.gmsh
 def test_multiple_named_pec_slots_have_disjoint_released_facet_mappings() -> None:
     geometry = GeometryModel((-1.0, 1.0), (-3.0, 3.0), Material())
     ground = geometry.add_pec(x=0.0, background=True, name="ground")
