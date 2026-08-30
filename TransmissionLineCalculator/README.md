@@ -160,7 +160,7 @@ On Linux use `./build/transmission-line-calculator`; on macOS use
 `open build/transmission-line-calculator.app`. Add `Release/` after the build
 directory for a Visual Studio build.
 
-Choose one of Coaxial, Microstrip, Stripline, or CPW, edit its dimensions, and
+Choose Microstrip, CPW, Stripline, or Coaxial, edit its dimensions, and
 select **Calculate FEM**. **Refine x2** halves the effective maximum element
 size and resolves the line again. **Display mesh** overlays the native
 triangles without recomputing the result. The E/H backgrounds encode field
@@ -174,8 +174,8 @@ Run the terminal calculator with no arguments from a real terminal:
 .\build\transmission-line-calculator-cli.exe
 ```
 
-This opens the interactive FTXUI interface. It presents Coaxial, Microstrip,
-Stripline, and CPW choices, editable engineering-unit fields for the selected
+This opens the interactive FTXUI interface. It presents Microstrip, CPW,
+Stripline, and Coaxial choices, editable engineering-unit fields for the selected
 geometry, solve status, timings, and extracted results. The **Setup** and
 **Results** workspace tabs keep the interface usable in an 80-column terminal.
 
@@ -241,10 +241,19 @@ remote zero-potential wall has less influence on the extracted values:
   0.8 mm, metal 35 um, padding 3, relative permittivity 3.55, loss tangent
   0.0027.
 
-All dimensions, frequency, relative permittivity, mesh size, padding, and a
-provided conductivity must be finite and positive. Loss tangent may be zero
+The padding input is a dimensionless domain-padding factor rather than a
+distance. All dimensions, frequency, relative permittivity, mesh size, padding
+factor, and a provided conductivity must be finite and positive. Loss tangent
+may be zero
 but cannot be negative. Coax shield radius must exceed its inner-conductor
 radius; stripline metal thickness must be smaller than the ground spacing.
+
+The Qt field panels default to a focused, equal-scale view for microstrip, CPW,
+and stripline. This display crop is equivalent to at most one padding unit and
+does not alter the mesh or extracted values; enable **Show full FEM domain** to
+inspect the complete padded mesh. Coaxial always shows its complete closed
+domain. Both native interfaces list the geometries as Microstrip, CPW,
+Stripline, then Coaxial, with Microstrip selected initially.
 
 Results are reported as `Zc`/`Zwave` in ohms, `R'` in ohms/m, `L'` in H/m,
 `G'` in S/m, `C'` in F/m, attenuation in 1/m, and power in W.

@@ -92,6 +92,7 @@ add_executable(transmission-line-calculator WIN32 MACOSX_BUNDLE
     native/main.cpp
     native/main_window.cpp
     native/field_plot.cpp
+    native/field_view.cpp
 )
 set_target_properties(transmission-line-calculator PROPERTIES AUTOMOC ON)
 target_link_libraries(transmission-line-calculator PRIVATE
@@ -132,6 +133,17 @@ if(BUILD_TESTING)
 
     add_test(NAME tl-solver-tests COMMAND tl-solver-tests)
     set_tests_properties(tl-solver-tests PROPERTIES TIMEOUT 180)
+
+    add_executable(tl-field-view-tests
+        tests/test_field_view.cpp
+        native/field_view.cpp
+    )
+    target_include_directories(tl-field-view-tests PRIVATE native)
+    target_link_libraries(tl-field-view-tests PRIVATE tl::core)
+    tl_enable_warnings(tl-field-view-tests)
+
+    add_test(NAME tl-field-view-tests COMMAND tl-field-view-tests)
+    set_tests_properties(tl-field-view-tests PROPERTIES TIMEOUT 30)
 
     add_test(
         NAME tl-gui-smoke

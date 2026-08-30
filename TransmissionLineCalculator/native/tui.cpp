@@ -126,7 +126,7 @@ struct GeometryForm {
                  1.0e-3},
                 {InputKey::ConductorThickness, "Metal thick. (um)", "35",
                  1.0e-6},
-                {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+                {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
                 epsilon,
                 loss,
                 conductivity,
@@ -139,7 +139,7 @@ struct GeometryForm {
                 {InputKey::GroundSpacing, "Ground gap (mm)", "1.524", 1.0e-3},
                 {InputKey::ConductorThickness, "Metal thick. (um)", "35",
                  1.0e-6},
-                {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+                {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
                 epsilon,
                 loss,
                 conductivity,
@@ -154,7 +154,7 @@ struct GeometryForm {
                 {InputKey::SubstrateHeight, "Substrate h (mm)", "0.8", 1.0e-3},
                 {InputKey::ConductorThickness, "Metal thick. (um)", "35",
                  1.0e-6},
-                {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+                {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
                 epsilon,
                 loss,
                 conductivity,
@@ -253,6 +253,13 @@ public:
     }
 
     [[nodiscard]] bool renderSmokeFrame() {
+        const std::vector<std::string> expectedLineNames{
+            "Microstrip", "CPW", "Stripline", "Coaxial"
+        };
+        if (lineIndex_ != 0 || lineNames_ != expectedLineNames
+            || forms_.front().type != LineType::Microstrip) {
+            return false;
+        }
         for (auto& form : forms_) {
             Component firstInvalid;
             const auto parsed = readParameters(form, firstInvalid);
@@ -302,7 +309,7 @@ public:
 
 private:
     void buildComponents() {
-        lineNames_ = {"Coaxial", "Microstrip", "Stripline", "CPW"};
+        lineNames_ = {"Microstrip", "CPW", "Stripline", "Coaxial"};
         MenuOption lineOptions = MenuOption::HorizontalAnimated();
         lineOptions.on_change = [this] {
             viewIndex_ = 0;
@@ -322,9 +329,12 @@ private:
         visibleLineMenu_ =
             Maybe(lineMenu_, [this] { return viewIndex_ == 0; });
 
-        constexpr std::array types{LineType::Coaxial, LineType::Microstrip,
-                                   LineType::Stripline,
-                                   LineType::CoplanarWaveguide};
+        constexpr std::array types{
+            LineType::Microstrip,
+            LineType::CoplanarWaveguide,
+            LineType::Stripline,
+            LineType::Coaxial,
+        };
         Components formChildren;
         for (std::size_t index = 0; index < forms_.size(); ++index) {
             forms_[index] = makeForm(types[index]);
@@ -1032,7 +1042,7 @@ private:
     std::string repetitionsText_{"5"};
     std::string refinementError_;
     std::string repetitionsError_;
-    std::string status_{"Ready. Edit inputs or press F5 for the coaxial default."};
+    std::string status_{"Ready. Edit inputs or press F5 for the microstrip default."};
     std::string lastSolveError_;
     std::string resultName_;
     std::shared_ptr<const Result> result_;

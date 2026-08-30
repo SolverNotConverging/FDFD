@@ -11,53 +11,15 @@
 #include <cmath>
 #include <complex>
 #include <limits>
-#include <optional>
 #include <vector>
 
 namespace tl {
 namespace {
 
-struct Bounds {
-    double xMin{};
-    double xMax{};
-    double yMin{};
-    double yMax{};
-};
-
-[[nodiscard]] std::optional<Bounds> dataBounds(const Result& result) {
-    if (result.mesh.nodes.empty()) {
-        return std::nullopt;
-    }
-    Bounds bounds{
-        std::numeric_limits<double>::infinity(),
-        -std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity(),
-        -std::numeric_limits<double>::infinity(),
-    };
-    for (const auto& node : result.mesh.nodes) {
-        bounds.xMin = std::min(bounds.xMin, node.x);
-        bounds.xMax = std::max(bounds.xMax, node.x);
-        bounds.yMin = std::min(bounds.yMin, node.y);
-        bounds.yMax = std::max(bounds.yMax, node.y);
-    }
-    if (!std::isfinite(bounds.xMin) || !std::isfinite(bounds.xMax)
-        || !std::isfinite(bounds.yMin) || !std::isfinite(bounds.yMax)) {
-        return std::nullopt;
-    }
-    const auto xScale = std::max({std::abs(bounds.xMin), std::abs(bounds.xMax), 1.0e-12});
-    const auto yScale = std::max({std::abs(bounds.yMin), std::abs(bounds.yMax), 1.0e-12});
-    if (bounds.xMax <= bounds.xMin) {
-        bounds.xMin -= 0.5 * xScale;
-        bounds.xMax += 0.5 * xScale;
-    }
-    if (bounds.yMax <= bounds.yMin) {
-        bounds.yMin -= 0.5 * yScale;
-        bounds.yMax += 0.5 * yScale;
-    }
-    return bounds;
-}
-
-[[nodiscard]] QRectF aspectFit(const QRectF& available, const Bounds& bounds) {
+[[nodiscard]] QRectF aspectFit(
+    const QRectF& available,
+    const FieldViewBounds& bounds
+) {
     const auto dataWidth = bounds.xMax - bounds.xMin;
     const auto dataHeight = bounds.yMax - bounds.yMin;
     const auto dataAspect = dataWidth / dataHeight;
@@ -71,7 +33,7 @@ struct Bounds {
             available.width(), height};
 }
 
-[[nodiscard]] QPointF mapPoint(const Vec2& point, const Bounds& bounds,
+[[nodiscard]] QPointF mapPoint(const Vec2& point, const FieldViewBounds& bounds,
                                const QRectF& area) {
     const auto x = (point.x - bounds.xMin) / (bounds.xMax - bounds.xMin);
     const auto y = (point.y - bounds.yMin) / (bounds.yMax - bounds.yMin);
@@ -168,6 +130,14 @@ void FieldPlot::setMeshVisible(bool visible) {
     update();
 }
 
+void FieldPlot::setViewMode(const FieldViewMode mode) {
+    if (viewMode_ == mode) {
+        return;
+    }
+    viewMode_ = mode;
+    update();
+}
+
 void FieldPlot::setEmptyMessage(QString message) {
     result_.reset();
     emptyMessage_ = std::move(message);
@@ -205,8 +175,9 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         return;
     }
 
-    const auto bounds = dataBounds(*result_);
-    if (!bounds) {
+    const auto fullBounds = fieldMeshBounds(*result_);
+    const auto bounds = fieldDisplayBounds(*result_, viewMode_);
+    if (!fullBounds || !bounds) {
         painter.setPen(QColor(170, 30, 45));
         painter.drawText(rect(), Qt::AlignCenter,
                          QStringLiteral("Field mesh contains invalid coordinates."));
@@ -217,6 +188,7 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         return;
     }
     const auto plotArea = aspectFit(available, *bounds);
+    const auto cropped = fieldViewIsCropped(*fullBounds, *bounds);
 
     std::vector<double> magnitudes;
     magnitudes.reserve(result_->samples.size());
@@ -227,6 +199,9 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         maximum = std::max(maximum, magnitudes.back());
     }
     const auto colourScale = maximum > std::numeric_limits<double>::min() ? maximum : 1.0;
+
+    painter.save();
+    painter.setClipRect(plotArea);
 
     const auto triangleCount = result_->mesh.triangles.size();
     for (std::size_t index = 0; index < triangleCount; ++index) {
@@ -250,11 +225,15 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         painter.drawPolygon(polygon);
     }
 
+    const auto visibleSamples = visibleFieldSampleIndices(*result_, *bounds);
     const auto maximumArrows = std::max<std::size_t>(1,
         static_cast<std::size_t>(plotArea.width() * plotArea.height() / 2000.0));
     const auto stride = std::max<std::size_t>(1,
-        (result_->samples.size() + maximumArrows - 1) / maximumArrows);
-    for (std::size_t index = 0; index < result_->samples.size(); index += stride) {
+        (visibleSamples.size() + maximumArrows - 1) / maximumArrows);
+    for (std::size_t visibleIndex = 0;
+         visibleIndex < visibleSamples.size();
+         visibleIndex += stride) {
+        const auto index = visibleSamples[visibleIndex];
         const auto& sample = result_->samples[index];
         const auto& field = family_ == FieldFamily::Electric
             ? sample.electric : sample.magnetic;
@@ -267,6 +246,7 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         }
         drawArrow(painter, mapPoint(sample.position, *bounds, plotArea), x, y);
     }
+    painter.restore();
 
     painter.setBrush(Qt::NoBrush);
     painter.setPen(QPen(palette().color(QPalette::Text), 1.0));
@@ -294,6 +274,28 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
     painter.drawText(QRectF(plotArea.right() - 30.0, plotArea.bottom() + 1.0,
                             60.0, 16.0), Qt::AlignRight | Qt::AlignVCenter,
                      scientific(bounds->xMax));
+
+    if (cropped) {
+        QFont badgeFont = bodyFont;
+        badgeFont.setPointSizeF(std::max(7.0, bodyFont.pointSizeF() - 1.0));
+        painter.setFont(badgeFont);
+        const auto badgeText = QStringLiteral("Focused view — display only");
+        const auto textBounds = painter.fontMetrics().boundingRect(badgeText);
+        const QRectF badge(
+            plotArea.left() + 6.0,
+            plotArea.top() + 6.0,
+            textBounds.width() + 12.0,
+            textBounds.height() + 6.0
+        );
+        auto badgeBackground = palette().color(QPalette::Base);
+        badgeBackground.setAlpha(210);
+        painter.setBrush(badgeBackground);
+        painter.setPen(QPen(palette().color(QPalette::Mid), 0.8));
+        painter.drawRoundedRect(badge, 3.0, 3.0);
+        painter.setPen(palette().color(QPalette::Text));
+        painter.drawText(badge, Qt::AlignCenter, badgeText);
+        painter.setFont(bodyFont);
+    }
 
     const QRectF colourBar(width() - 46.0, plotArea.top(), 13.0, plotArea.height());
     QLinearGradient gradient(colourBar.bottomLeft(), colourBar.topLeft());

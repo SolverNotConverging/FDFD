@@ -87,6 +87,7 @@ private:
     void setBusy(bool busy);
     void setStatus(const QString& message, bool error = false);
     void updateHeading();
+    void updateFieldViewControls();
 
     QComboBox* lineTypeCombo_{};
     QGroupBox* parametersGroup_{};
@@ -94,6 +95,7 @@ private:
     QPushButton* calculateButton_{};
     QPushButton* refineButton_{};
     QCheckBox* meshCheck_{};
+    QCheckBox* fullDomainCheck_{};
     QLabel* statusLabel_{};
     QLabel* headingLabel_{};
     QLabel* resultsLabel_{};

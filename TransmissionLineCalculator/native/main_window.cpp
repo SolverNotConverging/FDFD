@@ -18,6 +18,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStringList>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -107,26 +108,38 @@ template <typename Value>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     buildUi();
-    configureEntries(LineType::Coaxial);
+    configureEntries(selectedLineType());
     updateHeading();
+    updateFieldViewControls();
     setBusy(false);
     setStatus(QStringLiteral("Ready"));
     resize(1460, 860);
 }
 
 void MainWindow::calculateForSmokeTest() {
-    lineTypeCombo_->setCurrentIndex(1);
+    lineTypeCombo_->setCurrentIndex(0);
     calculate();
 }
 
 bool MainWindow::defaultsMatchForSmokeTest() {
     const int originalIndex = lineTypeCombo_->currentIndex();
-    bool matches = true;
+    const QStringList expectedOrder{
+        QStringLiteral("Microstrip"), QStringLiteral("CPW"),
+        QStringLiteral("Stripline"), QStringLiteral("Coaxial"),
+    };
+    QStringList actualOrder;
+    for (int index = 0; index < lineTypeCombo_->count(); ++index) {
+        actualOrder.push_back(lineTypeCombo_->itemText(index));
+    }
+    bool matches = originalIndex == 0 && actualOrder == expectedOrder
+        && fullDomainCheck_->isEnabled() && !fullDomainCheck_->isChecked();
     for (int index = 0; index < lineTypeCombo_->count(); ++index) {
         lineTypeCombo_->setCurrentIndex(index);
         const auto parameters = readParameters();
         matches = matches &&
-                  sameParameters(parameters, defaultParameters(selectedLineType()));
+                  sameParameters(parameters, defaultParameters(selectedLineType()))
+            && (fullDomainCheck_->isEnabled()
+                == (selectedLineType() != LineType::Coaxial));
     }
     lineTypeCombo_->setCurrentIndex(originalIndex);
     return matches;
@@ -153,8 +166,10 @@ void MainWindow::buildUi() {
     auto* typeGroup = new QGroupBox(QStringLiteral("Transmission line"), controls);
     auto* typeLayout = new QVBoxLayout(typeGroup);
     lineTypeCombo_ = new QComboBox(typeGroup);
-    lineTypeCombo_->addItems({QStringLiteral("Coaxial"), QStringLiteral("Microstrip"),
-                              QStringLiteral("Stripline"), QStringLiteral("CPW")});
+    lineTypeCombo_->addItems({
+        QStringLiteral("Microstrip"), QStringLiteral("CPW"),
+        QStringLiteral("Stripline"), QStringLiteral("Coaxial"),
+    });
     typeLayout->addWidget(lineTypeCombo_);
     controlsLayout->addWidget(typeGroup);
 
@@ -175,6 +190,16 @@ void MainWindow::buildUi() {
     meshCheck_ = new QCheckBox(QStringLiteral("Display mesh"), controls);
     meshCheck_->setChecked(false);
     controlsLayout->addWidget(meshCheck_);
+
+    fullDomainCheck_ = new QCheckBox(
+        QStringLiteral("Show full FEM domain"), controls
+    );
+    fullDomainCheck_->setChecked(false);
+    fullDomainCheck_->setToolTip(QStringLiteral(
+        "Display the entire padded mesh. This changes only the plot view; "
+        "the FEM solve always uses the full domain."
+    ));
+    controlsLayout->addWidget(fullDomainCheck_);
 
     statusLabel_ = new QLabel(QStringLiteral("Ready"), controls);
     statusLabel_->setWordWrap(true);
@@ -236,6 +261,7 @@ void MainWindow::buildUi() {
     connect(lineTypeCombo_, &QComboBox::currentIndexChanged, this, [this](int) {
         configureEntries(selectedLineType());
         updateHeading();
+        updateFieldViewControls();
         invalidateSolution(QStringLiteral("Line changed; calculate the new geometry."));
     });
     connect(calculateButton_, &QPushButton::clicked, this, [this] { calculate(); });
@@ -243,6 +269,9 @@ void MainWindow::buildUi() {
     connect(meshCheck_, &QCheckBox::toggled, this, [this](bool visible) {
         electricPlot_->setMeshVisible(visible);
         magneticPlot_->setMeshVisible(visible);
+    });
+    connect(fullDomainCheck_, &QCheckBox::toggled, this, [this](bool) {
+        updateFieldViewControls();
     });
 }
 
@@ -277,7 +306,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::TraceWidth, "Trace width (mm)", "3", 1.0e-3},
             {InputKey::SubstrateHeight, "Substrate h (mm)", "1.524", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
             epsilon,
             loss,
             conductivity,
@@ -289,7 +318,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::TraceWidth, "Trace width (mm)", "0.8", 1.0e-3},
             {InputKey::GroundSpacing, "Ground gap (mm)", "1.524", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
             epsilon,
             loss,
             conductivity,
@@ -303,7 +332,7 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::GroundWidth, "Ground width (mm)", "1.5", 1.0e-3},
             {InputKey::SubstrateHeight, "Substrate h (mm)", "0.8", 1.0e-3},
             {InputKey::ConductorThickness, "Metal thick. (um)", "35", 1.0e-6},
-            {InputKey::DomainPaddingFactor, "Domain padding (x)", "3", 1.0},
+            {InputKey::DomainPaddingFactor, "Domain padding factor", "3", 1.0},
             epsilon,
             loss,
             conductivity,
@@ -336,12 +365,12 @@ void MainWindow::configureEntries(LineType type) {
 
 LineType MainWindow::selectedLineType() const {
     switch (lineTypeCombo_->currentIndex()) {
-    case 1:
+    case 0:
         return LineType::Microstrip;
+    case 1:
+        return LineType::CoplanarWaveguide;
     case 2:
         return LineType::Stripline;
-    case 3:
-        return LineType::CoplanarWaveguide;
     default:
         return LineType::Coaxial;
     }
@@ -571,6 +600,16 @@ void MainWindow::updateHeading() {
     const auto name = lineName(selectedLineType());
     headingLabel_->setText(QStringLiteral("FEM transmission-line calculator — %1").arg(name));
     setWindowTitle(QStringLiteral("FEM Transmission-Line Calculator — %1").arg(name));
+}
+
+void MainWindow::updateFieldViewControls() {
+    const auto openLine = selectedLineType() != LineType::Coaxial;
+    fullDomainCheck_->setEnabled(openLine);
+    const auto mode = !openLine || fullDomainCheck_->isChecked()
+        ? FieldViewMode::FullDomain
+        : FieldViewMode::Focused;
+    electricPlot_->setViewMode(mode);
+    magneticPlot_->setViewMode(mode);
 }
 
 } // namespace tl

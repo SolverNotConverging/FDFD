@@ -1,5 +1,6 @@
 #pragma once
 
+#include "field_view.hpp"
 #include "model.hpp"
 
 #include <QString>
@@ -17,6 +18,7 @@ public:
 
     void setResult(std::shared_ptr<const Result> result);
     void setMeshVisible(bool visible);
+    void setViewMode(FieldViewMode mode);
     void setEmptyMessage(QString message);
 
     [[nodiscard]] QSize minimumSizeHint() const override;
@@ -29,6 +31,7 @@ private:
     std::shared_ptr<const Result> result_;
     QString emptyMessage_;
     bool meshVisible_{};
+    FieldViewMode viewMode_{FieldViewMode::Focused};
 };
 
 } // namespace tl
