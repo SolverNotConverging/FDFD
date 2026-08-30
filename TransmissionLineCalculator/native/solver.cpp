@@ -1298,7 +1298,7 @@ Parameters defaultParameters(const LineType type) {
             parameters.conductorThickness = 35.0e-6;
             parameters.epsilonR = 3.55;
             parameters.lossTangent = 2.7e-3;
-            parameters.domainPaddingFactor = 1.0;
+            parameters.domainPaddingFactor = 3.0;
             break;
         case LineType::Stripline:
             parameters.traceWidth = 0.80e-3;
@@ -1306,7 +1306,7 @@ Parameters defaultParameters(const LineType type) {
             parameters.conductorThickness = 35.0e-6;
             parameters.epsilonR = 3.55;
             parameters.lossTangent = 2.7e-3;
-            parameters.domainPaddingFactor = 1.0;
+            parameters.domainPaddingFactor = 3.0;
             break;
         case LineType::CoplanarWaveguide:
             parameters.centerWidth = 0.60e-3;
@@ -1316,7 +1316,7 @@ Parameters defaultParameters(const LineType type) {
             parameters.conductorThickness = 35.0e-6;
             parameters.epsilonR = 3.55;
             parameters.lossTangent = 2.7e-3;
-            parameters.domainPaddingFactor = 1.0;
+            parameters.domainPaddingFactor = 3.0;
             break;
     }
     return parameters;

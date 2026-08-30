@@ -1,11 +1,12 @@
 # Transmission Line Calculator
 
-Transmission Line Calculator is a native C++20/Qt 6 application for fast
-quasi-TEM extraction of coaxial, microstrip, stripline, and coplanar-waveguide
-cross-sections. It is a standalone rewrite of the Python calculator: the GUI,
-mesher, sparse finite-element solve, field plots, and command-line benchmark
-run without Python, NumPy, SciPy, scikit-fem, or Matplotlib. Geometry and
-conforming triangular meshing use the native Gmsh 4 C++ API.
+Transmission Line Calculator is a native C++20 application for fast quasi-TEM
+extraction of coaxial, microstrip, stripline, and coplanar-waveguide
+cross-sections. It provides a Qt 6 desktop GUI and an FTXUI terminal interface.
+It is a standalone rewrite of the Python calculator: both front ends, the
+mesher, sparse finite-element solve, field plots, and repeated benchmarks run
+without Python, NumPy, SciPy, scikit-fem, or Matplotlib. Geometry and conforming
+triangular meshing use the native Gmsh 4 C++ API.
 
 The numerical core is also available as the reusable `tl-core` CMake target.
 
@@ -36,6 +37,7 @@ The build requires:
 - a C++20 compiler (MSVC, AppleClang, GCC, or Clang);
 - CMake 3.24 or newer;
 - Qt 6.2 or newer (`Widgets` and `Concurrent`);
+- FTXUI, including its `component`, `dom`, and `screen` CMake targets;
 - Eigen 3.4 or newer (Eigen 5 is also accepted);
 - Gmsh 4, including `gmsh.h` and its C++ library.
 
@@ -48,7 +50,7 @@ Install Visual Studio 2022 with **Desktop development with C++**, CMake, and
 [vcpkg](https://learn.microsoft.com/vcpkg/get_started/get-started). Then run:
 
 ```powershell
-C:\vcpkg\vcpkg.exe install qtbase eigen3 gmsh --triplet x64-windows
+C:\vcpkg\vcpkg.exe install qtbase eigen3 gmsh ftxui --triplet x64-windows
 cmake --fresh -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 `
   -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build-msvc --config Release --parallel
@@ -69,7 +71,8 @@ Install or update one consistent MinGW64 environment from PowerShell:
   mingw-w64-x86_64-ninja `
   mingw-w64-x86_64-qt6-base `
   mingw-w64-x86_64-eigen3 `
-  mingw-w64-x86_64-gmsh
+  mingw-w64-x86_64-gmsh `
+  mingw-w64-x86_64-ftxui
 ```
 
 ```powershell
@@ -88,7 +91,7 @@ Homebrew prefixes visible to CMake:
 
 ```bash
 xcode-select --install
-brew install cmake ninja qt eigen gmsh
+brew install cmake ninja qt eigen gmsh ftxui
 cmake --fresh -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix)"
@@ -104,7 +107,7 @@ tests are regular Mach-O executables in `build/`.
 ```bash
 sudo apt update
 sudo apt install build-essential cmake ninja-build qt6-base-dev \
-  libeigen3-dev libgmsh-dev
+  libeigen3-dev libgmsh-dev libftxui-dev
 cmake --fresh -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -128,7 +131,8 @@ The build creates:
 
 - `transmission-line-calculator` — Qt desktop calculator (`.exe` on Windows or
   `.app` on macOS);
-- `transmission-line-calculator-cli` — headless solve/benchmark tool;
+- `transmission-line-calculator-cli` — interactive-only FTXUI terminal
+  calculator;
 - `tl-solver-tests` — numerical regression tests;
 - `tl-core` — reusable static solver library.
 
@@ -138,11 +142,11 @@ subdirectory for Visual Studio). A repository-root build places them under
 
 CTest exercises all four default templates, the exact ideal-coax TEM solution,
 lossy passive branches, analytic coax and projected microstrip metal loss,
-mesh refinement, invalid inputs, and an offscreen GUI startup smoke test. It
-also compares `n_eff`,
-`Zc`, capacitance, vacuum capacitance, and inductance for every 1 mm GUI
-default against frozen Python FEM reference values with a 4% relative-error
-limit.
+mesh refinement, open-domain padding convergence, invalid inputs, an offscreen
+GUI startup/calculation/defaults smoke test, and an in-memory FTXUI
+render/defaults smoke test. It also compares `n_eff`, `Zc`, capacitance, vacuum
+capacitance, and inductance at the original padding-1 reference inputs against
+frozen Python FEM values with a 4% relative-error limit.
 
 ## Use
 
@@ -160,47 +164,81 @@ Choose one of Coaxial, Microstrip, Stripline, or CPW, edit its dimensions, and
 select **Calculate FEM**. **Refine x2** halves the effective maximum element
 size and resolves the line again. **Display mesh** overlays the native
 triangles without recomputing the result. The E/H backgrounds encode field
-magnitude; the arrows encode instantaneous transverse direction.
+magnitude; compact arrows encode instantaneous transverse direction.
 
-Run all four defaults headlessly:
+### Terminal workflow
+
+Run the terminal calculator with no arguments from a real terminal:
 
 ```powershell
 .\build\transmission-line-calculator-cli.exe
 ```
 
-Select one line, refine it, or benchmark repeated full solves:
+This opens the interactive FTXUI interface. It presents Coaxial, Microstrip,
+Stripline, and CPW choices, editable engineering-unit fields for the selected
+geometry, solve status, timings, and extracted results. The **Setup** and
+**Results** workspace tabs keep the interface usable in an 80-column terminal.
+
+A typical session is to choose a geometry with the arrow keys, tab through and
+edit its values, press `F5` to solve, and inspect the automatically selected
+**Results** workspace. Press `F6` to repeat at twice the planar resolution and
+compare the engineering quantities for convergence.
+
+The keyboard workflow is:
+
+| Key | Action |
+| --- | --- |
+| `Tab` / `Shift+Tab` | Move focus forward or backward through controls. |
+| Arrow keys | Change the selected geometry when its picker has focus. |
+| `F5` | Solve the current geometry. |
+| `F6` | Apply **Refine x2** and solve again. |
+| `Ctrl+R` | Reset every geometry form to its audited defaults. |
+| `F1` | Open the in-app key and workflow help. |
+| `Ctrl+Q` | Quit; while busy, finish the active Gmsh solve first. |
+
+For repeatable timing, enable **Benchmark repeated full solves** and enter a
+run count from 1 to 1000. The Performance tab reports the completed count and
+median full-run time. The visible stop action takes effect between repetitions
+because an individual Gmsh solve cannot be interrupted safely.
+
+This is a breaking replacement for the former command-line solver despite
+retaining the executable name. A normal run requires standard input and output
+to be attached to a real terminal; redirected, piped, and non-interactive solve
+workflows are not supported. The only public command options are:
 
 ```powershell
-.\build\transmission-line-calculator-cli.exe --type microstrip --refine 2
-.\build\transmission-line-calculator-cli.exe --type coaxial --benchmark 5
 .\build\transmission-line-calculator-cli.exe --help
+.\build\transmission-line-calculator-cli.exe --version
 ```
 
-The CLI prints node/triangle counts; mesh, solve, and total timings; `n_eff`,
-`beta`, `Zc`, and wave impedance; R/L/G/C and vacuum capacitance; and power.
+The results panels present node/triangle counts; mesh, assembly, factorization,
+and solve timings; `n_eff`, `beta`, `Zc`, and wave impedance; R/L/G/C and vacuum
+capacitance; and power. Switch back to **Setup** to edit the next case.
 
 ## Units and defaults
 
 The core API uses SI units: metres, hertz, siemens per metre, farads per metre,
-henries per metre, ohms, and watts. The GUI converts the following displayed
-units to SI:
+henries per metre, ohms, and watts. The Qt and FTXUI interfaces convert the
+following displayed units to SI:
 
-| Input | GUI unit | Default |
+| Input | Displayed unit | Default |
 | --- | ---: | ---: |
 | Frequency | GHz | 10 |
 | Mesh size | mm | 1.00 |
 | Metal conductivity | MS/m | blank (ideal PEC) |
 
-Geometry defaults match the Python calculator:
+The audited dimensions and material defaults match the Python calculator. The
+three open geometries use padding 3 instead of the original padding 1 so the
+remote zero-potential wall has less influence on the extracted values:
 
 - Coaxial: inner radius 0.5 mm, shield inner radius 1.67 mm, shield thickness
   150 um, relative permittivity 2.1, loss tangent 0.0002.
-- Microstrip: trace 3 mm, substrate 1.524 mm, metal 35 um, padding 1,
+- Microstrip: trace 3 mm, substrate 1.524 mm, metal 35 um, padding 3,
   relative permittivity 3.55, loss tangent 0.0027.
-- Stripline: trace 0.8 mm, ground spacing 1.524 mm, metal 35 um, padding 1,
+- Stripline: trace 0.8 mm, ground spacing 1.524 mm, metal 35 um, padding 3,
   relative permittivity 3.55, loss tangent 0.0027.
 - CPW: centre conductor 0.6 mm, slot 0.25 mm, each ground 1.5 mm, substrate
-  0.8 mm, metal 35 um, padding 1, relative permittivity 3.55, loss tangent
+  0.8 mm, metal 35 um, padding 3, relative permittivity 3.55, loss tangent
   0.0027.
 
 All dimensions, frequency, relative permittivity, mesh size, padding, and a
@@ -214,21 +252,25 @@ Results are reported as `Zc`/`Zwave` in ohms, `R'` in ohms/m, `L'` in H/m,
 ## Performance and accuracy
 
 Both potential systems reuse the same mesh topology. The native executable
-avoids Python interpreter and object-allocation overhead, while the GUI runs
-meshing and solving away from its event thread. The result and CLI expose
-separate mesh and solve timings; use `--benchmark N` for measurements on the
-current machine instead of relying on a fixed speedup claim.
+avoids Python interpreter and object-allocation overhead, while both interactive
+front ends run meshing and solving away from their event thread. The result and
+performance panel expose separate mesh and solve timings; use the TUI benchmark
+repetitions field for measurements on the current machine instead of relying on
+a fixed speedup claim.
 
 `Refine x2` approximately doubles planar resolution, so triangle count and
 memory can grow by roughly four times. Reported engineering values should be
 checked by successive refinement until the quantities of interest stop
 changing. For microstrip and CPW, also increase domain padding to check the
-independent error caused by the remote zero-potential truncation wall.
+independent error caused by the remote zero-potential truncation wall; the same
+check applies to stripline's remote side walls.
 
-The automated parity test fixes the GUI's default 1 mm mesh and requires the
-five principal extracted quantities for all four templates to remain within
-4% of the established Python implementation. This guards native performance
-work from silently changing the calculator's engineering results.
+The automated parity test fixes the 1 mm mesh and padding-1 reference inputs and
+requires the five principal extracted quantities for all four templates to
+remain within 4% of the established Python implementation. A separate native
+test requires padding 3 to remain stable when expanded to padding 4. Together
+they guard performance work and open-boundary defaults from silently changing
+the calculator's engineering results.
 
 This is a frequency-tagged quasi-static TEM/quasi-TEM model. It does not model
 radiation, rough conductors, fields inside metal, higher-order modes, or
@@ -247,9 +289,9 @@ offer required by that license.
 ## Windows MinGW install and uninstall
 
 The provided PowerShell installer is specifically for the MSYS2 MinGW64 build.
-It configures and builds Release binaries, runs CTest, installs to
-`%LOCALAPPDATA%\TransmissionLineCalculator`, deploys Qt's platform plugin, and
-copies Gmsh and the required MinGW runtime DLLs:
+It configures and builds Release binaries, runs CTest, installs both front ends
+to `%LOCALAPPDATA%\TransmissionLineCalculator`, deploys Qt's platform plugin,
+and copies Gmsh, FTXUI, and the required MinGW runtime DLLs:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
@@ -259,11 +301,14 @@ Use `-SkipTests` only when the same build has already passed CTest. A custom
 MSYS2 prefix or installation directory can be supplied with `-MsysPrefix` and
 `-Destination`.
 
-Launch the installed GUI with:
+Launch the installed GUI or interactive terminal calculator with:
 
 ```powershell
 & "$env:LOCALAPPDATA\TransmissionLineCalculator\bin\transmission-line-calculator.exe"
+& "$env:LOCALAPPDATA\TransmissionLineCalculator\bin\transmission-line-calculator-cli.exe"
 ```
+
+The second command requires and starts the FTXUI interface in a real terminal.
 
 Remove the default installation with:
 
@@ -280,6 +325,9 @@ build output is separate and is not removed by the uninstaller.
 - `native/solver.*` — geometry, P1 mesh, two-potential FEM, and result model;
 - `native/main_window.*` — Qt calculator workflow and asynchronous solve;
 - `native/field_plot.*` — E/H field and mesh rendering;
-- `native/cli.cpp` — headless validation and benchmarking;
+- `native/cli.cpp` — terminal validation, help/version handling, and FTXUI
+  startup;
+- `native/tui.*` — interactive geometry editor, asynchronous solve workflow,
+  results, refinement, and benchmarking;
 - `tests/test_solver.cpp` — numerical regression suite;
 - `scripts/install.ps1`, `scripts/uninstall.ps1` — Windows deployment helpers.

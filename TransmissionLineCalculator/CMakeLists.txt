@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TransmissionLineCalculator VERSION 0.1.0 LANGUAGES CXX)
+project(TransmissionLineCalculator VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_AUTOMOC ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Eigen3 REQUIRED NO_MODULE)
+find_package(Threads REQUIRED)
 if(DEFINED Eigen3_VERSION AND Eigen3_VERSION VERSION_LESS 3.4)
     message(FATAL_ERROR "Transmission Line Calculator requires Eigen 3.4 or newer")
 endif()
@@ -65,6 +65,7 @@ if(NOT TL_GMSH_TARGET)
 endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Concurrent Widgets)
+find_package(ftxui CONFIG REQUIRED)
 
 function(tl_enable_warnings target_name)
     if(MSVC)
@@ -92,6 +93,7 @@ add_executable(transmission-line-calculator WIN32 MACOSX_BUNDLE
     native/main_window.cpp
     native/field_plot.cpp
 )
+set_target_properties(transmission-line-calculator PROPERTIES AUTOMOC ON)
 target_link_libraries(transmission-line-calculator PRIVATE
     tl::core
     Qt6::Concurrent
@@ -106,8 +108,15 @@ tl_enable_warnings(transmission-line-calculator)
 
 add_executable(transmission-line-calculator-cli
     native/cli.cpp
+    native/tui.cpp
 )
-target_link_libraries(transmission-line-calculator-cli PRIVATE tl::core)
+target_link_libraries(transmission-line-calculator-cli PRIVATE
+    tl::core
+    Threads::Threads
+    ftxui::component
+    ftxui::dom
+    ftxui::screen
+)
 target_compile_definitions(transmission-line-calculator-cli PRIVATE
     TL_CALCULATOR_VERSION="${PROJECT_VERSION}"
 )
@@ -130,6 +139,57 @@ if(BUILD_TESTING)
     )
     set_tests_properties(tl-gui-smoke PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME tl-gui-calculate-smoke
+        COMMAND transmission-line-calculator --calculate-smoke-test
+    )
+    set_tests_properties(tl-gui-calculate-smoke PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 120
+    )
+
+    add_test(
+        NAME tl-tui-smoke
+        COMMAND transmission-line-calculator-cli --smoke-test
+    )
+    set_tests_properties(tl-tui-smoke PROPERTIES TIMEOUT 30)
+
+    add_test(
+        NAME tl-tui-help
+        COMMAND transmission-line-calculator-cli --help
+    )
+    set_tests_properties(tl-tui-help PROPERTIES
+        PASS_REGULAR_EXPRESSION "interactive FTXUI"
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME tl-tui-version
+        COMMAND transmission-line-calculator-cli --version
+    )
+    set_tests_properties(tl-tui-version PROPERTIES
+        PASS_REGULAR_EXPRESSION "Transmission Line Calculator ${PROJECT_VERSION}"
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME tl-tui-rejects-legacy-flags
+        COMMAND transmission-line-calculator-cli --type coaxial
+    )
+    set_tests_properties(tl-tui-rejects-legacy-flags PROPERTIES
+        WILL_FAIL TRUE
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME tl-tui-requires-terminal
+        COMMAND transmission-line-calculator-cli
+    )
+    set_tests_properties(tl-tui-requires-terminal PROPERTIES
+        WILL_FAIL TRUE
         TIMEOUT 30
     )
 endif()

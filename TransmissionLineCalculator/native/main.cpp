@@ -29,7 +29,9 @@ int main(int argc, char* argv[]) {
             }
         });
     } else if (arguments.contains(QStringLiteral("--smoke-test"))) {
-        QTimer::singleShot(1500, &application, &QApplication::quit);
+        const int status = window.defaultsMatchForSmokeTest() ? 0 : 1;
+        QTimer::singleShot(1500, &application,
+                           [&application, status] { application.exit(status); });
     }
 
     return application.exec();
