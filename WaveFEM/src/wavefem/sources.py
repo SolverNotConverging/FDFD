@@ -8,7 +8,9 @@ The material difference is evaluated directly at quadrature points so its
 support is exactly the user-defined perturbation rather than a projected or
 smoothed approximation.  Removing part of a background PEC sheet is a
 boundary perturbation instead.  Its load is assembled from the two one-sided
-incident magnetic tractions on the released mesh facets.
+incident magnetic tractions on the released mesh facets.  Inserting a finite
+actual-only PEC sheet prescribes the scattered tangential trace as the
+negative incident trace.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from typing import Callable, TypeAlias
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from skfem import InteriorFacetBasis, LinearForm, asm
+from skfem import BilinearForm, InteriorFacetBasis, LinearForm, asm, condense, solve
 
 from .constants import ETA_0
 from .exceptions import ConfigurationError
@@ -28,7 +30,7 @@ from .fem import (
     MixedFieldSolution,
     assemble_load_vector,
     evaluate_diagonal_coefficient,
-    solve_homogeneous_pec,
+    solve_prescribed_pec,
 )
 from .operators import electric_field_vector
 
@@ -72,10 +74,11 @@ class EquivalentSource:
     active_quadrature_fraction: float
     maximum_delta_eps: float
     released_pec_facet_count: int = 0
+    inserted_pec_facet_count: int = 0
 
     @property
     def is_zero(self) -> bool:
-        return not np.any(self.load)
+        return not np.any(self.load) and self.inserted_pec_facet_count == 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +93,19 @@ class ScatteredFieldSolution:
 def _released_pec_form(vt: object, vy: object, w: object) -> object:
     test_field = electric_field_vector(vt, vy)
     return np.sum(np.conj(test_field) * w.traction_values, axis=0)
+
+
+@BilinearForm(dtype=np.complex128)
+def _tangential_trace_mass(u: object, v: object, w: object) -> object:
+    tangent_u = -w.n[1] * u[0] + w.n[0] * u[1]
+    tangent_v = -w.n[1] * v[0] + w.n[0] * v[1]
+    return np.conj(tangent_v) * tangent_u
+
+
+@LinearForm(dtype=np.complex128)
+def _tangential_trace_load(v: object, w: object) -> object:
+    tangent_v = -w.n[1] * v[0] + w.n[0] * v[1]
+    return np.conj(tangent_v) * w.trace_values
 
 
 def _validated_interior_facets(
@@ -111,6 +127,118 @@ def _validated_interior_facets(
     return result
 
 
+def _validated_inserted_pec_facets(
+    system: MixedFEMSystem,
+    facets: ArrayLike,
+) -> NDArray[np.int64]:
+    """Return inserted facets that are registered as actual PEC constraints."""
+
+    raw = np.asarray(facets)
+    if raw.ndim != 1 or (raw.size and raw.dtype.kind not in "iu"):
+        raise ValueError("inserted_pec_facets must be a one-dimensional integer array.")
+    result = np.unique(np.asarray(raw, dtype=np.int64))
+    if np.any(result < 0) or np.any(result >= system.basis.mesh.nfacets):
+        raise ValueError("inserted_pec_facets contains an out-of-range facet index.")
+    if result.size and np.any(system.basis.mesh.f2t[1, result] < 0):
+        raise ValueError("inserted_pec_facets must contain interior mesh facets only.")
+    if np.setdiff1d(result, system.internal_pec_facets, assume_unique=True).size:
+        raise ValueError(
+            "Every inserted PEC facet must also be registered as an actual PEC constraint."
+        )
+    return result
+
+
+def assemble_inserted_pec_boundary_values(
+    system: MixedFEMSystem,
+    *,
+    inserted_pec_facets: ArrayLike,
+    incident: IncidentField,
+) -> NDArray[np.complex128]:
+    """Project ``-E_inc,t`` onto finite actual-only PEC trace DOFs.
+
+    The returned full mixed-space vector is zero away from the inserted PEC
+    facets.  On those facets it supplies the scattered-field essential data
+    required by ``E_total,t = E_inc,t + E_sc,t = 0``.  The Nedelec and P1
+    traces are projected separately on the facet set, so values away from the
+    plate and the Nedelec normal component cannot affect the prescribed data.
+    Composite-space DOF ordering is handled by scikit-fem rather than assumed
+    by position.
+    """
+
+    if not callable(incident):
+        raise ValueError("incident must be callable.")
+    facets = _validated_inserted_pec_facets(system, inserted_pec_facets)
+    boundary_values = np.zeros(system.ndofs, dtype=np.complex128)
+    if not facets.size:
+        return boundary_values
+
+    component_bases = system.basis.split_bases()
+    component_indices = system.basis.split_indices()
+
+    def physical_incident(points: NDArray[np.floating]) -> NDArray[np.complex128]:
+        return _incident_values(
+            incident,
+            system.length_scale * points[0],
+            system.length_scale * points[1],
+        )
+
+    transverse_facet_basis = InteriorFacetBasis(
+        system.basis.mesh,
+        component_bases[0].elem,
+        facets=facets,
+        side=0,
+        # A volume Basis carries a triangular quadrature rule.  FacetBasis
+        # instead needs a one-dimensional rule on the reference edge; passing
+        # the volume rule is accepted by scikit-fem but gives biased points and
+        # half-scaled edge weights.
+        intorder=system.quadrature_order,
+    )
+    transverse_coordinates = np.asarray(
+        transverse_facet_basis.global_coordinates(), dtype=float
+    )
+    transverse_incident = physical_incident(transverse_coordinates)
+    normal = np.asarray(transverse_facet_basis.normals, dtype=float)
+    incident_tangential_trace = -(
+        -normal[1] * transverse_incident[0]
+        + normal[0] * transverse_incident[2]
+    )
+    transverse_dofs = np.asarray(
+        component_bases[0].get_dofs(facets=facets).all(), dtype=np.int64
+    )
+    transverse = solve(
+        *condense(
+            asm(_tangential_trace_mass, transverse_facet_basis),
+            asm(
+                _tangential_trace_load,
+                transverse_facet_basis,
+                trace_values=incident_tangential_trace,
+            ),
+            I=transverse_dofs,
+        )
+    )
+    invariant_facet_basis = InteriorFacetBasis(
+        system.basis.mesh,
+        component_bases[1].elem,
+        facets=facets,
+        side=0,
+        intorder=system.quadrature_order,
+    )
+    invariant = invariant_facet_basis.project(
+        lambda points: -physical_incident(points)[1],
+        dtype=np.complex128,
+    )
+    projected = np.zeros(system.ndofs, dtype=np.complex128)
+    projected[component_indices[0]] = np.asarray(
+        transverse, dtype=np.complex128
+    )
+    projected[component_indices[1]] = np.asarray(invariant, dtype=np.complex128)
+    constrained = np.asarray(
+        system.basis.get_dofs(facets=facets).all(), dtype=np.int64
+    )
+    boundary_values[constrained] = projected[constrained]
+    return boundary_values
+
+
 def assemble_released_pec_source(
     system: MixedFEMSystem,
     *,
@@ -123,14 +251,15 @@ def assemble_released_pec_source(
     zero-thickness PEC sheet.  On a released facet, the scattered-field weak
     load is the negative sum of their incident reactions,
 
-    ``-2i*k0*L*ETA_0 * integral(conj(V) . (H_inc x n)) ds``.
+    ``-i*k0*L*ETA_0 * integral(conj(V) . (H_inc x n)) ds``.
 
     Here ``n`` is the outward normal of each adjacent element, ``L`` is the
     system length scale, and both one-sided magnetic traces are evaluated by
-    probing infinitesimally inside their respective elements.  The factor two
-    is the planar PEC image-equivalence factor for releasing the screen into
-    the two-sided solve domain.  Consequently a PEC slot can scatter even when
-    actual and background permittivities are identical everywhere.
+    probing infinitesimally inside their respective elements.  The loop below
+    already sums the natural weak reactions from both adjacent sides; no
+    additional image-equivalence multiplier is applied.  Consequently a PEC
+    slot can scatter even when actual and background permittivities are
+    identical everywhere.
     """
 
     if not callable(incident_magnetic):
@@ -146,7 +275,7 @@ def assemble_released_pec_source(
             system.basis.elem,
             facets=facets,
             side=side,
-            quadrature=system.basis.quadrature,
+            intorder=system.quadrature_order,
         )
         coordinates = np.asarray(facet_basis.global_coordinates(), dtype=float)
         # scikit-fem stores the side-0 outward orientation for both interior
@@ -172,7 +301,7 @@ def assemble_released_pec_source(
             dtype=np.complex128,
         )
         traction = (
-            -2j
+            -1j
             * system.dimensionless_k0
             * ETA_0
             * magnetic_cross_normal
@@ -195,13 +324,16 @@ def assemble_equivalent_source(
     mu_background: ConstitutiveCoefficient = 1.0,
     incident: IncidentField,
     released_pec_facets: ArrayLike = (),
+    inserted_pec_facets: ArrayLike = (),
     incident_magnetic: IncidentField | None = None,
 ) -> EquivalentSource:
-    """Assemble volume contrast and optional released-PEC aperture loads.
+    """Assemble volume contrast and record both PEC perturbation classes.
 
     ``incident`` supplies electric fields for the volume term.  When
     ``released_pec_facets`` is nonempty, ``incident_magnetic`` must supply the
-    corresponding one-sided-capable magnetic field callback.
+    corresponding one-sided-capable magnetic field callback. Inserted facets
+    are counted here; their essential data are projected by
+    :func:`assemble_inserted_pec_boundary_values` during the field solve.
     """
 
     coordinates = system.physical_coordinates()
@@ -246,6 +378,9 @@ def assemble_equivalent_source(
         )
 
     facets = _validated_interior_facets(system, released_pec_facets)
+    inserted_facets = _validated_inserted_pec_facets(
+        system, inserted_pec_facets
+    )
     load = assemble_load_vector(system.basis, source_at_quadrature)
     if facets.size:
         if incident_magnetic is None:
@@ -263,6 +398,7 @@ def assemble_equivalent_source(
         active_quadrature_fraction=float(np.count_nonzero(active) / active.size),
         maximum_delta_eps=float(np.max(np.abs(delta))),
         released_pec_facet_count=int(facets.size),
+        inserted_pec_facet_count=int(inserted_facets.size),
     )
 
 
@@ -273,10 +409,11 @@ def solve_scattered_pec(
     mu_background: ConstitutiveCoefficient = 1.0,
     incident: IncidentField,
     released_pec_facets: ArrayLike = (),
+    inserted_pec_facets: ArrayLike = (),
     incident_magnetic: IncidentField | None = None,
     residual_tolerance: float = 1e-7,
 ) -> ScatteredFieldSolution:
-    """Solve with homogeneous actual PEC and optional released-background PEC."""
+    """Solve with released-background and inserted-actual PEC perturbations."""
 
     source = assemble_equivalent_source(
         system,
@@ -284,11 +421,18 @@ def solve_scattered_pec(
         mu_background=mu_background,
         incident=incident,
         released_pec_facets=released_pec_facets,
+        inserted_pec_facets=inserted_pec_facets,
         incident_magnetic=incident_magnetic,
     )
-    field = solve_homogeneous_pec(
+    boundary_values = assemble_inserted_pec_boundary_values(
+        system,
+        inserted_pec_facets=inserted_pec_facets,
+        incident=incident,
+    )
+    field = solve_prescribed_pec(
         system,
         source.load,
+        boundary_values=boundary_values,
         residual_tolerance=residual_tolerance,
     )
     return ScatteredFieldSolution(field=field, source=source)
@@ -299,6 +443,7 @@ __all__ = [
     "IncidentField",
     "ScatteredFieldSolution",
     "assemble_equivalent_source",
+    "assemble_inserted_pec_boundary_values",
     "assemble_released_pec_source",
     "solve_scattered_pec",
 ]

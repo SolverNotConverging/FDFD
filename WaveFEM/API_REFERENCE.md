@@ -137,8 +137,9 @@ The latter four are `None` until the corresponding workflow stage completes.
 
 The integrated API accepts passive physical materials, requires lossless
 uniform leads for modal power projection, supports compact material loss,
-and supports two perturbation types: volume permittivity contrast and finite
-slots released from z-invariant zero-thickness background PEC sheets.
+and supports three perturbation types: volume permittivity contrast, finite
+slots released from z-invariant zero-thickness background PEC sheets, and
+finite actual-only constant-x PEC plates.
 
 #### `Scattering2D.from_material_function`
 
@@ -283,7 +284,7 @@ Self-intersection is not repaired or inferred; provide a simple polygon.
 sim.add_pec(
     *,
     x: float,
-    z: Literal["all"] = "all",
+    z: Sequence[float] | Literal["all"] = "all",
     background: bool = True,
     name: str | None = None,
 ) -> wavefem.geometry.PECSheet
@@ -292,18 +293,19 @@ sim.add_pec(
 Adds an ideal zero-thickness PEC sheet at constant x and returns its immutable
 `PECSheet` record. Coordinates are in metres. The sheet must lie strictly
 inside `x_span`; numerical outer PEC walls already exist and are not geometry
-objects. In the integrated solver the sheet must be a z-invariant background
-feature, so `z="all"` and `background=True` are required. It is therefore
-present in both the modal background and the actual device before slots are
-cut. `background=False` is rejected explicitly because inserting an
-actual-only PEC would require a different nonhomogeneous scattered-field
-boundary source.
+objects. With `background=True`, the sheet must use `z="all"`; it is present
+in both the modal background and actual device before slots are cut. With
+`background=False`, `z=(z_min,z_max)` must be a finite compact span strictly
+inside the non-PML interior. Such a plate is absent from the lead mode and is
+inserted only into the actual device.
 
 The mesh conforms to the sheet. Its Nedelec tangential edge DOFs and nodal
 `E_y` DOFs are constrained, while normal `E_x` remains free and may jump
-across the two faces. The same coordinate is added to the one-dimensional
-wave-port cross-section. Adding a sheet invalidates existing mesh, modes, and
-incident state.
+across the two faces. A background sheet's coordinate is also added to the
+one-dimensional wave-port cross-section. On an actual-only plate, the
+scattered trace is prescribed as `E_sc,t=-E_inc,t`, which enforces
+`E_total,t=0`. Adding a sheet invalidates existing mesh, modes, and incident
+state.
 
 #### `add_slot`
 
@@ -325,7 +327,7 @@ sheet, so its lead modes remain z-invariant.
 
 Meshing inserts both slot endpoints as conforming partitions. Facets inside
 the opening are omitted from the actual PEC constraint set and recorded as
-released-background facets. During `solve`, their doubled two-sided magnetic
+released-background facets. During `solve`, their natural two-sided magnetic
 reaction is assembled from the incident mode. This boundary source remains
 nonzero even when actual and background permittivities are identical
 everywhere. Adding a slot invalidates existing mesh, modes, and incident
@@ -416,8 +418,8 @@ target transitions back to the base size; `None` selects three times the
 smallest material target. Setting `refine_interfaces=False` disables both
 local fields but does not remove conforming interfaces or PEC facets.
 
-The returned `Mesh2D` identifies background, actual, and released PEC facet
-sets so low-level workflows do not need geometric reclassification.
+The returned `Mesh2D` identifies background, actual, released, and inserted
+PEC facet sets so low-level workflows do not need geometric reclassification.
 
 The returned `Mesh2D.info.requested_maximum_edge` reveals the selected target.
 Warnings are issued when a PML spans fewer than three requested edge lengths
@@ -510,10 +512,11 @@ sim.solve(
 ) -> wf.ScatteringResult
 ```
 
-Assembles the mixed Maxwell system, forms both the volume
-permittivity-contrast source and any released-PEC aperture source, solves the
-outgoing scattered field, reconstructs total E and H, projects both lead
-monitors onto forward/backward modes, and computes power terms.
+Assembles the mixed Maxwell system, forms the volume permittivity-contrast
+source and any released-PEC aperture source, prescribes `-E_inc,t` on finite
+inserted PEC plates, solves the outgoing scattered field, reconstructs total
+E and H, projects both lead monitors onto forward/backward modes, and computes
+power terms.
 
 Preconditions:
 
@@ -733,6 +736,8 @@ Current integrated metadata keys include:
 | `length_scale` | Metres represented by one computational unit |
 | `source_active_fraction` | Fraction of quadrature points with nonzero contrast source |
 | `released_pec_facet_count` | Number of background PEC facets released as finite slots |
+| `inserted_pec_facet_count` | Number of actual-only PEC facets inserted as finite plates |
+| `prescribed_pec_dof_count` | Number of PEC trace DOFs with nonzero scattered-field data |
 | `left_projection_residual`, `right_projection_residual` | Weighted E/H reconstruction errors |
 | `projected_incoming_amplitude`, `prescribed_incoming_amplitude` | Independent projection check against the launched amplitude |
 | `incoming_projection_relative_error` | Relative mismatch of those two amplitudes |
@@ -1861,9 +1866,9 @@ Maintains the actual/background distinction and stable insertion-order tags.
   ideal constant-x sheet. Its coordinate must lie strictly inside `x_span`;
   coincident overlapping sheets and duplicate geometry names are rejected.
   A background sheet must be z-invariant and therefore requires `z="all"`.
-  The lower-level geometry can describe an actual-only finite sheet, but the
-  integrated `Scattering2D.add_pec` deliberately permits only the supported
-  z-invariant background form.
+  An actual-only sheet may instead have a finite z span. The integrated
+  `Scattering2D.add_pec` accepts that finite form when it lies strictly inside
+  the non-PML interior.
 - `add_slot(pec, z, name=None) -> PECSlot` subtracts a compact interval from
   the actual copy of a background sheet. `pec` is a sheet owned by this model
   or its name. The span must lie strictly inside the sheet, and slots on the
@@ -1909,6 +1914,7 @@ Mesh2D(
     actual_pec_facets: ndarray = empty,
     released_pec_facets: ndarray = empty,
     pec_slot_facets: dict[str, ndarray] = {},
+    inserted_pec_facets: ndarray = empty,
 )
 ```
 
@@ -1919,9 +1925,12 @@ PEC arrays contain sorted global `MeshTri` facet indices:
 
 - `background_pec_facets` is the union of complete z-invariant background
   sheets;
-- `actual_pec_facets` is the constraint set after finite slots are removed;
+- `actual_pec_facets` is the constraint set after finite slots are removed and
+  finite actual-only plates are inserted;
 - `released_pec_facets` is exactly `background - actual` and is the aperture
   source support;
+- `inserted_pec_facets` is exactly `actual - background` and carries the
+  nonhomogeneous scattered-field PEC trace;
 - `pec_slot_facets` maps every slot name to its released subset.
 
 `pec_facets(profile)` returns the actual or background array.
@@ -2068,7 +2077,8 @@ Stores:
 - `matrix`: sparse complex Maxwell matrix;
 - `parameters`: physical `MaxwellParameters`;
 - `physical_mesh`: original SI `MeshTri`;
-- `length_scale`: metres per computational coordinate unit.
+- `length_scale`: metres per computational coordinate unit;
+- `quadrature_order`: integration order retained for volume and facet forms;
 - `internal_pec_facets`: sorted unique interior-facet indices on which the
   actual electric tangential trace is constrained.
 
@@ -2151,6 +2161,9 @@ assemble_mixed_system(
 Creates the basis and matrix. `length_scale` is the number of physical metres
 per computational coordinate unit. Material callbacks still receive physical
 metres. The high-level solver uses `length_scale = 1/k0` for conditioning.
+The requested `intorder` is retained so boundary loads and essential-trace
+projections use a true one-dimensional facet rule of the same order rather
+than reusing the triangular volume rule.
 `internal_pec_facets` must be a one-dimensional integer array of valid
 interior facets. Indices are topology-preserving under mesh rescaling and are
 stored on the returned system; boundary facets, noninteger arrays, and
@@ -2180,6 +2193,25 @@ Condenses all outer PEC DOFs and every registered actual internal-PEC DOF,
 performs a SciPy direct solve, and validates the relative residual on free
 DOFs. Singular/resonant systems and non-finite solutions raise `SolverError`.
 
+#### `solve_prescribed_pec`
+
+```python
+solve_prescribed_pec(
+    system: MixedFEMSystem,
+    load,
+    *,
+    boundary_values: ArrayLike,
+    residual_tolerance: float = 1e-7,
+) -> MixedFieldSolution
+```
+
+Performs the same condensed direct solve while imposing a full mixed-space
+coefficient vector on the PEC DOF set. Entries outside `system.pec_dofs` must
+be zero. The residual normalization includes the effective load induced by
+the prescribed trace, so a boundary-only scattered-field solve remains a
+relative rather than absolute check. `solve_homogeneous_pec` is the zero-data
+special case.
+
 #### `relative_hermiticity_error`
 
 ```python
@@ -2205,15 +2237,35 @@ EquivalentSource(
     active_quadrature_fraction: float,
     maximum_delta_eps: float,
     released_pec_facet_count: int = 0,
+    inserted_pec_facet_count: int = 0,
 )
 ```
 
 Stores the assembled RHS, fraction of quadrature points where material
-contrast is nonzero, maximum absolute permittivity contrast, and the number
-of released PEC facets contributing a boundary load. `is_zero` reports
-whether every assembled load entry is zero. A boundary-only slot source can
-therefore have zero contrast fraction and zero `maximum_delta_eps` while
+contrast is nonzero, maximum absolute permittivity contrast, and released and
+inserted PEC facet counts. `is_zero` is false when either the assembled load
+is nonzero or inserted PEC data are present. A boundary-only PEC perturbation
+can therefore have zero contrast fraction and zero `maximum_delta_eps` while
 `is_zero` is false.
+
+### `assemble_inserted_pec_boundary_values`
+
+```python
+assemble_inserted_pec_boundary_values(
+    system: MixedFEMSystem,
+    *,
+    inserted_pec_facets: ArrayLike,
+    incident: IncidentField,
+) -> complex ndarray
+```
+
+Projects `-E_inc,t` separately on the inserted-facet traces of the Nedelec and
+continuous-P1 component spaces using one-dimensional facet quadrature, maps
+the component coefficients through scikit-fem's topology-aware composite
+ordering, and returns a full vector that is zero away from the inserted
+facets. The result depends only on tangential incident data at the plate, not
+on its normal component or off-facet field. Every inserted facet must be an
+interior member of `system.internal_pec_facets`.
 
 ### `assemble_released_pec_source`
 
@@ -2228,24 +2280,24 @@ assemble_released_pec_source(
 
 Assembles the scattered-field aperture load for facets that are PEC in the
 background guide but open in the actual device. For each facet it creates
-both `InteriorFacetBasis` traces, orients an outward normal for each adjacent
-element, and samples `incident_magnetic` an infinitesimal distance inside
-that element. This preserves a discontinuous one-sided magnetic trace at the
-background sheet; evaluating exactly at the coordinate would incorrectly
-select the same mode cell on both sides.
+both `InteriorFacetBasis` traces with a one-dimensional edge rule, orients an
+outward normal for each adjacent element, and samples `incident_magnetic` an
+infinitesimal distance inside that element. This preserves a discontinuous
+one-sided magnetic trace at the background sheet; evaluating exactly at the
+coordinate would incorrectly select the same mode cell on both sides.
 
-On the dimensionless mesh the planar PEC image-equivalent weak load is
+On the dimensionless mesh the released-boundary weak load is
 
 ```text
--2 i (k0 * length_scale) ETA_0
+-i (k0 * length_scale) ETA_0
     * sum_s integral_Gamma conj(V) dot (H_inc,s x n_s) ds.
 ```
 
-The two is the planar screen image-equivalence factor, and the sum is over
-the two adjacent element sides. A continuous magnetic field gives cancelling
-opposite-normal contributions. Facets must be unique valid interior indices
-and disjoint from `system.internal_pec_facets`; otherwise `ValueError` is
-raised. An empty array returns an exact all-zero vector.
+The sum explicitly includes the two adjacent element sides; there is no
+additional image-equivalence multiplier. A continuous magnetic field gives
+cancelling opposite-normal contributions. Facets must be unique valid
+interior indices and disjoint from `system.internal_pec_facets`; otherwise
+`ValueError` is raised. An empty array returns an exact all-zero vector.
 
 ### `ScatteredFieldSolution`
 
@@ -2269,6 +2321,7 @@ assemble_equivalent_source(
     mu_background=1.0,
     incident: IncidentField,
     released_pec_facets: ArrayLike = (),
+    inserted_pec_facets: ArrayLike = (),
     incident_magnetic: IncidentField | None = None,
 ) -> EquivalentSource
 ```
@@ -2278,8 +2331,9 @@ values. `incident(x,z)` returns three components. Actual and background
 permeability must agree to numerical tolerance; otherwise
 `ConfigurationError` is raised. When `released_pec_facets` is nonempty, the
 function also adds `assemble_released_pec_source`; `incident_magnetic` then
-becomes mandatory. The returned diagnostics report volume and boundary
-support separately.
+becomes mandatory. `inserted_pec_facets` is validated and counted separately;
+its essential data are assembled by `assemble_inserted_pec_boundary_values`
+during the solve.
 
 ### `solve_scattered_pec`
 
@@ -2291,14 +2345,16 @@ solve_scattered_pec(
     mu_background=1.0,
     incident: IncidentField,
     released_pec_facets: ArrayLike = (),
+    inserted_pec_facets: ArrayLike = (),
     incident_magnetic: IncidentField | None = None,
     residual_tolerance: float = 1e-7,
 ) -> ScatteredFieldSolution
 ```
 
-Forms the combined volume/aperture equivalent source and calls the
-homogeneous actual-PEC field solver. `released_pec_facets` must not be in the
-system's actual constraint set. In the high-level workflow the physical
+Forms the combined volume/aperture equivalent source, assembles the inserted
+PEC trace, and calls the prescribed actual-PEC field solver.
+`released_pec_facets` must not be in the system's actual constraint set;
+`inserted_pec_facets` must be in it. In the high-level workflow the physical
 outgoing condition is supplied by constitutive PML tensors inside the outer
 PEC boundary.
 
@@ -2485,9 +2541,10 @@ may evolve faster than the top-level workflow.
 
 - Physical public materials are scalar and isotropic; internal PML tensors
   are diagonal.
-- The scattered-field source supports volume permittivity contrast and finite
-  slots released from z-invariant background PEC sheets. Permeability
-  contrast and actual-only PEC insertion are not implemented.
+- The scattered-field workflow supports volume permittivity contrast, finite
+  slots released from z-invariant background PEC sheets, and finite
+  constant-x actual-only PEC plates. Permeability contrast, arbitrary curved
+  PEC insertions, and finite-conductivity sheets are not implemented.
 - `Scattering2D` supports passive reciprocal problems, compact loss, one
   incident mode, and left incidence.
 - Uniform leads must be lossless for the integrated projection/power path.

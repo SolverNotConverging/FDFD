@@ -369,6 +369,58 @@ def test_failed_write_leaves_existing_destination_untouched(tmp_path, monkeypatc
     assert list(tmp_path.glob(f".{path.name}.*.tmp")) == []
 
 
+def test_atomic_write_retries_transient_windows_sharing_violation(
+    tmp_path, monkeypatch
+) -> None:
+    from wavefem import hdf5 as persistence
+
+    path = tmp_path / "retry.h5"
+    real_replace = persistence.os.replace
+    attempts = 0
+
+    def intermittently_locked(source, destination) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            error = OSError("injected sharing violation")
+            error.winerror = 32
+            raise error
+        real_replace(source, destination)
+
+    monkeypatch.setattr(persistence.os, "replace", intermittently_locked)
+    monkeypatch.setattr(persistence.time, "sleep", lambda _delay: None)
+
+    save_result_h5(make_result(), path)
+
+    assert attempts == 3
+    assert path.is_file()
+    assert list(tmp_path.glob(f".{path.name}.*.tmp")) == []
+
+
+def test_atomic_write_does_not_retry_unrelated_replace_error(
+    tmp_path, monkeypatch
+) -> None:
+    from wavefem import hdf5 as persistence
+
+    path = tmp_path / "unrelated-error.h5"
+    attempts = 0
+
+    def fail_replace(_source, _destination) -> None:
+        nonlocal attempts
+        attempts += 1
+        error = OSError("injected disk failure")
+        error.winerror = 112
+        raise error
+
+    monkeypatch.setattr(persistence.os, "replace", fail_replace)
+
+    with pytest.raises(ConfigurationError, match="injected disk failure"):
+        save_result_h5(make_result(), path)
+
+    assert attempts == 1
+    assert list(tmp_path.glob(f".{path.name}.*.tmp")) == []
+
+
 def test_public_result_and_sweep_save_wrappers_return_written_paths(tmp_path) -> None:
     result_mode = make_mode()
     result = replace(

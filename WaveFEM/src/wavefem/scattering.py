@@ -227,13 +227,20 @@ class Scattering2D:
             )
 
     def _validate_integrated_pec_geometry(self) -> None:
-        unsupported = [sheet.name for sheet in self.geometry.pec_sheets if not sheet.background]
-        if unsupported:
-            raise ConfigurationError(
-                "Scattering2D supports z-invariant background PEC sheets only; "
-                "actual-only PEC sheets require a nonhomogeneous boundary source. "
-                f"Unsupported sheet(s): {', '.join(unsupported)}."
-            )
+        (x0, x1), (z0, z1) = self._interior_spans()
+        for sheet in self.geometry.pec_sheets:
+            if sheet.background:
+                continue
+            if not z0 < sheet.z[0] < sheet.z[1] < z1:
+                raise ConfigurationError(
+                    f"Actual-only PEC sheet {sheet.name!r} must be compact and lie "
+                    "strictly inside the non-PML z interior."
+                )
+            if self.pml.x is not None and not x0 < sheet.x < x1:
+                raise ConfigurationError(
+                    f"Actual-only PEC sheet {sheet.name!r} must lie strictly inside "
+                    "the non-PML x interior."
+                )
 
     def add_rectangle(
         self,
@@ -311,28 +318,33 @@ class Scattering2D:
         self,
         *,
         x: float,
-        z: Literal["all"] = "all",
+        z: Sequence[float] | Literal["all"] = "all",
         background: bool = True,
         name: str | None = None,
     ) -> PECSheet:
-        """Add a z-invariant background PEC sheet at constant x.
+        """Add a background ground sheet or a compact actual-only PEC plate.
 
-        The ideal sheet has zero thickness and is represented by conforming
-        interior mesh facets.  It belongs to both the unperturbed lead and the
-        actual device until finite openings are cut with :meth:`add_slot`.
-        Actual-only PEC insertion is intentionally rejected because it would
-        require a different nonhomogeneous scattered-field boundary source.
+        A background sheet must use ``z='all'`` and is present in both the
+        unperturbed lead and actual device until openings are cut with
+        :meth:`add_slot`.  An actual-only sheet must have a finite compact
+        ``z`` span.  Its scattered tangential field is prescribed as the
+        negative incident trace so the total tangential field vanishes.
         """
 
         self._require_region_geometry()
-        if not isinstance(background, (bool, np.bool_)) or not bool(background):
+        if not isinstance(background, (bool, np.bool_)):
             raise ConfigurationError(
-                "Scattering2D.add_pec currently supports background=True only."
+                "PEC background must be a boolean."
+            )
+        background_value = bool(background)
+        if not background_value and isinstance(z, str) and z == "all":
+            raise ConfigurationError(
+                "An actual-only PEC sheet must be compact; provide a finite z span."
             )
         sheet = self.geometry.add_pec(
             x=x,
             z=z,
-            background=True,
+            background=background_value,
             name=name,
         )
         self._invalidate()
@@ -511,6 +523,9 @@ class Scattering2D:
             return None
         bounds = [_shape_bounds(region)[1] for region in self.geometry.perturbations]
         bounds.extend(slot.z for slot in self.geometry.pec_slots)
+        bounds.extend(
+            sheet.z for sheet in self.geometry.pec_sheets if not sheet.background
+        )
         if not bounds:
             return None
         return min(item[0] for item in bounds), max(item[1] for item in bounds)
@@ -1107,6 +1122,7 @@ class Scattering2D:
             mu_background=self._mu_background,
             incident=self.incident,
             released_pec_facets=self.mesh_data.released_pec_facets,
+            inserted_pec_facets=self.mesh_data.inserted_pec_facets,
             incident_magnetic=self.incident.H,
             residual_tolerance=self.solver_options.tolerance,
         )
@@ -1331,6 +1347,7 @@ class Scattering2D:
                 "length_scale": length_scale,
                 "source_active_fraction": scattered.source.active_quadrature_fraction,
                 "released_pec_facet_count": scattered.source.released_pec_facet_count,
+                "inserted_pec_facet_count": scattered.source.inserted_pec_facet_count,
                 "left_projection_residual": left_projection.relative_residual,
                 "right_projection_residual": right_projection.relative_residual,
                 "projected_incoming_amplitude": projected_incoming,

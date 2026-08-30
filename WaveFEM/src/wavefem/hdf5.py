@@ -17,6 +17,7 @@ import os
 from operator import index as integer_index
 from pathlib import Path
 import tempfile
+import time
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -32,6 +33,8 @@ SCHEMA_NAME = "wavefem"
 SCHEMA_VERSION = 1
 _COMPRESSION = "gzip"
 _COMPRESSION_LEVEL = 4
+_WINDOWS_REPLACE_RETRY_DELAYS = (0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64)
+_WINDOWS_SHARING_VIOLATIONS = frozenset((5, 32, 33))
 _POWER_NAMES = (
     "reflected_power",
     "transmitted_power",
@@ -780,6 +783,31 @@ def _write_file(
         _write_result(result_group.create_group(f"{index:06d}"), result, index)
 
 
+def _replace_file(source: Path, destination: Path) -> None:
+    """Atomically replace a file, tolerating transient Windows share locks.
+
+    ``h5py.File`` is fully closed before this helper is called.  Windows virus
+    scanners and indexers can nevertheless open the just-created temporary
+    file during that handoff and briefly cause ``os.replace`` to report
+    ``ERROR_ACCESS_DENIED``, ``ERROR_SHARING_VIOLATION``, or
+    ``ERROR_LOCK_VIOLATION``.  Retry only those specific errors; every other
+    failure remains immediate.
+    """
+
+    for delay in (*_WINDOWS_REPLACE_RETRY_DELAYS, None):
+        try:
+            os.replace(source, destination)
+            return
+        except OSError as exc:
+            if (
+                delay is None
+                or getattr(exc, "winerror", None)
+                not in _WINDOWS_SHARING_VIOLATIONS
+            ):
+                raise
+            time.sleep(delay)
+
+
 def _atomic_write(
     destination: Path,
     *,
@@ -804,7 +832,7 @@ def _atomic_write(
                 results=results,
             )
             handle.flush()
-        os.replace(temporary, destination)
+        _replace_file(temporary, destination)
     except OSError as exc:
         raise ConfigurationError(
             f"Could not write HDF5 file {destination}: {exc}"

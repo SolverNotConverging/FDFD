@@ -47,6 +47,9 @@ class Mesh2D:
         default_factory=lambda: np.empty(0, dtype=np.int32)
     )
     pec_slot_facets: dict[str, NDArray[np.int32]] = field(default_factory=dict)
+    inserted_pec_facets: NDArray[np.int32] = field(
+        default_factory=lambda: np.empty(0, dtype=np.int32)
+    )
 
     def elements_in(self, region: str | int) -> NDArray[np.int64]:
         if isinstance(region, str):
@@ -607,6 +610,14 @@ def generate_mesh(
         ),
         dtype=np.int32,
     )
+    inserted_pec_facets = np.asarray(
+        np.setdiff1d(
+            actual_pec_facets,
+            background_pec_facets,
+            assume_unique=True,
+        ),
+        dtype=np.int32,
+    )
     sheet_by_name = {sheet.name: sheet for sheet in geometry.pec_sheets}
     pec_slot_facets = {
         slot.name: _facets_on_pec_segments(
@@ -648,5 +659,6 @@ def generate_mesh(
         background_pec_facets=background_pec_facets,
         actual_pec_facets=actual_pec_facets,
         released_pec_facets=released_pec_facets,
+        inserted_pec_facets=inserted_pec_facets,
         pec_slot_facets=pec_slot_facets,
     )

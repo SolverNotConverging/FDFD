@@ -14,7 +14,8 @@ The current MVP provides:
 
 - a mixed first-order Nedelec + continuous P1 Maxwell discretization;
 - fixed-frequency, fixed-`ky` full-vector lead modes;
-- permittivity-contrast and released-background-PEC slot sources;
+- permittivity contrast, released-background-PEC slots, and finite
+  actual-only PEC plates;
 - transformation-optics PMLs in `x` and `z`;
 - electromagnetic power-Gram modal projection;
 - S-parameters, sampled E/H fields, and structured power diagnostics;
@@ -121,7 +122,7 @@ is shown in `examples/frequency_sweep.py`; a grounded dielectric surface wave
 scattered by a finite ground-plane slot is in
 `examples/grounded_slab_slot.py`.
 
-## Grounded-slab PEC slot
+## Grounded-slab PEC slot and finite top plates
 
 A zero-thickness ground plane inside the solve domain is a z-invariant
 background PEC sheet. Cut a finite opening only from the actual device:
@@ -141,6 +142,14 @@ ground = sim.add_pec(
     x=0.0, z="all", background=True, name="ground_plane",
 )
 sim.add_slot(pec=ground, z=(-1e-3, 1e-3), name="ground_slot")
+sim.add_pec(
+    x=4e-3, z=(-4e-3, -1.5e-3), background=False,
+    name="left_top_plate",
+)
+sim.add_pec(
+    x=4e-3, z=(1.5e-3, 4e-3), background=False,
+    name="right_top_plate",
+)
 sim.add_pml(x=4e-3, z=6e-3)
 sim.set_monitors(left=-12e-3, right=12e-3)
 sim.mesh(max_element_size=1e-3)
@@ -155,6 +164,14 @@ drive the scattered field. This is a boundary source: a valid slot solve has
 `result.solve_info["source_active_fraction"] == 0` when no material changes,
 but `released_pec_facet_count > 0` and a nonzero scattered field. In the HDF5
 scene, the yellow ground line is split around the aperture.
+
+Finite actual-only PEC plates are compact boundary insertions and are absent
+from the lead-mode background. Their Nedelec/P1 tangential scattered-field
+trace is imposed as `-E_inc`, so `E_total,t=0` on each plate. The mesh exposes
+these facets separately as `mesh.inserted_pec_facets`, and integrated results
+record `inserted_pec_facet_count` and `prescribed_pec_dof_count`. Background
+grounds must remain z-invariant; actual-only plates must lie strictly inside
+the non-PML interior.
 
 Run the example from the `WaveFEM` directory:
 
@@ -241,6 +258,16 @@ slot facets and assembles the doubled planar-screen reaction from the two
 one-sided incident magnetic traces. The remaining sheet facets retain
 homogeneous scattered-field PEC conditions because the background mode
 already has zero tangential electric field there.
+
+For a finite PEC plate inserted only in the actual device, WaveFEM constrains
+the scattered trace nonhomogeneously,
+
+\[
+\mathbf E_{t,\mathrm{sc}}=-\mathbf E_{t,\mathrm{inc}},
+\]
+
+which enforces zero total tangential electric field. Released and inserted
+facet sets are disjoint and may be present in the same solve.
 
 The one-dimensional lead solve uses the full-vector quadratic eigenproblem
 
@@ -420,7 +447,8 @@ normalization, nonzero-`ky` symmetry, PML tensor algebra, transverse mode-PML
 convergence, source support/sign, synthetic and physical modal projection,
 zero scattering in a uniform guide, weak-contrast field/amplitude/power
 scaling, physical z-PML and mesh refinement, open-guide zero-scattering,
-reciprocity, compact loss, and independent power accounting.
+reciprocity, compact loss, inserted-PEC essential traces, combined oblique
+slot/plate scattering, and independent power accounting.
 
 Current explicit limits are:
 
@@ -430,6 +458,8 @@ Current explicit limits are:
   material loss is supported, while active media and lossy uniform leads are
   rejected by the integrated power-accounting path;
 - permittivity perturbations only (`mu_actual` must equal `mu_background`);
+- ideal actual-only PEC insertions are finite constant-x plates; arbitrary
+  curved PEC objects and finite-conductivity sheets are not implemented;
 - left incidence in the integrated `Scattering2D.solve()` path;
 - sparse direct linear solves;
 - explicit PEC transverse truncation, or symmetric transverse PMLs terminated
