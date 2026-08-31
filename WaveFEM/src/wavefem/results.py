@@ -489,6 +489,52 @@ class ScatteringResult:
             color_axis.set_label(quantity)
         return ax
 
+    def visualize(
+        self,
+        component: str = "E",
+        *,
+        quantity: Literal["abs", "real", "imag", "phase", "norm"] = "abs",
+        part: Literal["total", "incident", "scattered"] = "total",
+        ax: Any | None = None,
+        cmap: Any | None = None,
+        levels: int = 50,
+        colorbar: bool = True,
+        show: bool = True,
+    ) -> Any:
+        """Create and show a Matplotlib field figure.
+
+        Pass ``show=False`` when embedding the returned axes.  Use the
+        zero-argument :meth:`visualize_with_gui` method for the native viewer.
+        """
+
+        if not isinstance(show, bool):
+            raise ValueError("show must be a boolean.")
+        axes = self.plot_field(
+            component,
+            quantity=quantity,
+            part=part,
+            ax=ax,
+            cmap=cmap,
+            levels=levels,
+            colorbar=colorbar,
+        )
+        if show:
+            import matplotlib.pyplot as plt
+
+            plt.show()
+        return axes
+
+    def visualize_with_gui(self) -> Any:
+        """Open the complete result and all stored modes in the native viewer."""
+
+        from .viewer import _persist_and_launch
+
+        return _persist_and_launch(
+            self,
+            h5_path=None,
+            default_filename="wavefem_result.h5",
+        )
+
     def check(
         self,
         *,

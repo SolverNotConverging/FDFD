@@ -86,6 +86,7 @@ The following names are available directly from `wavefem`:
 | Visualization scene | `Scene2D`, `SceneLine` |
 | Frequency | `Frequency`, `resolve_frequency` |
 | HDF5 | `H5FileData`, `H5ResultData`, `H5ModeData`, `load_h5`, `save_result_h5`, `save_sweep_h5` |
+| Native viewer | `find_viewer_executable`, `launch_viewer` |
 | Diagnostics | `Diagnostic`, `DiagnosticReport` |
 | Constants | `C0`, `EPSILON_0`, `MU_0`, `ETA_0` |
 | Exceptions | `WaveFEMError` and its specialized subclasses |
@@ -852,6 +853,21 @@ are `"twilight"` for phase, `"RdBu_r"` for real/imaginary parts, and
 `"viridis"` otherwise. The display convention is `z` on the horizontal axis
 and `x` on the vertical axis; stored coordinates remain ordered `(x, z)`.
 
+#### `visualize` and `visualize_with_gui`
+
+```python
+result.visualize(component="Ey", quantity="real", show=True)
+process = result.visualize_with_gui()
+```
+
+`visualize` calls `plot_field` and displays the Matplotlib window by default.
+Pass `show=False` to embed the returned axes without calling
+`matplotlib.pyplot.show()`. The separate, zero-argument
+`visualize_with_gui()` method reuses an existing `result.h5_path`; an in-memory
+result is first saved as `wavefem_result.h5`. It opens the complete result,
+including all stored modes, and returns the native viewer `subprocess.Popen`
+handle.
+
 #### `save_h5`
 
 ```python
@@ -1281,6 +1297,19 @@ therefore inspect result files on a machine without the FEM solver installed.
 Its README documents cross-platform CMake builds, installation, direct-path
 launch, file-picker workflow, tab controls, supported schema data, and the
 headless inspection/benchmark utility.
+Python exposes `wf.find_viewer_executable()` and `wf.launch_viewer(path=None)`.
+Discovery checks `WAVEFEM_VIEWER_EXECUTABLE`, standalone
+`WaveFEMViewer/build*` trees, repository-root `build*/WaveFEMViewer` trees,
+`PATH`, and the default Windows installation, in that order. A directory
+target populates the native viewer's HDF5 selector; `None` targets the current
+directory.
+
+`FrequencySweepResult.visualize()` draws S11/S21 with Matplotlib.
+`FrequencySweepResult.visualize_with_gui()` reuses an associated archive or
+saves `wavefem_sweep.h5`, then opens every sweep point and stored mode. The
+`wavefem-inspect-h5` command is headless by default; `--gui` launches the
+native viewer, and `--gui` without a path opens the current directory. The
+example inspector launches that directory GUI when run with no arguments.
 For every 2D vector/material plot it displays `z` horizontally and `x`
 vertically while leaving file storage in `(x, z)` order. Dielectric material
 is grey, PEC is yellow, PMC is blue, wave ports are red, and PML interfaces
@@ -1773,7 +1802,8 @@ WaveFEMError
 ├── MeshError
 ├── ModeSolverError
 ├── ModeProjectionError
-└── SolverError
+├── SolverError
+└── ViewerError
 ```
 
 - `WaveFEMError`: base class for actionable package errors.
@@ -1783,6 +1813,7 @@ WaveFEMError
 - `ModeSolverError`: requested validated eigenmodes could not be produced.
 - `ModeProjectionError`: monitor fields could not be reliably decomposed.
 - `SolverError`: FEM linear/eigenvalue solution failed.
+- `ViewerError`: the standalone native viewer could not be found or launched.
 
 Standard `ValueError` and `TypeError` are used by some lower-level numerical
 helpers when their raw array contracts are violated. `NotImplementedError`

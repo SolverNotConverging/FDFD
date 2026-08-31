@@ -16,6 +16,10 @@ def main() -> None:
         x_span=(-1.5e-6, 1.5e-6),
         z_span=(-2.5e-6, 2.5e-6),
         background_eps=1.44**2,
+        # Sparse direct solves can accumulate a few 1e-10 of normalized
+        # residual on this oblique, PML-stretched mesh.  Keep the example's
+        # acceptance threshold comfortably below plotting accuracy.
+        solver_options=wf.SolverOptions(tolerance=1.0e-8),
     )
     simulation.add_rectangle(
         x=(-0.22e-6, 0.22e-6),
@@ -43,7 +47,7 @@ def main() -> None:
     print("power-balance error =", result.power_balance_error)
     print("HDF5 result =", result.h5_path)
     print("diagnostics =", result.check())
-    result.plot_field("Ey", quantity="abs")
+    result.visualize_with_gui()
 
 
 if __name__ == "__main__":

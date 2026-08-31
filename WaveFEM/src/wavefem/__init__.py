@@ -15,6 +15,7 @@ from .exceptions import (
     ModeProjectionError,
     ModeSolverError,
     SolverError,
+    ViewerError,
     WaveFEMError,
 )
 from .frequency import Frequency, resolve_frequency
@@ -36,6 +37,7 @@ from .results import Diagnostic, DiagnosticReport, ScatteringResult
 from .scene import Scene2D, SceneLine
 from .scattering import Scattering2D, SolverOptions
 from .sweep import FrequencySweepResult
+from .viewer import find_viewer_executable, launch_viewer
 
 __version__ = "0.0.1"
 
@@ -72,7 +74,10 @@ __all__ = [
     "ScatteringResult",
     "SolverOptions",
     "SolverError",
+    "ViewerError",
     "WaveFEMError",
+    "find_viewer_executable",
+    "launch_viewer",
     "load_h5",
     "resolve_frequency",
     "save_result_h5",

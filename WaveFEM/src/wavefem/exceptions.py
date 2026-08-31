@@ -31,6 +31,10 @@ class SolverError(WaveFEMError):
     """A finite-element linear or eigenvalue solve failed."""
 
 
+class ViewerError(WaveFEMError):
+    """The standalone native viewer could not be found or launched."""
+
+
 __all__ = [
     "ConfigurationError",
     "MaterialError",
@@ -38,5 +42,6 @@ __all__ = [
     "ModeProjectionError",
     "ModeSolverError",
     "SolverError",
+    "ViewerError",
     "WaveFEMError",
 ]

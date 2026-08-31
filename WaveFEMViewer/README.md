@@ -191,6 +191,13 @@ are resident.
 The status bar reports native loading time and the number of field samples,
 modes, and material triangles loaded.
 
+From Python, `result.visualize(gui=True)`,
+`sweep.visualize_with_gui()`, and `wavefem.launch_viewer(path)` find this
+executable in repository build, `PATH`, and installed locations. Set
+`WAVEFEM_VIEWER_EXECUTABLE` for an explicit override. Run
+`wavefem-inspect-h5 --gui` (or `python examples/inspect_h5.py --gui`) to open
+the current directory and choose one of its HDF5 files in this window.
+
 ### Headless validation and timing
 
 Use the companion utility to validate a file and measure native HDF5 loading:

@@ -8,7 +8,6 @@ and scattered.  The resulting HDF5 file can be opened with
 from __future__ import annotations
 
 import numpy as np
-
 import wavefem as wf
 
 
@@ -44,6 +43,8 @@ def main() -> None:
     print("T =", sweep.transmission)
     print("power-balance error =", sweep.power_balance_error)
     print("HDF5 sweep =", sweep.h5_path)
+
+    sweep.visualize_with_gui()
 
 
 if __name__ == "__main__":

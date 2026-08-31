@@ -107,7 +107,7 @@ print("power error =", result.power_balance_error)
 print("saved to =", result.h5_path)
 print(result.check())
 
-result.plot_field("Ey", quantity="abs")
+result.visualize("Ey", quantity="abs")
 ```
 
 `run()` is the recommended terminal step because it solves and persists the
@@ -116,11 +116,12 @@ optional or computed dynamically; bare `solve()` intentionally leaves the
 result in memory. An existing result can be written later with
 `result.save_h5("result.h5")`.
 
+`visualize()` displays the Matplotlib window before returning. Pass
+`show=False` only when embedding the returned axes in an existing application.
 See `examples/weak_index_perturbation.py`, `examples/slab_mode.py`, and
 `examples/oblique_ky.py` for runnable variants. The frequency-sweep workflow
-is shown in `examples/frequency_sweep.py`; a grounded dielectric surface wave
-scattered by a finite ground-plane slot is in
-`examples/grounded_slab_slot.py`.
+is shown in `examples/frequency_sweep.py`; a grounded-slab leaky-wave antenna
+with a finite radiating slot is in `examples/grounded_slab_slot.py`.
 
 ## Grounded-slab PEC slot and finite top plates
 
@@ -177,12 +178,12 @@ Run the example from the `WaveFEM` directory:
 
 ```powershell
 conda run --name RF_Engineering_env python examples/grounded_slab_slot.py
-conda run --name RF_Engineering_env python examples/grounded_slab_slot.py --sweep
 ```
 
-The first command writes `grounded_slab_slot.h5`. The second independently
-solves 19, 20, and 21 GHz and writes
-`grounded_slab_slot_sweep.h5`; both files open in `wavefem-viewer`.
+The example has no command-line parser. It writes `grounded_slab_slot.h5`,
+opens that result in `wavefem-viewer`, and displays the field in Matplotlib.
+Run `examples/frequency_sweep.py` for a multi-frequency archive and response
+plot.
 
 ## Domain layout
 
@@ -364,11 +365,30 @@ print(point.scene.x_span, point.scene.z_span)  # None only for legacy files
 
 The viewer is a separate native C++20/Qt 6 sibling project with its own
 source code, HDF5 dependency, executable, deployment scripts, and
-documentation. Build or install it from `../WaveFEMViewer` and launch it with:
+documentation. Build or install it from `../WaveFEMViewer`. Python discovers
+both standalone and repository-root CMake `build*` directories first, then
+`PATH` and the default installation, so a solved result can launch it directly:
+
+```python
+result.visualize("Ey")           # Matplotlib field figure
+result.visualize_with_gui()      # every stored mode in the native viewer
+sweep.visualize()                # Matplotlib S11/S21 figure
+sweep.visualize_with_gui()       # every frequency and stored mode in the native viewer
+wf.launch_viewer("results")      # opens a directory and its in-window H5 selector
+```
+
+Set `WAVEFEM_VIEWER_EXECUTABLE` to override discovery. The equivalent direct
+Windows launch is:
 
 ```powershell
 & "$env:LOCALAPPDATA\WaveFEMViewer\bin\wavefem-viewer.exe" frequency_sweep.h5
 ```
+
+For a MinGW build-tree executable, Python reads its `CMakeCache.txt` and adds
+the matching compiler/Qt runtime and Qt plugin directory to the child process.
+This makes IDE launches work even when MSYS2 is absent from the IDE's `PATH`.
+If the native process still exits before opening a window, `launch_viewer`
+raises an actionable exception instead of failing silently.
 
 See the [WaveFEMViewer README](../WaveFEMViewer/README.md) for complete
 installation, uninstallation, command-line, file-picker, and GUI usage
@@ -377,6 +397,18 @@ selected frequency's large field arrays. The viewer reads HDF5 only; no FEM
 solve is started. Its 2D
 plots put `z` on the horizontal axis and `x` on the vertical axis and render
 the stored dielectric, PEC, PMC, wave-port, and PML scene styles.
+
+The installed inspector remains headless by default. Add `--gui` to open a
+file or directory; with no path it opens the current directory. The runnable
+`examples/inspect_h5.py` convenience script opens the current directory in the
+GUI when it is invoked without arguments:
+
+```bash
+wavefem-inspect-h5 result.h5
+wavefem-inspect-h5 --gui
+python examples/inspect_h5.py
+python examples/inspect_h5.py --gui results
+```
 
 ## Power and fields
 
@@ -398,6 +430,8 @@ ey = result.field("Ey", quantity="complex")
 e_abs = result.field("E", quantity="norm")
 h_abs = result.field("H", quantity="norm")
 result.plot_field("Ey", quantity="real", part="total")
+result.visualize("Ey", quantity="real", part="total")  # plots and shows
+result.visualize("Ey", show=False)  # plots without calling pyplot.show()
 ```
 
 Lower-level meshes, matrices, modes, incident fields, projectors, and mixed

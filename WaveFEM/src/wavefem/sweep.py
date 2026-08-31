@@ -232,5 +232,53 @@ class FrequencySweepResult:
         )
         return Path(written)
 
+    def visualize(
+        self,
+        *,
+        ax: Any | None = None,
+        show: bool = True,
+    ) -> Any:
+        """Plot the fundamental S11/S21 response with Matplotlib."""
+
+        if not isinstance(show, bool):
+            raise ValueError("show must be a boolean.")
+        import matplotlib.pyplot as plt
+
+        if ax is None:
+            _, ax = plt.subplots()
+        frequency_ghz = self.frequencies_hz / 1.0e9
+        floor = np.finfo(float).tiny
+        ax.plot(
+            frequency_ghz,
+            20.0 * np.log10(np.maximum(np.abs(self.S11), floor)),
+            "o-",
+            label="S11",
+        )
+        ax.plot(
+            frequency_ghz,
+            20.0 * np.log10(np.maximum(np.abs(self.S21), floor)),
+            "o-",
+            label="S21",
+        )
+        ax.set_xlabel("Frequency (GHz)")
+        ax.set_ylabel("Magnitude (dB)")
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        ax.figure.tight_layout()
+        if show:
+            plt.show()
+        return ax
+
+    def visualize_with_gui(self) -> Any:
+        """Open every sweep point and its stored modes in the native viewer."""
+
+        from .viewer import _persist_and_launch
+
+        return _persist_and_launch(
+            self,
+            h5_path=None,
+            default_filename="wavefem_sweep.h5",
+        )
+
 
 __all__ = ["FrequencySweepResult"]

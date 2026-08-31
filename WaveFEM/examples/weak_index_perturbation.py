@@ -39,6 +39,7 @@ def main() -> None:
     print("power-balance error =", result.power_balance_error)
     print("HDF5 result =", result.h5_path)
     print("diagnostics =", result.check())
+    result.visualize_with_gui()
 
 
 if __name__ == "__main__":
