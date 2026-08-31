@@ -9,9 +9,15 @@ from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
 from scipy.sparse.linalg import eigs
 
 try:
-    from .refined_shift_invert_arnoldi import refined_shift_invert_arnoldi
+    from .refined_shift_invert_arnoldi import (
+        refined_shift_invert_arnoldi,
+        resolve_kernel_backend,
+    )
 except ImportError:
-    from refined_shift_invert_arnoldi import refined_shift_invert_arnoldi
+    from refined_shift_invert_arnoldi import (
+        refined_shift_invert_arnoldi,
+        resolve_kernel_backend,
+    )
 
 
 class PeriodicModeSolver3D:
@@ -109,6 +115,7 @@ class PeriodicModeSolver3D:
         self.attenuation_constant = None
         self.refined_residuals = None
         self.refined_restarts = None
+        self.refined_backend = None
 
     def _invalidate_solution(self):
         self.fields = {}
@@ -120,6 +127,7 @@ class PeriodicModeSolver3D:
         self.attenuation_constant = None
         self.refined_residuals = None
         self.refined_restarts = None
+        self.refined_backend = None
 
     # --- Differentiation operators
     def _init_operators(self):
@@ -871,7 +879,16 @@ class PeriodicModeSolver3D:
 
         return A, B
 
-    def solve(self, method="refined", sigma_guess=None, tol=None, ncv=None, max_restarts=12, random_seed=0):
+    def solve(
+        self,
+        method="refined",
+        sigma_guess=None,
+        tol=None,
+        ncv=None,
+        max_restarts=12,
+        random_seed=0,
+        kernel_backend="auto",
+    ):
         """Solve periodic modes.
 
         Args:
@@ -883,6 +900,9 @@ class PeriodicModeSolver3D:
             ncv (int|None): Arnoldi subspace size override.
             max_restarts (int): refined Arnoldi restart limit.
             random_seed (int|None): seed for the refined solver start vector.
+            kernel_backend (str): ``"auto"``, ``"cython"``, ``"python"``,
+                or the legacy ``"numpy"`` alias for the refined solver's
+                large-vector kernels.
         """
         sigma_guess = self.sigma_guess if sigma_guess is None else sigma_guess
         tol = self.tol if tol is None else tol
@@ -915,19 +935,26 @@ class PeriodicModeSolver3D:
             eigenvectors_reduced = eigenvectors_reduced[:, order]
             self.refined_residuals = None
             self.refined_restarts = None
+            self.refined_backend = None
         elif method == "refined":
-            self.eigenvalues, eigenvectors_reduced, self.refined_residuals, self.refined_restarts = (
-                refined_shift_invert_arnoldi(
-                    A,
-                    B,
-                    sigma=sigma_guess,
-                    num_modes=self.num_modes,
-                    tol=tol,
-                    ncv=ncv,
-                    max_restarts=max_restarts,
-                    random_seed=random_seed,
-                )
+            # Keep the legacy facade's machine-precision floor for ``tol=0``;
+            # the shared public API deliberately retains literal zero for its
+            # explicit restart-exhaustion use case.
+            refined_tolerance = max(0.0 if tol is None else float(tol), 1e-12)
+            refined_kwargs = dict(
+                sigma=sigma_guess,
+                num_modes=self.num_modes,
+                tol=refined_tolerance,
+                ncv=ncv,
+                max_restarts=max_restarts,
+                random_seed=random_seed,
             )
+            if kernel_backend != "auto":
+                refined_kwargs["kernel_backend"] = kernel_backend
+            self.eigenvalues, eigenvectors_reduced, self.refined_residuals, self.refined_restarts = (
+                refined_shift_invert_arnoldi(A, B, **refined_kwargs)
+            )
+            self.refined_backend = resolve_kernel_backend(kernel_backend)
         else:
             raise ValueError("method must be 'eigs' or 'refined'.")
 

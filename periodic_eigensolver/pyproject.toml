@@ -1,0 +1,38 @@
+[build-system]
+requires = [
+    "setuptools>=77",
+    "Cython>=3,<4",
+    "numpy>=1.26,<3",
+    "scipy>=1.12,<2",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "periodic-eigensolver"
+version = "0.2.0"
+description = "Shared refined shift-and-invert Arnoldi kernels for periodic FEM and FDFD pencils"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "numpy>=1.26,<3",
+    "scipy>=1.12,<2",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools]
+packages = ["periodic_eigensolver"]
+package-dir = { periodic_eigensolver = "." }
+include-package-data = false
+
+[[tool.setuptools.ext-modules]]
+name = "periodic_eigensolver._cython_kernels"
+sources = ["_cython_kernels.pyx"]
+optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

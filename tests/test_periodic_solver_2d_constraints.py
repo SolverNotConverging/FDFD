@@ -308,6 +308,68 @@ class PeriodicModeSolver2DConstraintTests(unittest.TestCase):
             0.0,
         )
 
+    def test_refined_solve_uses_shared_backend_and_restores_exact_zeros(self):
+        solver = self.make_solver("TM")
+        solver.add_pec((1, 2), (0, solver.Nz), components=("xx",))
+        pec_xx, _pec_yy, _pec_zz, _pmc_xx, pmc_yy, _pmc_zz = (
+            self.effective_masks(solver)
+        )
+        free = np.concatenate(
+            (~pec_xx.ravel(order="F"), ~pmc_yy.ravel(order="F"))
+        )
+        captured = {}
+
+        def fake_refined(
+            A,
+            B,
+            *,
+            sigma,
+            num_modes,
+            tol,
+            ncv,
+            max_restarts,
+            random_seed,
+            kernel_backend,
+        ):
+            captured.update(
+                A=A,
+                B=B,
+                sigma=sigma,
+                tol=tol,
+                kernel_backend=kernel_backend,
+            )
+            vector = np.arange(1, A.shape[0] + 1, dtype=float).reshape(-1, 1)
+            return (
+                np.array([2.0 + 0.0j]),
+                vector.astype(complex),
+                np.array([1e-9]),
+                2,
+            )
+
+        with patch.object(
+            periodic_solver_2d_module,
+            "refined_shift_invert_arnoldi",
+            side_effect=fake_refined,
+        ):
+            solver.solve(method="refined", kernel_backend="numpy")
+
+        reduced_size = int(np.count_nonzero(free))
+        self.assertEqual(captured["A"].shape, (reduced_size, reduced_size))
+        self.assertEqual(captured["B"].shape, (reduced_size, reduced_size))
+        self.assertEqual(captured["kernel_backend"], "numpy")
+        self.assertEqual(captured["tol"], 1e-12)
+        self.assertEqual(solver.refined_backend, "numpy")
+        self.assertEqual(solver.refined_restarts, 2)
+        np.testing.assert_array_equal(solver.refined_residuals, [1e-9])
+        np.testing.assert_array_equal(
+            solver.Ex[pec_xx.ravel(order="F"), 0],
+            0.0,
+        )
+        np.testing.assert_array_equal(
+            solver.Hy[pmc_yy.ravel(order="F"), 0],
+            0.0,
+        )
+
     def test_spatial_eigenvalue_maps_to_exp_plus_jwt_effective_index(self):
         solver = self.make_solver("TM")
         gamma = solver.k0 * (0.02 + 1.5j)

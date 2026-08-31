@@ -417,6 +417,7 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
         ):
             captured["A"] = A
             captured["B"] = B
+            captured["tol"] = tol
             return (
                 np.array([2.0 + 0.0j]),
                 self.deterministic_vector(A.shape[0]),
@@ -434,6 +435,7 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
         reduced_size = int(np.count_nonzero(free))
         self.assertEqual(captured["A"].shape, (reduced_size, reduced_size))
         self.assertEqual(captured["B"].shape, (reduced_size, reduced_size))
+        self.assertEqual(captured["tol"], 1e-12)
 
         expected = np.zeros(free.size, dtype=complex)
         expected[free] = np.arange(1, reduced_size + 1, dtype=float)

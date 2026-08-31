@@ -8,6 +8,11 @@ from matplotlib.patches import Rectangle
 from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
 from scipy.sparse.linalg import eigs
 
+from periodic_eigensolver import (
+    refined_shift_invert_arnoldi,
+    resolve_kernel_backend,
+)
+
 
 class PeriodicModeSolver2D:
     """2D Bloch-periodic TE/TM mode solver on a periodic Yee grid.
@@ -121,6 +126,9 @@ class PeriodicModeSolver2D:
         self.accepted_candidate_indices = None
         self.rejected_candidate_indices = None
         self.unselected_candidate_indices = None
+        self.refined_residuals = None
+        self.refined_restarts = None
+        self.refined_backend = None
         for name in ("Ex", "Ey", "Hx", "Hy"):
             if hasattr(self, name):
                 delattr(self, name)
@@ -726,8 +734,17 @@ class PeriodicModeSolver2D:
             second = ~self._flat(pec_yy_mask)
         return np.concatenate((first, second))
 
-    def solve(self, guess=None, tol=None, ncv=None):
-        """Solve periodic modes, optionally overriding eigs controls for this call."""
+    def solve(
+        self,
+        guess=None,
+        tol=None,
+        ncv=None,
+        method="eigs",
+        max_restarts=12,
+        random_seed=0,
+        kernel_backend="auto",
+    ):
+        """Solve periodic modes with SciPy or refined shift-invert Arnoldi."""
         guess = self.guess if guess is None else guess
         tol = self.tol if tol is None else tol
         ncv = self.ncv if ncv is None else ncv
@@ -761,19 +778,48 @@ class PeriodicModeSolver2D:
 
         A = A[free, :][:, free]
         B = B[free, :][:, free]
-        v0 = np.ones(A.shape[0], dtype=complex)
-        eigenvalues, eigenvectors_reduced = eigs(
-            A,
-            M=B,
-            k=self.num_modes,
-            sigma=guess,
-            tol=tol,
-            ncv=ncv,
-            v0=v0,
-        )
-        order = np.argsort(np.abs(eigenvalues - guess))
-        eigenvalues = eigenvalues[order]
-        eigenvectors_reduced = eigenvectors_reduced[:, order]
+        if method == "eigs":
+            v0 = np.ones(A.shape[0], dtype=complex)
+            eigenvalues, eigenvectors_reduced = eigs(
+                A,
+                M=B,
+                k=self.num_modes,
+                sigma=guess,
+                tol=tol,
+                ncv=ncv,
+                v0=v0,
+            )
+            order = np.argsort(np.abs(eigenvalues - guess))
+            eigenvalues = eigenvalues[order]
+            eigenvectors_reduced = eigenvectors_reduced[:, order]
+            self.refined_residuals = None
+            self.refined_restarts = None
+            self.refined_backend = None
+        elif method == "refined":
+            # Legacy ``tol=0`` followed SciPy's machine-precision convention;
+            # preserve the former facade's finite convergence floor rather
+            # than exhausting every refined restart on an impossible zero
+            # residual target.
+            refined_tolerance = max(0.0 if tol is None else float(tol), 1e-12)
+            refined_kwargs = dict(
+                sigma=guess,
+                num_modes=self.num_modes,
+                tol=refined_tolerance,
+                ncv=ncv,
+                max_restarts=max_restarts,
+                random_seed=random_seed,
+            )
+            if kernel_backend != "auto":
+                refined_kwargs["kernel_backend"] = kernel_backend
+            (
+                eigenvalues,
+                eigenvectors_reduced,
+                self.refined_residuals,
+                self.refined_restarts,
+            ) = refined_shift_invert_arnoldi(A, B, **refined_kwargs)
+            self.refined_backend = resolve_kernel_backend(kernel_backend)
+        else:
+            raise ValueError("method must be 'eigs' or 'refined'.")
 
         eigenvectors = np.zeros((free.size, self.num_modes), dtype=complex)
         eigenvectors[free, :] = eigenvectors_reduced
