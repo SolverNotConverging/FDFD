@@ -215,4 +215,12 @@ personal_use/
 
 mode_data.*
 
+# Local validation/build outputs used by the periodic solvers and viewer
+/.pytest_tmp_*/
+/.viewer_install_test/
+/.native_wheel_test/
+/build*/
+/FEMPeriodicViewer/build*/
+/FEM_Periodic_Solver/examples/*.h5
+
 
