@@ -746,7 +746,10 @@ class ModeSolver1D:
         centres = 0.5 * (nodes[:-1] + nodes[1:])
         widths = np.diff(nodes)
         eps_transformed, mu_transformed = self._transformed_material_at(centres)
-        eps_physical, _ = self.geometry.material_at(centres)
+        eps_physical, mu_physical = self.geometry.material_at(centres)
+        material_index = np.sqrt(
+            np.max(np.abs(eps_physical * mu_physical), axis=0)
+        )
 
         nodal = np.zeros(nodes.size, dtype=np.complex128)
         nodal[system.free_nodes] = candidate.vector
@@ -807,6 +810,7 @@ class ModeSolver1D:
             metadata={
                 "x_nodes": np.array(nodes, copy=True),
                 "active_elements": np.array(system.active_elements, copy=True),
+                "material_index": np.asarray(material_index, dtype=float),
                 "phasor_convention": "exp(+1j*omega*t - 1j*beta*z)",
             },
         )
@@ -979,14 +983,14 @@ class ModeSolver1D:
 
         return visualize(self.solution, mode=mode, **kwargs)
 
-    def visualize_with_gui(self, **kwargs: object) -> object:
-        """Open the same interactive GUI entry point as the existing solvers."""
+    def visualize_with_gui(self) -> object:
+        """Open all solved modes in the interactive GUI."""
 
         if self.solution is None:
             raise RuntimeError("solve() must be called before visualize_with_gui().")
         from .visualization import visualize_with_gui
 
-        return visualize_with_gui(self.solution, **kwargs)
+        return visualize_with_gui(self.solution)
 
 
 __all__ = ["ModeSolver1D"]

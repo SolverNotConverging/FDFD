@@ -50,7 +50,7 @@ def test_top_level_api_and_results_are_read_only() -> None:
         modes[0].fields.values["Ex"] = np.zeros_like(modes[0].component("Ex"))
 
 
-def test_1d_static_and_gui_visualizers_render_with_shared_api() -> None:
+def test_1d_static_and_gui_visualizers_render_with_shared_api(monkeypatch) -> None:
     solver = fem.ModeSolver1D(20e9, 20e-3, num_modes=1)
     solver.discretize(resolution=20)
     solver.solve()
@@ -65,15 +65,43 @@ def test_1d_static_and_gui_visualizers_render_with_shared_api() -> None:
     assert axes.shape == (2,)
     figure.canvas.draw()
 
-    viewer = solver.visualize_with_gui(
-        mode=1,
-        component="Ex",
-        mesh=True,
-        show=False,
+    captured: list[object] = []
+    marker = object()
+    monkeypatch.setattr(
+        "FEM_Mode_Solver.visualization.visualize_with_gui",
+        lambda source: captured.append(source) or marker,
     )
-    assert viewer.mode is solver.solution.mode(1)  # type: ignore[union-attr]
-    viewer.figure.canvas.draw()
-    viewer.close()
+    assert solver.visualize_with_gui() is marker
+    assert captured == [solver.solution]
+
+    import matplotlib.pyplot as plt
+
+    plt.close(figure)
+
+
+def test_1d_material_only_view_masks_unit_index_and_has_own_scale() -> None:
+    from matplotlib.collections import QuadMesh
+
+    fields = fem.SampledFields(
+        np.asarray((0.5, 1.5, 2.5)),
+        {"Ey": np.asarray((1.0, 0.5, -0.25), dtype=np.complex128)},
+        dimension=1,
+        material=np.asarray((1.0, 4.0, 1.0), dtype=np.complex128),
+        metadata={
+            "x_nodes": np.asarray((0.0, 1.0, 2.0, 3.0)),
+            "material_index": np.asarray((1.0, 2.0, 1.0)),
+        },
+    )
+    mode = fem.Mode(neff=1.5, beta=2.0, fields=fields, index=1)
+    figure, axes = fem.visualize(mode, component="Ey", field=False, show=False)
+    figure.canvas.draw()
+
+    assert not axes[0].lines
+    material_artists = [item for item in axes[0].collections if isinstance(item, QuadMesh)]
+    assert len(material_artists) == 1
+    assert material_artists[0].cmap.name == "coolwarm"
+    assert np.ma.count_masked(material_artists[0].get_array()) == 2
+    assert any(axis.get_ylabel() == r"material $|n_{eff}|$" for axis in figure.axes)
 
     import matplotlib.pyplot as plt
 
@@ -81,7 +109,9 @@ def test_1d_static_and_gui_visualizers_render_with_shared_api() -> None:
 
 
 @pytest.mark.gmsh
-def test_2d_static_and_gui_visualizers_accept_fem_quadrature_samples() -> None:
+def test_2d_static_and_gui_visualizers_accept_fem_quadrature_samples(
+    monkeypatch,
+) -> None:
     solver = fem.ModeSolver2D(
         299_792_458.0,
         x_range=1.0,
@@ -107,15 +137,14 @@ def test_2d_static_and_gui_visualizers_accept_fem_quadrature_samples() -> None:
     assert axes.shape == (1,)
     figure.canvas.draw()
 
-    viewer = solver.visualize_with_gui(
-        mode=1,
-        component="Ey",
-        material=True,
-        mesh=True,
-        show=False,
+    captured: list[object] = []
+    marker = object()
+    monkeypatch.setattr(
+        "FEM_Mode_Solver.visualization.visualize_with_gui",
+        lambda source: captured.append(source) or marker,
     )
-    viewer.figure.canvas.draw()
-    viewer.close()
+    assert solver.visualize_with_gui() is marker
+    assert captured == [solver]
 
     import matplotlib.pyplot as plt
 

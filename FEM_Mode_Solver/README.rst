@@ -290,160 +290,6 @@ installed/editable package with:
 The example is intended as an API and convergence-study starting point; its
 mesh parameters should be tightened for reported engineering results.
 
-FEM transmission-line calculator
---------------------------------
-
-The package also includes a two-potential quasi-TEM FEM calculator for
-coaxial, microstrip, stripline, and coplanar-waveguide cross-sections.  The CPW
-template drives the centre signal conductor against the tied left and right
-grounds and is labelled ``CPW`` in the GUI.
-
-The lifecycle follows the mode solvers:
-
-.. code-block:: python
-
-   from FEM_Mode_Solver import TransmissionLineCalculator
-
-   calculator = TransmissionLineCalculator.microstrip(
-       frequency=10.0e9,
-       trace_width=3.0e-3,
-       substrate_height=1.524e-3,
-       conductor_thickness=35.0e-6,
-       epsilon_r=3.55,
-       loss_tangent=0.0027,
-       domain_padding_factor=1.0,
-       # Optional bulk conductivity in S/m.  Omit it for ideal PEC metal.
-       metal_conductivity=59.6e6,
-   )
-   calculator.discretize(
-       max_element_size=0.30e-3,
-       material_aware=True,
-       boundary_refinement=0.4,
-   )
-   result = calculator.solve()
-
-   print(result.neff)
-   print(result.characteristic_impedance)
-   print(result.wave_impedance)
-   print(result.capacitance_per_length)
-   print(result.inductance_per_length)
-   print(result.resistance_per_length)
-   print(result.conductance_per_length)
-
-   # Per-element |Et| and |Ht| colour maps with uniform direction arrows.
-   calculator.visualize_with_gui()
-
-The field colour in each native triangle carries magnitude; the white arrows
-are spatially distributed, phase-resolved unit vectors and therefore encode
-direction only.  An area-weighted adaptive cutoff omits arrows where the field
-is insignificant, while a power-law colour normalization keeps weaker fringe
-fields visible without clipping the conductor-edge maximum.  Translucent cyan
-shapes identify dielectrics and yellow shapes identify metal conductors.  The
-calculator's ``Display mesh`` option overlays the native triangular FEM mesh;
-its editable mesh-size field starts at ``1.00`` mm for every line type.
-
-``refine(factor=2)`` remeshes the complete line, including material jumps,
-signal edges, and PEC walls, and invalidates the old result before the next
-``solve()``.
-
-Microstrip, stripline, and CPW use a remote zero-potential wall to truncate
-their otherwise open or laterally unbounded cross-sections.  Set
-``domain_padding_factor`` above one to move that wall outward, then compare
-successive solutions to quantify domain-truncation error independently of
-mesh refinement.
-
-For a unit signal voltage, the dielectric FEM potential gives
-
-.. math::
-
-   \nabla_t\!\cdot(\epsilon\nabla_t\phi)=0,
-   \qquad \mathbf E_t=-\nabla_t\phi,
-   \qquad C'=\int_A \epsilon |\mathbf E_t|^2\,dA.
-
-A second solve with every dielectric replaced by vacuum gives ``C0'`` and the
-unit-current magnetic dual.  With ideal PEC conductors (the default), the
-supported nonmagnetic quasi-TEM lines satisfy
-
-.. math::
-
-   L'=\frac{1}{c_0^2 C'_0},\qquad
-   n_\mathrm{eff}=\sqrt{\frac{C'}{C'_0}},\qquad
-   Z_c=\sqrt{\frac{L'}{C'}}.
-
-Users can instead supply ``metal_conductivity`` as a finite positive bulk
-conductivity :math:`\sigma` in S/m.  ``None`` retains the ideal-PEC calculation
-for backward compatibility.  The GUI accepts the same quantity in MS/m; a
-blank field means PEC.  Conductivity :math:`\sigma` is a material property and
-must not be confused with the transmission-line shunt conductance :math:`G'`.
-
-Finite conductivity uses a first-order good-conductor surface-impedance model:
-
-.. math::
-
-   Z_s=(1+j)\sqrt{\frac{\pi f\mu_0}{\sigma}},\qquad
-   Z'_{\mathrm{cond}}=Z_s\int_{\Gamma_{\mathrm{metal}}}
-   |H_{t,I=1}|^2\,dl,
-
-where the integration includes the signal and every named ground metal.  This
-includes the bottom ground conductor in the microstrip template and both tied
-grounds in stripline and CPW; the artificial remote truncation wall is not a
-lossy metal.  The resulting line quantities follow
-
-.. math::
-
-   R'=\operatorname{Re}(Z'_{\mathrm{cond}}),\qquad
-   L'_{\mathrm{ext}}=\frac{1}{c_0^2 C'_0},\qquad
-   L'=L'_{\mathrm{ext}}+\frac{\operatorname{Im}(Z'_{\mathrm{cond}})}{\omega},
-
-.. math::
-
-   G'=-\omega\operatorname{Im}(C'),\qquad
-   Z'=R'+j\omega L',\qquad
-   Y'=G'+j\omega\operatorname{Re}(C')=j\omega C',
-
-.. math::
-
-   \beta=\sqrt{-Z'Y'},\qquad Z_c=\sqrt{\frac{Z'}{Y'}}.
-
-Thus the existing complex ``capacitance_per_length`` already contains
-dielectric loss; do not add ``G'`` to ``j*omega*C'`` a second time.  The public
-``resistance_per_length`` and ``conductance_per_length`` fields expose the
-standard :math:`R'` and :math:`G'` entries of the RLGC model.
-
-``Zc`` is the circuit characteristic impedance.  It is intentionally kept
-separate from wave impedance.  The reported scalar wave impedance is the
-area least-squares transverse field ratio
-
-.. math::
-
-   Z_w =
-   \frac{\int_A (E_x H_y^* - E_y H_x^*)\,dA}
-        {\int_A (|H_x|^2+|H_y|^2)\,dA},
-
-and ``result.local_wave_impedance`` contains the corresponding pointwise
-``Et/Ht`` ratio, with zero-field samples masked.
-
-Launch the complete selector/parameter/results GUI with either:
-
-.. code-block:: bash
-
-   fem-transmission-line
-
-or:
-
-.. code-block:: bash
-
-   python -m FEM_Mode_Solver.examples.transmission_line_calculator
-
-The calculation is a frequency-tagged quasi-static FEM extraction, appropriate
-for TEM and quasi-TEM operation.  Open lines are approximated by the finite PEC
-truncation wall described above.  The conductor correction assumes a smooth,
-nonmagnetic good conductor and is a first-order SIBC perturbation; it does not
-resolve fields inside the metal, roughness, or a conductor thinner than the
-skin-effect model permits.  The calculator also does not model radiation or
-higher-order dispersion; use the full-vector 2D mode solver when those effects
-are required.
-
 Results
 -------
 
@@ -491,7 +337,8 @@ Both solver methods and module-level functions use the same interface:
        mode=1,                       # one-based
        components=("Ex", "Ey", "Ez"),
        quantity="real",             # real, imag, magnitude, phase
-       material=True,
+       material=False,
+       field=True,                   # default field display mode
        mesh_overlay=True,
        normalize=False,
        show=False,
@@ -507,8 +354,21 @@ Both solver methods and module-level functions use the same interface:
        show=True,
    )
 
+Solver objects use the same split as the FDFD APIs: ``solver.visualize(...)``
+creates a Matplotlib figure, while the public ``solver.visualize_with_gui()``
+method takes no arguments and presents every available mode. The configurable
+module-level ``visualize_with_gui(modes, ...)`` function shown above remains
+available for embedding and tests.
+
 The interactive viewer is implemented with Matplotlib widgets and offers mode,
-component, quantity, mesh, material, and normalization controls.  Keep the
+component, quantity, field, mesh, material, and normalization controls. Field
+mode defaults on. Field and material are mutually exclusive: enabling either
+one disables the other, replaces the shared colour bar, and prevents material
+interface outlines from appearing on the field plot. Enable material mode to
+inspect an opaque material map.
+Materials use an independent coolwarm colour scale for local
+:math:`|n_\mathrm{eff}|`. In 1D, unit-index background regions are transparent,
+so only dielectric or magnetic contrast is drawn behind the line profile. Keep the
 returned ``viewer`` alive while a non-blocking window is open.  Legacy flags
 such as ``ex=True``, ``hz=True``, ``eabs=True``, and ``habs=True`` are accepted
 by ``visualize``.
@@ -531,9 +391,9 @@ concrete solver class.  It only needs to:
           from .visualization import visualize
           return visualize(self.solution, mode=mode, **kwargs)
 
-      def visualize_with_gui(self, **kwargs):
+      def visualize_with_gui(self):
           from .visualization import visualize_with_gui
-          return visualize_with_gui(self.solution, **kwargs)
+          return visualize_with_gui(self.solution)
 
 For 1D, coordinates may have shape ``(N, 1)`` and line cells ``(M, 2)``.  For
 2D, coordinates may be structured axes, curvilinear arrays, or ``(N, 2)``

@@ -545,14 +545,14 @@ class ModeSolver2D:
 
         return visualize(self, mode=mode, **kwargs)
 
-    def visualize_with_gui(self, **kwargs: Any) -> Any:
-        """Open the same interactive field viewer exposed by legacy solvers."""
+    def visualize_with_gui(self) -> Any:
+        """Open all solved modes in the interactive field viewer."""
 
         if self.solution is None:
             raise RuntimeError("solve() must be called before visualize_with_gui().")
         from .visualization import visualize_with_gui
 
-        return visualize_with_gui(self, **kwargs)
+        return visualize_with_gui(self)
 
     def _background_refractive_index(self) -> float:
         item = self.geometry.background
@@ -890,6 +890,7 @@ class ModeSolver2D:
             "coordinates": coordinates,
             "fields": np.asarray(fields, dtype=np.complex128),
             "epsilon": epsilon,
+            "mu": mu,
             "power": complex(poynting),
             "energy_like": energy_like,
         }
@@ -969,6 +970,9 @@ class ModeSolver2D:
             np.arange(element_count, dtype=np.int64), sample_shape[1]
         )
         coordinates = np.moveaxis(data["coordinates"], 0, -1).reshape(-1, 2)
+        material_index = np.sqrt(
+            np.max(np.abs(data["epsilon"] * data["mu"]), axis=0)
+        ).reshape(-1)
         sampled = SampledFields(
             coordinates,
             values.reshape(-1, len(_COMPONENT_ORDER)),
@@ -981,6 +985,7 @@ class ModeSolver2D:
                 "sampling": "element-quadrature",
                 "sample_element_indices": sample_element_indices,
                 "element_quadrature_shape": sample_shape,
+                "material_index": np.asarray(material_index, dtype=float),
                 "time_convention": "exp(+1j*omega*t - 1j*beta*z)",
             },
         )

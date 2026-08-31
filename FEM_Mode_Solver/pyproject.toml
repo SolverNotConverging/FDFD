@@ -20,14 +20,10 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]
 
-[project.gui-scripts]
-fem-transmission-line = "FEM_Mode_Solver.transmission_lines.gui:main"
-
 [tool.setuptools]
 packages = [
     "FEM_Mode_Solver",
     "FEM_Mode_Solver.examples",
-    "FEM_Mode_Solver.transmission_lines",
 ]
 package-dir = {FEM_Mode_Solver = "."}
 

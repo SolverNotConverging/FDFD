@@ -31,14 +31,7 @@ def main() -> None:
             f"residual={mode.residual:.3e}"
         )
 
-    solver.visualize(
-        mode=1,
-        components=("Ey", "Hx", "Hz"),
-        quantity="real",
-        material=True,
-        mesh=True,
-        show=True,
-    )
+    solver.visualize_with_gui()
 
 
 if __name__ == "__main__":

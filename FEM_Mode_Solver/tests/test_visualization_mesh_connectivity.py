@@ -87,7 +87,7 @@ def test_quadrature_samples_render_on_native_cells_without_filling_hole() -> Non
     plt.close(figure)
 
 
-def test_material_overlay_uses_native_interface_edges() -> None:
+def test_material_mode_uses_native_interface_edges_without_field_layer() -> None:
     import matplotlib.pyplot as plt
     from matplotlib.collections import LineCollection
 
@@ -101,6 +101,7 @@ def test_material_overlay_uses_native_interface_edges() -> None:
     figure.canvas.draw()
 
     assert any(isinstance(item, LineCollection) for item in axes[0].collections)
+    assert axes[0].get_title().startswith("Mode 1: material")
     plt.close(figure)
 
 
@@ -157,6 +158,49 @@ def test_gui_field_changes_keep_plot_and_colorbar_geometry() -> None:
                 viewer._colorbar.ax.get_position().bounds,
                 colorbar_active,
             )
+    finally:
+        viewer.close()
+
+
+def test_gui_field_and_material_modes_are_exclusive_and_replace_colorbar() -> None:
+    from matplotlib.collections import LineCollection
+
+    viewer = visualize_with_gui(
+        _mode_on_square_ring(),
+        component="Ez",
+        show=False,
+    )
+    try:
+        assert viewer.field
+        assert not viewer.material
+        viewer.figure.canvas.draw()
+        assert not any(
+            isinstance(item, LineCollection) for item in viewer.axes.collections
+        )
+        assert viewer._colorbar is not None
+        colorbar = viewer._colorbar
+        axes_count = len(viewer.figure.axes)
+
+        viewer.options_control.set_active(2)  # material on, field off
+        viewer.figure.canvas.draw()
+
+        assert not viewer.field
+        assert viewer.material
+        assert viewer._colorbar is colorbar
+        assert viewer._colorbar_axes.get_visible()
+        assert viewer._colorbar.mappable.cmap.name == "coolwarm"
+        assert len(viewer.figure.axes) == axes_count
+
+        viewer.options_control.set_active(0)  # field on, material off
+        viewer.figure.canvas.draw()
+        assert viewer.field
+        assert not viewer.material
+        assert viewer._colorbar is colorbar
+        assert viewer._colorbar.mappable.cmap.name == "RdBu_r"
+        assert not any(
+            isinstance(item, LineCollection) for item in viewer.axes.collections
+        )
+        assert len(viewer.figure.axes) == axes_count
     finally:
         viewer.close()
 

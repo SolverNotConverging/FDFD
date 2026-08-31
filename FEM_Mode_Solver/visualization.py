@@ -177,6 +177,33 @@ def _material_levels(material: NDArray[Any]) -> NDArray[np.float64]:
     return np.linspace(float(values.min()), float(values.max()), 8)[1:-1]
 
 
+def _material_index(fields: SampledFields) -> NDArray[np.float64] | None:
+    """Return the sampled local material-index magnitude.
+
+    New solver results store ``sqrt(max_i |epsilon_i mu_i|)`` explicitly.
+    Older/user-created results only contain epsilon, so retain a useful
+    non-magnetic fallback instead of making their visualizations fail.
+    """
+
+    stored = fields.metadata.get("material_index")
+    if stored is not None:
+        values = np.asarray(stored, dtype=np.float64)
+        if values.shape == fields.sample_shape and np.all(np.isfinite(values)):
+            return values
+    if fields.material is None:
+        return None
+    return np.asarray(np.sqrt(np.abs(fields.material)), dtype=np.float64)
+
+
+def _material_limits(values: NDArray[np.float64]) -> tuple[float, float]:
+    minimum = float(np.min(values))
+    maximum = float(np.max(values))
+    if maximum > minimum:
+        return minimum, maximum
+    padding = max(1.0, abs(minimum)) * 0.05
+    return minimum - padding, maximum + padding
+
+
 def _native_triangulation(fields: SampledFields) -> Any | None:
     """Return the supplied FEM triangulation, if this is a 2D mesh sample."""
 
@@ -313,45 +340,86 @@ def _draw_cell_material_interfaces(
         )
 
 
-def _draw_material(ax: Any, fields: SampledFields) -> None:
-    material = fields.material
-    if material is None:
-        return
-    values = np.abs(np.asarray(material))
+def _draw_material(ax: Any, fields: SampledFields, *, opaque: bool = False) -> Any | None:
+    values = _material_index(fields)
+    if values is None:
+        return None
+    colour_map = "coolwarm"
+    alpha = 1.0 if opaque else 0.38
     if fields.dimension == 1:
-        maximum = float(np.max(values)) if values.size else 0.0
-        if maximum > np.finfo(float).tiny:
-            ax.fill_between(
-                fields.x,
-                0.0,
-                values / maximum,
-                transform=ax.get_xaxis_transform(),
-                color="0.55",
-                alpha=0.15,
-                step="mid",
-                linewidth=0.0,
-                zorder=-10,
-            )
-        return
+        # Air/vacuum (index one) is intentionally transparent, matching the
+        # established FDFD line-plot style and leaving only actual material
+        # contrast behind the field trace.
+        visible = ~np.isclose(values, 1.0, rtol=1e-9, atol=1e-12)
+        if not np.any(visible):
+            return None
+        masked = np.ma.masked_where(~visible, values)
+        x_nodes = fields.metadata.get("x_nodes")
+        if x_nodes is None or np.asarray(x_nodes).size != values.size + 1:
+            centres = np.asarray(fields.x, dtype=float)
+            if centres.size == 1:
+                edges = np.asarray((centres[0] - 0.5, centres[0] + 0.5))
+            else:
+                edges = np.empty(centres.size + 1, dtype=float)
+                edges[1:-1] = 0.5 * (centres[:-1] + centres[1:])
+                edges[0] = centres[0] - 0.5 * (centres[1] - centres[0])
+                edges[-1] = centres[-1] + 0.5 * (centres[-1] - centres[-2])
+        else:
+            edges = np.asarray(x_nodes, dtype=float)
+        vmin, vmax = _material_limits(values[visible])
+        return ax.pcolormesh(
+            edges,
+            np.asarray((0.0, 1.0)),
+            masked[np.newaxis, :],
+            transform=ax.get_xaxis_transform(),
+            shading="flat",
+            cmap=colour_map,
+            vmin=vmin,
+            vmax=vmax,
+            alpha=alpha,
+            linewidth=0.0,
+            zorder=-10,
+        )
 
-    levels = _material_levels(material)
-    if levels.size == 0:
-        return
+    levels = _material_levels(values)
     x, y = fields.coordinates
+    artist = None
     try:
         if fields.layout == "structured":
-            ax.contour(x, y, values, levels=levels, colors="white", linewidths=0.7, alpha=0.65)
+            vmin, vmax = _material_limits(values)
+            artist = ax.pcolormesh(
+                x, y, values, shading="auto", cmap=colour_map,
+                vmin=vmin, vmax=vmax, alpha=alpha, zorder=-10,
+            )
+            if levels.size:
+                ax.contour(
+                    x, y, values, levels=levels, colors="white",
+                    linewidths=0.7, alpha=0.65, zorder=8,
+                )
         elif (triangulation := _native_triangulation(fields)) is not None:
             native = _native_sample_data(fields, values)
             if native is None:
                 # The supplied mesh tells us a hole/non-convex topology exists,
                 # but not which element owns each sample.  Skipping this
                 # decorative overlay is safer than inventing global triangles.
-                return
+                return None
             location, native_values = native
+            vmin, vmax = _material_limits(native_values)
+            if location == "node":
+                artist = ax.tripcolor(
+                    triangulation, native_values, shading="gouraud",
+                    cmap=colour_map, vmin=vmin, vmax=vmax,
+                    alpha=alpha, zorder=-10,
+                )
+            else:
+                artist = ax.tripcolor(
+                    triangulation, facecolors=native_values, shading="flat",
+                    cmap=colour_map, vmin=vmin, vmax=vmax,
+                    alpha=alpha, zorder=-10,
+                )
             if location == "cell" and np.unique(np.round(native_values, 12)).size <= 12:
                 _draw_cell_material_interfaces(ax, fields, native_values)
-            else:
+            elif levels.size:
                 if location == "cell":
                     native_values = _cell_to_node(
                         np.asarray(fields.mesh_cells[:, :3], dtype=np.int64),
@@ -367,19 +435,23 @@ def _draw_material(ax: Any, fields: SampledFields) -> None:
                     alpha=0.65,
                 )
         else:
-            ax.tricontour(
-                np.ravel(x),
-                np.ravel(y),
-                np.ravel(values),
-                levels=levels,
-                colors="white",
-                linewidths=0.7,
-                alpha=0.65,
+            vmin, vmax = _material_limits(values)
+            artist = ax.tricontourf(
+                np.ravel(x), np.ravel(y), np.ravel(values), levels=64,
+                cmap=colour_map, vmin=vmin, vmax=vmax, alpha=alpha,
+                zorder=-10,
             )
+            if levels.size:
+                ax.tricontour(
+                    np.ravel(x), np.ravel(y), np.ravel(values),
+                    levels=levels, colors="white", linewidths=0.7,
+                    alpha=0.65, zorder=8,
+                )
     except (RuntimeError, ValueError):
         # Material contours are decorative; degenerate point sets should not
         # prevent the modal field itself from being inspected.
-        return
+        return None
+    return artist
 
 
 def _draw_mesh(ax: Any, fields: SampledFields) -> None:
@@ -415,91 +487,86 @@ def _draw_component(
     quantity: str,
     *,
     cmap: str,
+    field: bool,
     normalize: bool,
     material: bool,
     mesh: bool,
-) -> Any | None:
+) -> tuple[Any | None, Any | None]:
     fields = mode.fields
     selected_quantity = "magnitude" if component in ("E", "H") else quantity
-    data = np.asarray(fields.quantity(component, selected_quantity), dtype=np.float64)
-    data, normalization_label = _normalised(data, normalize)
+    normalization_label = ""
 
     artist = None
-    if fields.dimension == 1:
-        ax.plot(fields.x, data, color="tab:blue", linewidth=1.7)
-        ax.axhline(0.0, color="0.35", linewidth=0.65, alpha=0.5)
-        ax.set_xlabel("x (m)")
-        ax.set_ylabel(f"{component} {selected_quantity}{normalization_label}")
-        ax.grid(True, alpha=0.22)
-    else:
-        x, y = fields.coordinates
-        if fields.layout in ("structured", "curvilinear"):
-            limits = _colour_limits(data, selected_quantity)
-            artist = ax.pcolormesh(x, y, data, shading="auto", cmap=cmap, **limits)
-        elif (triangulation := _native_triangulation(fields)) is not None:
-            native = _native_sample_data(fields, data)
-            if native is None:
-                # Do not globally triangulate samples when native connectivity
-                # is present: that can fill PEC/PMC holes and concave cut-outs.
+    if field:
+        data = np.asarray(fields.quantity(component, selected_quantity), dtype=np.float64)
+        data, normalization_label = _normalised(data, normalize)
+        if fields.dimension == 1:
+            ax.plot(fields.x, data, color="tab:blue", linewidth=1.7)
+            ax.axhline(0.0, color="0.35", linewidth=0.65, alpha=0.5)
+            ax.set_ylabel(f"{component} {selected_quantity}{normalization_label}")
+            ax.grid(True, alpha=0.22)
+        else:
+            x, y = fields.coordinates
+            if fields.layout in ("structured", "curvilinear"):
                 limits = _colour_limits(data, selected_quantity)
-                artist = ax.scatter(
-                    np.ravel(x),
-                    np.ravel(y),
-                    c=np.ravel(data),
-                    cmap=cmap,
-                    s=12,
-                    linewidths=0.0,
-                    **limits,
-                )
-            else:
-                location, native_values = native
-                limits = _colour_limits(native_values, selected_quantity)
-                if location == "node":
-                    artist = ax.tripcolor(
-                        triangulation,
-                        native_values,
-                        shading="gouraud",
-                        cmap=cmap,
-                        **limits,
+                artist = ax.pcolormesh(x, y, data, shading="auto", cmap=cmap, **limits)
+            elif (triangulation := _native_triangulation(fields)) is not None:
+                native = _native_sample_data(fields, data)
+                if native is None:
+                    # Do not globally triangulate samples when native connectivity
+                    # is present: that can fill PEC/PMC holes and concave cut-outs.
+                    limits = _colour_limits(data, selected_quantity)
+                    artist = ax.scatter(
+                        np.ravel(x), np.ravel(y), c=np.ravel(data), cmap=cmap,
+                        s=12, linewidths=0.0, **limits,
                     )
                 else:
-                    artist = ax.tripcolor(
-                        triangulation,
-                        facecolors=native_values,
-                        shading="flat",
-                        cmap=cmap,
-                        **limits,
+                    location, native_values = native
+                    limits = _colour_limits(native_values, selected_quantity)
+                    if location == "node":
+                        artist = ax.tripcolor(
+                            triangulation, native_values, shading="gouraud",
+                            cmap=cmap, **limits,
+                        )
+                    else:
+                        artist = ax.tripcolor(
+                            triangulation, facecolors=native_values, shading="flat",
+                            cmap=cmap, **limits,
+                        )
+            else:
+                limits = _colour_limits(data, selected_quantity)
+                try:
+                    artist = ax.tricontourf(
+                        np.ravel(x), np.ravel(y), np.ravel(data), levels=64,
+                        cmap=cmap, **limits,
                     )
-        else:
-            limits = _colour_limits(data, selected_quantity)
-            try:
-                artist = ax.tricontourf(
-                    np.ravel(x),
-                    np.ravel(y),
-                    np.ravel(data),
-                    levels=64,
-                    cmap=cmap,
-                    **limits,
-                )
-            except (RuntimeError, ValueError):
-                artist = ax.scatter(
-                    np.ravel(x),
-                    np.ravel(y),
-                    c=np.ravel(data),
-                    cmap=cmap,
-                    s=12,
-                    linewidths=0.0,
-                    **limits,
-                )
+                except (RuntimeError, ValueError):
+                    artist = ax.scatter(
+                        np.ravel(x), np.ravel(y), c=np.ravel(data), cmap=cmap,
+                        s=12, linewidths=0.0, **limits,
+                    )
+    if fields.dimension == 1:
+        ax.set_xlabel("x (m)")
+        if not field:
+            ax.set_ylabel("material")
+    else:
         ax.set_xlabel("x (m)")
         ax.set_ylabel("y (m)")
         ax.set_aspect("equal", adjustable="box")
-    if material:
-        _draw_material(ax, fields)
+    # Field and material are separate display modes.  In particular, field
+    # mode must not retain material-interface contours from an earlier layered
+    # rendering design.
+    material_artist = _draw_material(ax, fields, opaque=True) if material and not field else None
     if mesh:
         _draw_mesh(ax, fields)
-    ax.set_title(_mode_title(mode, number, component, selected_quantity))
-    return artist
+    if field:
+        ax.set_title(_mode_title(mode, number, component, selected_quantity))
+    else:
+        ax.set_title(
+            f"Mode {number}: material $|n_{{eff}}|$\n"
+            f"$n_{{eff}}$={mode.neff.real:.7g}{mode.neff.imag:+.3g}j"
+        )
+    return artist, material_artist
 
 
 def visualize(
@@ -511,12 +578,13 @@ def visualize(
     quantity: str = "real",
     mesh: bool = False,
     mesh_overlay: bool | None = None,
-    material: bool = True,
+    material: bool | None = None,
+    field: bool = True,
     normalize: bool = False,
     cmap: str | None = None,
     axes: Any | None = None,
     title: str | None = None,
-    show: bool = False,
+    show: bool = True,
     **legacy_component_flags: Any,
 ) -> tuple[Any, NDArray[Any]]:
     """Plot one mode using common component and quantity controls.
@@ -530,13 +598,20 @@ def visualize(
     -------
     (figure, axes)
         ``axes`` is always a flat NumPy object array containing only the active
-        field panels.  The function does not call ``show`` unless requested.
+        field panels. The function shows the figure by default; pass
+        ``show=False`` when embedding it.
     """
 
     import matplotlib.pyplot as plt
 
     modes = _coerce_modes(source)
     selected_mode, number = _select_mode(modes, mode)
+    field_enabled = bool(field)
+    material_enabled = not field_enabled if material is None else bool(material)
+    if field_enabled and material_enabled:
+        # Explicit material selection takes the panel; the two renderers are
+        # intentionally never layered.
+        field_enabled = False
     selected_quantity = _canonical_plot_quantity(quantity)
     selected_components = _components_from_arguments(
         selected_mode.fields,
@@ -544,6 +619,11 @@ def visualize(
         components,
         legacy_component_flags,
     )
+    if not field_enabled:
+        # A material-only view is independent of field component; render one
+        # clear panel even when the default component selection contains all
+        # six E/H components.
+        selected_components = selected_components[:1]
     mesh_enabled = bool(mesh if mesh_overlay is None else mesh_overlay)
     colour_map = cmap or (
         "twilight" if selected_quantity == "phase" else
@@ -579,19 +659,23 @@ def visualize(
             if cmap is None and selected_component in ("E", "H")
             else colour_map
         )
-        artist = _draw_component(
+        artist, material_artist = _draw_component(
             ax,
             selected_mode,
             number,
             selected_component,
             selected_quantity,
             cmap=component_cmap,
+            field=field_enabled,
             normalize=normalize,
-            material=material,
+            material=material_enabled,
             mesh=mesh_enabled,
         )
         if artist is not None:
             figure.colorbar(artist, ax=ax, shrink=0.88)
+        if material_artist is not None:
+            material_bar = figure.colorbar(material_artist, ax=ax, shrink=0.88)
+            material_bar.set_label(r"material $|n_{eff}|$")
     if title is not None:
         figure.suptitle(str(title))
     if show:
@@ -610,7 +694,8 @@ class ModeViewer:
         component: str | None = None,
         quantity: str = "real",
         mesh: bool = False,
-        material: bool = True,
+        material: bool | None = None,
+        field: bool = True,
         normalize: bool = False,
         cmap: str | None = None,
     ) -> None:
@@ -642,10 +727,14 @@ class ModeViewer:
             raise KeyError(f"Unknown initial component {self.component!r}.")
         self.quantity = _canonical_plot_quantity(quantity)
         self.mesh = bool(mesh)
-        self.material = bool(material)
+        self.field = bool(field)
+        self.material = not self.field if material is None else bool(material)
+        if self.field and self.material:
+            self.field = False
         self.normalize = bool(normalize)
         self.cmap = cmap
         self._colorbar: Any | None = None
+        self._updating_options = False
 
         self.figure = plt.figure(figsize=(10.5, 6.5))
         # Keep the field and colorbar in independent, fixed axes.  Passing the
@@ -659,7 +748,7 @@ class ModeViewer:
         mode_axes = self.figure.add_axes((0.77, 0.67, 0.21, 0.25))
         component_axes = self.figure.add_axes((0.77, 0.39, 0.10, 0.24))
         quantity_axes = self.figure.add_axes((0.88, 0.39, 0.10, 0.24))
-        options_axes = self.figure.add_axes((0.77, 0.22, 0.21, 0.11))
+        options_axes = self.figure.add_axes((0.77, 0.18, 0.21, 0.16))
 
         self._mode_labels = tuple(
             f"{index + 1}: {item.polarization or 'mode'}"
@@ -683,13 +772,13 @@ class ModeViewer:
         )
         self.options_control = CheckButtons(
             options_axes,
-            ("mesh", "material", "normalize"),
-            (self.mesh, self.material, self.normalize),
+            ("field", "mesh", "material", "normalize"),
+            (self.field, self.mesh, self.material, self.normalize),
         )
         mode_axes.set_title("Mode", fontsize=10)
         component_axes.set_title("Component", fontsize=10)
         quantity_axes.set_title("Quantity", fontsize=10)
-        options_axes.set_title("Overlays", fontsize=10)
+        options_axes.set_title("Display", fontsize=10)
 
         self.mode_control.on_clicked(self._set_mode)
         self.component_control.on_clicked(self._set_component)
@@ -713,14 +802,34 @@ class ModeViewer:
         self.quantity = label
         self._draw()
 
-    def _set_option(self, _label: str) -> None:
-        self.mesh, self.material, self.normalize = self.options_control.get_status()
+    def _set_option(self, label: str) -> None:
+        if self._updating_options:
+            return
+        statuses = list(self.options_control.get_status())
+        field_index, material_index = 0, 2
+        other_index = None
+        if label == "field" and statuses[field_index] and statuses[material_index]:
+            other_index = material_index
+        elif label == "material" and statuses[material_index] and statuses[field_index]:
+            other_index = field_index
+        if other_index is not None:
+            self._updating_options = True
+            try:
+                self.options_control.set_active(other_index)
+            finally:
+                self._updating_options = False
+            statuses = list(self.options_control.get_status())
+        self.field, self.mesh, self.material, self.normalize = statuses
         self._draw()
 
     def _draw(self) -> None:
         self.axes.clear()
         self._colorbar_axes.set_visible(False)
-        if self.component not in ("E", "H") and self.component not in self.mode.fields.values:
+        if (
+            self.field
+            and self.component not in ("E", "H")
+            and self.component not in self.mode.fields.values
+        ):
             self.axes.text(
                 0.5,
                 0.5,
@@ -731,7 +840,7 @@ class ModeViewer:
             )
             self.figure.canvas.draw_idle()
             return
-        if self.component in ("E", "H"):
+        if self.field and self.component in ("E", "H"):
             available = any(
                 name.startswith(self.component) for name in self.mode.fields.components
             )
@@ -753,13 +862,14 @@ class ModeViewer:
             "RdBu_r" if selected_quantity in ("real", "imag") else
             "viridis"
         )
-        artist = _draw_component(
+        artist, material_artist = _draw_component(
             self.axes,
             self.mode,
             self.mode_number,
             self.component,
             selected_quantity,
             cmap=colour_map,
+            field=self.field,
             normalize=self.normalize,
             material=self.material,
             mesh=self.mesh,
@@ -773,6 +883,20 @@ class ModeViewer:
                 )
             else:
                 self._colorbar.update_normal(artist)
+            self._colorbar.set_label(
+                f"{self.component} "
+                f"{'magnitude' if self.component in ('E', 'H') else selected_quantity}"
+            )
+        if material_artist is not None:
+            self._colorbar_axes.set_visible(True)
+            if self._colorbar is None:
+                self._colorbar = self.figure.colorbar(
+                    material_artist,
+                    cax=self._colorbar_axes,
+                )
+            else:
+                self._colorbar.update_normal(material_artist)
+            self._colorbar.set_label(r"material $|n_{eff}|$")
         self.figure.canvas.draw_idle()
 
     def show(self, *, block: bool | None = None) -> None:
@@ -797,7 +921,8 @@ def visualize_with_gui(
     quantity: str = "real",
     mesh: bool = False,
     mesh_overlay: bool | None = None,
-    material: bool = True,
+    material: bool | None = None,
+    field: bool = True,
     normalize: bool = False,
     cmap: str | None = None,
     show: bool = True,
@@ -817,6 +942,7 @@ def visualize_with_gui(
         quantity=quantity,
         mesh=bool(mesh if mesh_overlay is None else mesh_overlay),
         material=material,
+        field=field,
         normalize=normalize,
         cmap=cmap,
     )
