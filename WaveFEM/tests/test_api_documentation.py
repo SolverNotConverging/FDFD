@@ -20,15 +20,15 @@ from wavefem import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-API_REFERENCE = PROJECT_ROOT / "API_REFERENCE.md"
+API_REFERENCE = PROJECT_ROOT / "API_REFERENCE.rst"
 
 
 def test_api_reference_covers_top_level_exports() -> None:
     documentation = API_REFERENCE.read_text(encoding="utf-8")
 
     for name in wavefem.__all__:
-        assert f"`{name}`" in documentation, (
-            f"Top-level public API {name!r} is missing from API_REFERENCE.md."
+        assert f"``{name}``" in documentation, (
+            f"Top-level public API {name!r} is missing from API_REFERENCE.rst."
         )
 
 
@@ -51,7 +51,7 @@ def test_api_reference_covers_module_exports() -> None:
 
     for module in documented_modules:
         for name in module.__all__:
-            assert f"`{name}`" in documentation, (
+            assert f"``{name}``" in documentation, (
                 f"Public API {module.__name__}.{name} is missing from "
-                "API_REFERENCE.md."
+                "API_REFERENCE.rst."
             )

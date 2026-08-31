@@ -190,7 +190,7 @@ directory-first GUI:
 Writes use a sibling temporary file followed by atomic replacement.  Complex
 arrays use HDF5 compound ``{r,i}`` complex128 storage; readers linked through
 HDF5 2 also accept its native complex encoding.  Field chunks are mode-first, gzip level 4,
-shuffled, and Fletcher32 protected.  See ``../FEMPeriodicViewer/README.md`` for
+shuffled, and Fletcher32 protected.  See ``../FEMPeriodicViewer/README.rst`` for
 portable MinGW, MSVC, AppleClang, and GCC builds of the standalone C++20
 viewer and ``fem-periodic-inspect``.
 

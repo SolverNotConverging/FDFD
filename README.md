@@ -11,11 +11,11 @@ The repository is organised by problem type. Each solver folder contains the sol
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
 | `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
-| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.md`](TransmissionLineCalculator/README.md) |
-| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.md`](WaveFEM/README.md) |
-| `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.md`](WaveFEMViewer/README.md) |
+| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.rst`](TransmissionLineCalculator/README.rst) |
+| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.rst`](WaveFEM/README.rst) |
+| `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.rst`](WaveFEMViewer/README.rst) |
 | `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [`README.rst`](FEM_Periodic_Solver/README.rst) |
-| `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.md`](FEMPeriodicViewer/README.md) |
+| `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.rst`](FEMPeriodicViewer/README.rst) |
 
 ### FDFD solvers
 
@@ -29,7 +29,7 @@ The repository is organised by problem type. Each solver folder contains the sol
 | `Scattering/` | `FDFD2DScatteringSolver` | 2D TEz/TMz scattering problems | [`README.rst`](Scattering/README.rst) |
 | `Electrostatic_Solver/` | `ElectrostaticSolver` | 1D/2D electrostatic potential problems | [`README.rst`](Electrostatic_Solver/README.rst) |
 
-The shared [`periodic_eigensolver/`](periodic_eigensolver/README.md) package
+The shared [`periodic_eigensolver/`](periodic_eigensolver/README.rst) package
 provides the Cython/BLAS refined shift-and-invert Arnoldi backend used by both
 the periodic FDFD and FEM solvers.
 
@@ -56,9 +56,9 @@ The transmission line calculator additionally needs FTXUI, Eigen 3.4 or newer, a
 WaveFEM and FEM periodic viewers need HDF5 1.10 or newer. The FEM periodic
 viewer can optionally use VTK 9.2 or newer. Platform-specific dependency and
 build commands are documented in the
-[`TransmissionLineCalculator`](TransmissionLineCalculator/README.md) and
-[`WaveFEMViewer`](WaveFEMViewer/README.md), and
-[`FEMPeriodicViewer`](FEMPeriodicViewer/README.md) READMEs.
+[`TransmissionLineCalculator`](TransmissionLineCalculator/README.rst) and
+[`WaveFEMViewer`](WaveFEMViewer/README.rst), and
+[`FEMPeriodicViewer`](FEMPeriodicViewer/README.rst) READMEs.
 
 ### Build native applications
 
