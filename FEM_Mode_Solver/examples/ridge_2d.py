@@ -6,7 +6,7 @@ from FEM_Mode_Solver import ModeSolver2D
 
 
 def main() -> None:
-    wavelength = 1.0e-6
+    wavelength = 0.5e-6
     frequency = 299_792_458.0 / wavelength
     solver = ModeSolver2D(
         frequency=frequency,
