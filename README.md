@@ -6,12 +6,21 @@ The repository is organised by problem type. Each solver folder contains the sol
 
 ## Solver Map
 
+### FEM solvers and viewers
+
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
 | `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
 | `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.md`](TransmissionLineCalculator/README.md) |
 | `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.md`](WaveFEM/README.md) |
 | `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.md`](WaveFEMViewer/README.md) |
+| `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [`README.rst`](FEM_Periodic_Solver/README.rst) |
+| `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.md`](FEMPeriodicViewer/README.md) |
+
+### FDFD solvers
+
+| Folder | Solver | Use case | Documentation |
+|---|---|---|---|
 | `Mode_Solver_1D/` | `ModeSolver1D` | TE/TM modes of 1D slab waveguides | [`README.rst`](Mode_Solver_1D/README.rst) |
 | `Mode_Solver_2D/` | `ModeSolver2D` | Full-vector modes of 2D waveguide cross-sections | [`README.rst`](Mode_Solver_2D/README.rst) |
 | `Periodic_Solver_2D/` | `PeriodicModeSolver2D` | 2D Bloch-periodic TE/TM unit-cell modes | [`README.rst`](Periodic_Solver_2D/README.rst) |
@@ -19,6 +28,10 @@ The repository is organised by problem type. Each solver folder contains the sol
 | `Band_Diagram_Solver/` | `BandDiagramSolver2D` | 2D photonic-crystal band diagrams | [`README.rst`](Band_Diagram_Solver/README.rst) |
 | `Scattering/` | `FDFD2DScatteringSolver` | 2D TEz/TMz scattering problems | [`README.rst`](Scattering/README.rst) |
 | `Electrostatic_Solver/` | `ElectrostaticSolver` | 1D/2D electrostatic potential problems | [`README.rst`](Electrostatic_Solver/README.rst) |
+
+The shared [`periodic_eigensolver/`](periodic_eigensolver/README.md) package
+provides the Cython/BLAS refined shift-and-invert Arnoldi backend used by both
+the periodic FDFD and FEM solvers.
 
 Utility scripts at the repository root include `Mesh_points_calculation.py` and `PML_sigma_calculation.py`.
 
@@ -32,21 +45,24 @@ pip install numpy scipy matplotlib
 
 Some visualizers use Tk through Matplotlib. If GUI windows do not open, install the Tk package for your Python distribution.
 
-The standalone FEM mode package additionally needs scikit-fem and Gmsh; its
-isolated installation and environment are documented in
-[`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst).
+The standalone FEM packages additionally need scikit-fem and Gmsh; their
+installation and environments are documented in
+[`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst) and
+[`FEM_Periodic_Solver/README.rst`](FEM_Periodic_Solver/README.rst).
 
-The two native C++20 applications support MSVC on Windows, AppleClang on
-macOS, and GCC or Clang on Linux. Both use Qt 6.2 or newer. The transmission
-line calculator additionally needs FTXUI, Eigen 3.4 or newer, and Gmsh; the
-WaveFEM viewer needs HDF5 1.10 or newer. Platform-specific dependency and
+The native C++20 applications support MinGW-w64 or MSVC on Windows, AppleClang on
+macOS, and GCC or Clang on Linux. The native viewers use Qt 6.2 or newer.
+The transmission line calculator additionally needs FTXUI, Eigen 3.4 or newer, and Gmsh; the
+WaveFEM and FEM periodic viewers need HDF5 1.10 or newer. The FEM periodic
+viewer can optionally use VTK 9.2 or newer. Platform-specific dependency and
 build commands are documented in the
 [`TransmissionLineCalculator`](TransmissionLineCalculator/README.md) and
-[`WaveFEMViewer`](WaveFEMViewer/README.md) READMEs.
+[`WaveFEMViewer`](WaveFEMViewer/README.md), and
+[`FEMPeriodicViewer`](FEMPeriodicViewer/README.md) READMEs.
 
-### Build both native applications
+### Build native applications
 
-When the dependencies are in CMake's normal search path, configure both from
+When the dependencies are in CMake's normal search path, configure all applications from
 the repository root with any single-configuration generator:
 
 ```bash
@@ -67,7 +83,10 @@ ctest --test-dir build-msvc -C Release --output-on-failure
 
 The root build can be limited to one application with
 `-DFDFD_BUILD_TRANSMISSION_LINE_CALCULATOR=OFF` or
-`-DFDFD_BUILD_WAVEFEM_VIEWER=OFF`. `CMAKE_PREFIX_PATH` may be supplied when
+`-DFDFD_BUILD_WAVEFEM_VIEWER=OFF`, and
+`-DFDFD_BUILD_FEM_PERIODIC_VIEWER=OFF`. The periodic viewer's optional VTK
+mode is selected with `-DFEM_PERIODIC_VIEWER_WITH_VTK=AUTO|ON|OFF`.
+`CMAKE_PREFIX_PATH` may be supplied when
 Qt or the other libraries are installed outside the platform's standard
 locations.
 
@@ -94,6 +113,11 @@ python example_ridge_dielectric_waveguide.py
 python -m FEM_Mode_Solver.examples.slab_1d
 python -m FEM_Mode_Solver.examples.ridge_2d
 python -m FEM_Mode_Solver.examples.microstrip_sibc
+```
+
+```bash
+python -m FEM_Periodic_Solver.examples.leaky_wave_antenna_2d
+python -m FEM_Periodic_Solver.examples.iris_loaded_waveguide_filter_3d
 ```
 
 ```bash
