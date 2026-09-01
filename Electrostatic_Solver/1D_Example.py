@@ -1,17 +1,24 @@
-from Electrostatic_Solver import ElectrostaticSolver
+"""Layered 1D FEM capacitor with geometry created before the mesh."""
 
-# Create a 1D solver with 100 grid points
-solver_1d = ElectrostaticSolver(mesh_size=(100,), dim=1)
+from pathlib import Path
+import sys
 
-# Set a fixed potential of 10V at point 59
-solver_1d.set_potential(slice(59, 60), potential_value=10)
 
-# Set a fixed potential of -10V from points 10 to 19
-solver_1d.set_potential(slice(10, 20), potential_value=-10)
+# Support both ``python -m Electrostatic_Solver.1D_Example`` and direct IDE/
+# file execution.  Without the repository root first on sys.path, the legacy
+# Electrostatic_Solver.py file shadows the package directory.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# Define a region (x = 30 to 39) with permittivity changed to 2
-solver_1d.add_object(slice(30, 40), erxx=2)
+from Electrostatic_Solver import ElectrostaticSolver, Interval
 
-# Solve the system and visualize the results
-solver_1d.solve()
-solver_1d.visualize()
+
+solver = ElectrostaticSolver(dim=1, domain=(0.0, 10e-3), outer_potential=None)
+solver.add_object(Interval((4e-3, 7e-3)), erxx=6.0, name="dielectric")
+solver.set_potential("left", 0.0, name="ground")
+solver.set_potential("right", 10.0, name="drive")
+
+solver.discretize(max_element_size=0.4e-3)
+result = solver.solve()
+print(f"nodes={result.mesh.info.nodes}, energy={result.energy:.6e} J/m2")
+solver.visualize()

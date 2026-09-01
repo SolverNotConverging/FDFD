@@ -1,6 +1,6 @@
-# FDFD
+# Computational Electromagnetics Solvers
 
-Finite-Difference Frequency-Domain solvers for computational electromagnetics.
+Finite-element and finite-difference frequency-domain solvers for computational electromagnetics.
 
 The repository is organised by problem type. Each solver folder contains the solver implementation, example scripts, and a solver-specific ``README.rst`` with API and workflow notes.
 
@@ -16,6 +16,7 @@ The repository is organised by problem type. Each solver folder contains the sol
 | `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.rst`](WaveFEMViewer/README.rst) |
 | `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [`README.rst`](FEM_Periodic_Solver/README.rst) |
 | `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.rst`](FEMPeriodicViewer/README.rst) |
+| `Electrostatic_Solver/` | `ElectrostaticSolver` | Geometry-first Gmsh/scikit-fem 1D/2D Poisson and Laplace problems | [`README.rst`](Electrostatic_Solver/README.rst) |
 
 ### FDFD solvers
 
@@ -27,7 +28,6 @@ The repository is organised by problem type. Each solver folder contains the sol
 | `Periodic_Solver_3D/` | `PeriodicModeSolver3D` | 3D Bloch-periodic full-vector modes | [`README.rst`](Periodic_Solver_3D/README.rst) |
 | `Band_Diagram_Solver/` | `BandDiagramSolver2D` | 2D photonic-crystal band diagrams | [`README.rst`](Band_Diagram_Solver/README.rst) |
 | `Scattering/` | `FDFD2DScatteringSolver` | 2D TEz/TMz scattering problems | [`README.rst`](Scattering/README.rst) |
-| `Electrostatic_Solver/` | `ElectrostaticSolver` | 1D/2D electrostatic potential problems | [`README.rst`](Electrostatic_Solver/README.rst) |
 
 The shared [`periodic_eigensolver/`](periodic_eigensolver/README.rst) package
 provides the Cython/BLAS refined shift-and-invert Arnoldi backend used by both
@@ -45,7 +45,7 @@ pip install numpy scipy matplotlib
 
 Some visualizers use Tk through Matplotlib. If GUI windows do not open, install the Tk package for your Python distribution.
 
-The standalone FEM packages additionally need scikit-fem and Gmsh; their
+The standalone FEM packages, including the electrostatic solver, additionally need scikit-fem and Gmsh; their
 installation and environments are documented in
 [`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst) and
 [`FEM_Periodic_Solver/README.rst`](FEM_Periodic_Solver/README.rst).
