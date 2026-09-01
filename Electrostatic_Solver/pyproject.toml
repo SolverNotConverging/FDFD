@@ -21,7 +21,7 @@ dependencies = [
 test = ["pytest>=8,<10"]
 
 [tool.setuptools]
-packages = ["Electrostatic_Solver"]
+packages = ["Electrostatic_Solver", "Electrostatic_Solver.examples"]
 package-dir = {Electrostatic_Solver = "."}
 
 [tool.pytest.ini_options]

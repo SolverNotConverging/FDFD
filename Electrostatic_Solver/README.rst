@@ -152,6 +152,6 @@ Examples and Tests
 
 .. code-block:: console
 
-   python -m Electrostatic_Solver.1D_Example
-   python -m Electrostatic_Solver.2D_example
+   python -m Electrostatic_Solver.examples.capacitor_1d
+   python -m Electrostatic_Solver.examples.anisotropic_2d
    pytest Electrostatic_Solver/tests
