@@ -15,7 +15,7 @@ def main() -> None:
     frequencies_hz = np.linspace(191.0e12, 195.0e12, 3)
     simulation = wf.Scattering2D(
         frequency=float(frequencies_hz[0]),
-        ky=0.0,
+        angle=0.0,
         x_span=(0.0, 1.0e-6),
         z_span=(-3.0e-6, 3.0e-6),
         background_eps=1.0,

@@ -13,7 +13,7 @@ import wavefem as wf
 def main() -> None:
     simulation = wf.Scattering2D(
         frequency=193.414489e12,
-        ky=0.0,
+        angle=0.0,
         x_span=(0.0, 1.0e-6),
         z_span=(-3.0e-6, 3.0e-6),
         background_eps=1.0,

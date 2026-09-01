@@ -47,6 +47,7 @@ private:
     QWidget* buildSParameterTab();
     QWidget* buildModalTab(FieldName field, ModalControls& controls);
     QWidget* buildVectorTab(FieldName field, VectorControls& controls);
+    QWidget* buildMeshTab();
     void chooseFile();
     void chooseDirectory();
     void loadDirectory(const QString& directoryPath);
@@ -56,6 +57,7 @@ private:
     void refreshSParameters();
     void refreshModal(FieldName field);
     void refreshVector(FieldName field);
+    void refreshMesh();
     void refreshCurrentTab();
     void setResultControlsEnabled(bool enabled);
     [[nodiscard]] int selectedResultIndex() const;
@@ -69,6 +71,7 @@ private:
     PlotWidget* sPlot_{};
     std::array<ModalControls, 2> modal_{};
     std::array<VectorControls, 2> vector_{};
+    PlotWidget* meshPlot_{};
     std::shared_ptr<const FileIndex> fileIndex_;
     ResultPtr result_;
     quint64 loadGeneration_{};

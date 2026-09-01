@@ -30,6 +30,63 @@ def test_documented_top_level_api_is_importable() -> None:
     assert all(hasattr(wf, name) for name in expected)
 
 
+def test_scattering_angle_sets_ky_and_is_preserved_across_frequency() -> None:
+    common = {
+        "x_span": (0.0, 1.0),
+        "z_span": (-2.0, 2.0),
+        "transverse_boundary": "pec",
+    }
+    normal = wf.Scattering2D(wavelength=1.0, angle=0.0, **common)
+    oblique = wf.Scattering2D(wavelength=1.0, angle=30.0, **common)
+    catalog = oblique.solve_modes(
+        num_modes=1,
+        neff_guess=np.sqrt(0.75),
+        num_elements=32,
+    )
+    seed_total_neff = catalog[0].neff.real
+    incident = oblique.set_incident_mode(catalog[0])
+    eta = oblique.ky / oblique.frequency.k0
+    resolved_total_neff = np.hypot(incident.mode.neff.real, eta)
+    doubled = oblique._clone_at_frequency(2.0 * oblique.frequency.frequency)
+
+    assert normal.angle == pytest.approx(0.0)
+    assert normal.ky == pytest.approx(0.0)
+    assert oblique.angle == pytest.approx(30.0)
+    assert oblique.ky == pytest.approx(
+        oblique.frequency.k0
+        * seed_total_neff
+        * np.sin(np.deg2rad(oblique.angle))
+    )
+    assert resolved_total_neff == pytest.approx(seed_total_neff, rel=5e-4)
+    assert np.degrees(np.arctan2(eta, incident.mode.neff.real)) == pytest.approx(
+        oblique.angle, abs=5e-4
+    )
+    assert doubled.angle == pytest.approx(oblique.angle)
+    assert doubled.ky == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("angle", [np.nan, np.inf, 1j, 90.0, -90.0, True])
+def test_scattering_rejects_invalid_propagation_angle(angle: object) -> None:
+    with pytest.raises(wf.ConfigurationError, match="angle"):
+        wf.Scattering2D(
+            frequency=1.0e9,
+            angle=angle,  # type: ignore[arg-type]
+            x_span=(0.0, 1.0),
+            z_span=(-1.0, 1.0),
+        )
+
+
+def test_scattering_rejects_angle_and_legacy_ky_together() -> None:
+    with pytest.raises(wf.ConfigurationError, match="angle or ky"):
+        wf.Scattering2D(
+            frequency=1.0e9,
+            angle=0.0,
+            ky=0.0,
+            x_span=(0.0, 1.0),
+            z_span=(-1.0, 1.0),
+        )
+
+
 def test_scattering_rejects_unimplemented_pmc_instead_of_imposing_pec() -> None:
     with pytest.raises(NotImplementedError, match="PMC"):
         wf.Scattering2D(

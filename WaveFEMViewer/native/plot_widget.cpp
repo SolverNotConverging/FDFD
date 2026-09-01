@@ -69,8 +69,9 @@ void PlotWidget::setEmpty(QString title, QString message) {
 void PlotWidget::setDataRange(double xMin, double xMax, double yMin, double yMax) {
     if (!(xMin < xMax)) {
         const auto center = 0.5 * (xMin + xMax);
-        xMin = center - 0.5;
-        xMax = center + 0.5;
+        const auto scale = std::max(1.0, std::abs(center));
+        xMin = center - 0.05 * scale;
+        xMax = center + 0.05 * scale;
     }
     if (!(yMin < yMax)) {
         const auto scale = std::max(1.0, std::abs(yMin));
@@ -252,6 +253,24 @@ void PlotWidget::setVector(ResultPtr result, FieldName field, FieldPart part,
     update();
 }
 
+void PlotWidget::setMesh(ResultPtr result) {
+    result_ = std::move(result);
+    kind_ = PlotKind::Mesh;
+    series_.clear();
+    selectedX_.reset();
+    arrows_.clear();
+    if (!result_ || !result_->scene) {
+        setEmpty(QStringLiteral("Mesh"), QStringLiteral("No saved mesh"));
+        return;
+    }
+    const auto& scene = *result_->scene;
+    title_ = QStringLiteral("Mesh · %1 triangles").arg(scene.triangles.columns);
+    xLabel_ = QStringLiteral("z (m)");
+    yLabel_ = QStringLiteral("x (m)");
+    setDataRange(scene.zSpan[0], scene.zSpan[1], scene.xSpan[0], scene.xSpan[1]);
+    update();
+}
+
 QRectF PlotWidget::plotRect() const {
     const auto rightMargin = kind_ == PlotKind::Vector ? 110.0 : 34.0;
     return QRectF(72.0, 42.0, std::max(10.0, width() - 72.0 - rightMargin),
@@ -329,14 +348,24 @@ void PlotWidget::drawLines(QPainter& painter, const QRectF& area) const {
     for (std::size_t seriesIndex = 0; seriesIndex < series_.size(); ++seriesIndex) {
         const auto& seriesItem = series_[seriesIndex];
         QPainterPath path;
+        std::vector<QPointF> isolatedPoints;
         bool started = false;
         const auto count = std::min(seriesItem.x.size(), seriesItem.y.size());
+        const auto isFiniteAt = [&](std::size_t index) {
+            return index < count && std::isfinite(seriesItem.x[index])
+                && std::isfinite(seriesItem.y[index]);
+        };
         for (std::size_t index = 0; index < count; ++index) {
-            if (!std::isfinite(seriesItem.x[index]) || !std::isfinite(seriesItem.y[index])) {
+            if (!isFiniteAt(index)) {
                 started = false;
                 continue;
             }
             const auto point = mapPoint(seriesItem.x[index], seriesItem.y[index]);
+            const auto hasPrevious = index > 0 && isFiniteAt(index - 1);
+            const auto hasNext = index + 1 < count && isFiniteAt(index + 1);
+            if (!hasPrevious && !hasNext) {
+                isolatedPoints.push_back(point);
+            }
             if (!started) {
                 path.moveTo(point);
                 started = true;
@@ -344,8 +373,15 @@ void PlotWidget::drawLines(QPainter& painter, const QRectF& area) const {
                 path.lineTo(point);
             }
         }
-        painter.setPen(QPen(seriesColors[seriesIndex % seriesColors.size()], 2));
+        const auto color = seriesColors[seriesIndex % seriesColors.size()];
+        painter.setPen(QPen(color, 2));
+        painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        for (const auto& point : isolatedPoints) {
+            painter.drawEllipse(point, 3.5, 3.5);
+        }
     }
     painter.restore();
 
@@ -377,7 +413,13 @@ void PlotWidget::rebuildSceneCache(const QRectF& area) {
     for (const auto value : scene.epsR) {
         epsMaximum = std::max(epsMaximum, std::abs(value.real()));
     }
-    painter.setPen(Qt::NoPen);
+    if (kind_ == PlotKind::Mesh) {
+        QPen meshPen(QColor(95, 95, 95, 165), 0.7);
+        meshPen.setCosmetic(true);
+        painter.setPen(meshPen);
+    } else {
+        painter.setPen(Qt::NoPen);
+    }
     for (std::size_t triangle = 0; triangle < scene.triangles.columns; ++triangle) {
         QPolygonF polygon;
         for (std::size_t vertex = 0; vertex < 3; ++vertex) {
@@ -462,6 +504,13 @@ void PlotWidget::drawVector(QPainter& painter, const QRectF& area) {
     painter.restore();
 }
 
+void PlotWidget::drawMesh(QPainter& painter, const QRectF& area) {
+    if (sceneCache_.isNull() || sceneCacheSize_ != size() || sceneCacheRange_ != viewRange_) {
+        rebuildSceneCache(area);
+    }
+    painter.drawImage(QPointF(0, 0), sceneCache_);
+}
+
 void PlotWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.fillRect(rect(), palette().base());
@@ -479,8 +528,10 @@ void PlotWidget::paintEvent(QPaintEvent*) {
     drawAxes(painter, area, kind_ == PlotKind::Vector);
     if (kind_ == PlotKind::Lines) {
         drawLines(painter, area);
-    } else {
+    } else if (kind_ == PlotKind::Vector) {
         drawVector(painter, area);
+    } else {
+        drawMesh(painter, area);
     }
 }
 

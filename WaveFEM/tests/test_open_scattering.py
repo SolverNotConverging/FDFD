@@ -6,10 +6,9 @@ from wavefem.scattering import Scattering2D
 
 def _solve_open_slab(*, perturbed: bool):
     wavelength = 1.55e-6
-    k0 = 2.0 * np.pi / wavelength
     simulation = Scattering2D(
         wavelength=wavelength,
-        ky=0.10 * k0,
+        angle=np.degrees(np.arcsin(0.10)),
         x_span=(-1.5e-6, 1.5e-6),
         z_span=(-2.5e-6, 2.5e-6),
         background_eps=1.44**2,
@@ -46,7 +45,7 @@ def _solve_open_slab(*, perturbed: bool):
 
 @pytest.mark.gmsh
 @pytest.mark.slow
-def test_open_transverse_nonzero_ky_scattering_is_finite_and_balanced() -> None:
+def test_open_transverse_oblique_scattering_is_finite_and_balanced() -> None:
     result = _solve_open_slab(perturbed=True)
 
     assert np.isfinite((result.S11.real, result.S11.imag)).all()

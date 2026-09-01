@@ -134,6 +134,7 @@ void MainWindow::buildUi() {
     tabs_->addTab(buildModalTab(FieldName::Magnetic, modal_[1]), QStringLiteral("Modal H"));
     tabs_->addTab(buildVectorTab(FieldName::Electric, vector_[0]), QStringLiteral("2D Vector E"));
     tabs_->addTab(buildVectorTab(FieldName::Magnetic, vector_[1]), QStringLiteral("2D Vector H"));
+    tabs_->addTab(buildMeshTab(), QStringLiteral("Mesh"));
     layout->addWidget(tabs_, 1);
     setCentralWidget(central);
 
@@ -240,6 +241,14 @@ QWidget* MainWindow::buildVectorTab(FieldName field, VectorControls& controls) {
     const auto refresh = [this, field](int) { refreshVector(field); };
     connect(controls.part, &QComboBox::currentIndexChanged, this, refresh);
     connect(controls.quantity, &QComboBox::currentIndexChanged, this, refresh);
+    return tab;
+}
+
+QWidget* MainWindow::buildMeshTab() {
+    auto* tab = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+    meshPlot_ = new PlotWidget(tab);
+    layout->addWidget(meshPlot_, 1);
     return tab;
 }
 
@@ -519,6 +528,14 @@ void MainWindow::refreshVector(FieldName field) {
                              vectorQuantity(controls.quantity->currentIndex()));
 }
 
+void MainWindow::refreshMesh() {
+    if (!result_) {
+        meshPlot_->setEmpty(QStringLiteral("Mesh"), QStringLiteral("Loading mesh…"));
+        return;
+    }
+    meshPlot_->setMesh(result_);
+}
+
 void MainWindow::setResultControlsEnabled(bool enabled) {
     for (auto& controls : modal_) {
         controls.mode->setEnabled(enabled);
@@ -547,6 +564,9 @@ void MainWindow::refreshCurrentTab() {
         break;
     case 4:
         refreshVector(FieldName::Magnetic);
+        break;
+    case 5:
+        refreshMesh();
         break;
     default:
         break;

@@ -28,6 +28,7 @@ public:
                   ScalarQuantity quantity);
     void setVector(ResultPtr result, FieldName field, FieldPart part,
                    ScalarQuantity quantity, std::size_t maxArrows = 1200);
+    void setMesh(ResultPtr result);
     void resetView();
 
 protected:
@@ -40,7 +41,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
-    enum class PlotKind { Empty, Lines, Vector };
+    enum class PlotKind { Empty, Lines, Vector, Mesh };
 
     struct Arrow {
         double x{};
@@ -57,6 +58,7 @@ private:
     void drawAxes(QPainter& painter, const QRectF& area, bool reserveColorbar) const;
     void drawLines(QPainter& painter, const QRectF& area) const;
     void drawVector(QPainter& painter, const QRectF& area);
+    void drawMesh(QPainter& painter, const QRectF& area);
     void rebuildSceneCache(const QRectF& area);
     void invalidateSceneCache();
 

@@ -23,7 +23,7 @@ def build_simulation(frequency_hz: float = DESIGN_FREQUENCY_HZ) -> wf.Scattering
 
     simulation = wf.Scattering2D(
         frequency=frequency_hz,
-        ky=0.0,
+        angle=0.0,
         x_span=(-20.0 * MM, 20.0 * MM),
         z_span=(-30.0 * MM, 30.0 * MM),
         background_eps=1.0,

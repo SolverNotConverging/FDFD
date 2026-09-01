@@ -9,7 +9,7 @@ The current MVP provides:
 
 * a mixed first-order Nedelec + continuous P1 Maxwell discretization;
 
-* fixed-frequency, fixed-``ky`` full-vector lead modes;
+* fixed-frequency full-vector lead modes with angle-based oblique incidence;
 
 * permittivity contrast, released-background-PEC slots, and finite actual-only PEC plates;
 
@@ -52,6 +52,14 @@ Thus ``d/dy -> i*ky``. With the project convention ``exp(-i*omega*t)``,
 
 WaveFEM centralizes this operator in ``wavefem.operators``; the scattering and mode solvers use the same signs and component ordering. At ``ky=0`` it reduces to the ordinary full-vector two-dimensional curl structure.
 
+The high-level scattering API specifies ``angle`` in degrees from +z toward +y. After ``solve_modes`` identifies the lead families, ``set_incident_mode`` ties the requested angle to the selected family and resolves
+
+.. math::
+
+   k_y = k_0 n_{\mathrm{eff,total}}\sin(\mathrm{angle}).
+
+Thus ``angle=0`` gives ``ky=0``. The lower-level FEM and mode objects continue to expose the resolved ``ky`` used by the 2.5D operators.
+
 Install in ``RF_Engineering_env``
 ---------------------------------
 
@@ -76,7 +84,7 @@ This deliberately small closed-transverse example is quick enough for a smoke te
 
    sim = wf.Scattering2D(
        frequency=193.414489e12,
-       ky=0.0,
+       angle=0.0,
        x_span=(0.0, 1.0e-6),
        z_span=(-3.0e-6, 3.0e-6),
        background_eps=1.0,
@@ -119,7 +127,7 @@ A zero-thickness ground plane inside the solve domain is a z-invariant backgroun
 
    sim = wf.Scattering2D(
        frequency=20.0e9,
-       ky=0.0,
+       angle=0.0,
        x_span=(-12e-3, 20e-3),
        z_span=(-30e-3, 30e-3),
    )
@@ -255,7 +263,7 @@ For multimode results:
 HDF5 results, frequency sweeps, and viewer
 ------------------------------------------
 
-Every persisted file uses a versioned WaveFEM schema. A single-run file contains the frequency and ``ky``, sampled incident/scattered/total E and H, all indexed modal S-parameters, power terms, lead-mode E/H samples, mesh metadata, solve diagnostics, and a full-domain material/overlay scene. The scene stores the conforming dielectric mesh, outer PEC boundary, wave-port monitor lines, and PML interfaces. A sweep file contains the same complete record for every frequency point; it is not limited to summary curves.
+Every persisted file uses a versioned WaveFEM schema. A single-run file contains the frequency and resolved ``ky`` (with the requested angle in solve diagnostics), sampled incident/scattered/total E and H, all indexed modal S-parameters, power terms, lead-mode E/H samples, mesh metadata, solve diagnostics, and a full-domain material/overlay scene. The scene stores the conforming dielectric mesh, outer PEC boundary, wave-port monitor lines, and PML interfaces. A sweep file contains the same complete record for every frequency point; it is not limited to summary curves.
 
 Run a strictly increasing ordinary-frequency sweep in hertz with:
 
@@ -358,7 +366,7 @@ For a callback-defined device, provide the lead modes explicitly instead of aski
 
    sim = wf.Scattering2D.from_material_function(
        frequency=193.414489e12,
-       ky=0.0,
+       angle=0.0,
        domain=((0.0, 1.0e-6), (-3.0e-6, 3.0e-6)),
        eps_r=lambda x, z: np.where(np.abs(z) <= 0.3e-6, 1.002, 1.0)
        + 0.0 * np.asarray(x),
@@ -379,7 +387,7 @@ For a callback-defined device, provide the lead modes explicitly instead of aski
    sim.set_incident_mode(0)
    result = sim.run(h5_path="callback_result.h5")
 
-The injected ``ModeSet`` is checked against the simulation frequency, ``ky``, and transverse span before it can be launched. The caller must also ensure a lossless z-invariant callback background, positive-z modal roots, and compact contrast bracketed by the explicit monitors; see the callback section of the `API reference <API_REFERENCE.rst>`_ for the complete contract.
+The injected ``ModeSet`` is checked against the simulation frequency, ``ky``, and transverse span before it can be launched. Callback-defined simulations currently require ``angle=0`` or a directly prescribed compatibility ``ky``; nonzero angle resolution needs an integrated geometry-backed lead. The caller must also ensure a lossless z-invariant callback background, positive-z modal roots, and compact contrast bracketed by the explicit monitors; see the callback section of the `API reference <API_REFERENCE.rst>`_ for the complete contract.
 
 Validation and current limits
 -----------------------------

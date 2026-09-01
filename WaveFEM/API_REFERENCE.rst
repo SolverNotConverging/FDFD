@@ -141,7 +141,8 @@ High-level scattering API
        frequency: float | None = None,
        omega: float | None = None,
        wavelength: float | None = None,
-       ky: float = 0.0,
+       angle: float | None = None,
+       ky: float | None = None,
        x_span: Sequence[float],
        z_span: Sequence[float],
        background_eps: complex | float = 1.0,
@@ -160,7 +161,9 @@ Parameters:
 
 * ``wavelength``: compatibility alternative vacuum wavelength in metres. Exactly one of the three spectral arguments must be supplied.
 
-* ``ky``: prescribed real invariant-direction wavenumber. Complex ``ky`` is rejected by the integrated solver.
+* ``angle``: propagation angle in degrees, measured from +z toward +y and restricted to ``(-90, 90)``. ``None`` defaults to normal propagation. For a nonzero angle, ``solve_modes`` first finds the normal-incidence modal families; ``set_incident_mode`` then resolves the selected family with ``ky = k0 * neff_total * sin(angle)``.
+
+* ``ky``: compatibility input for a directly prescribed finite real invariant-direction wavenumber. It is mutually exclusive with ``angle``; new integrated-solver code should use ``angle``.
 
 * ``x_span``, ``z_span``: two finite, strictly increasing coordinates.
 
@@ -170,7 +173,7 @@ Parameters:
 
 * ``solver_options``: optional ``SolverOptions`` instance.
 
-Important public attributes include ``frequency``, ``ky``, ``geometry``, ``pml``, ``mesh_data``, ``modes``, ``incident``, ``left_monitor``, and ``right_monitor``. The latter four are ``None`` until the corresponding workflow stage completes.
+Important public attributes include ``frequency``, ``angle``, derived ``ky``, ``geometry``, ``pml``, ``mesh_data``, ``modes``, ``incident``, ``left_monitor``, and ``right_monitor``. For a nonzero angle, ``ky`` remains zero until an incident family is selected. The latter four object attributes are ``None`` until the corresponding workflow stage completes.
 
 The integrated API accepts passive physical materials, requires lossless uniform leads for modal power projection, supports compact material loss, and supports three perturbation types: volume permittivity contrast, finite slots released from z-invariant zero-thickness background PEC sheets, and finite actual-only constant-x PEC plates.
 
@@ -184,7 +187,8 @@ The integrated API accepts passive physical materials, requires lossless uniform
        frequency: float | None = None,
        omega: float | None = None,
        wavelength: float | None = None,
-       ky: float = 0.0,
+       angle: float | None = None,
+       ky: float | None = None,
        domain: tuple[Sequence[float], Sequence[float]],
        eps_r: Callable,
        eps_background: Callable,
@@ -197,6 +201,8 @@ Creates a device from actual and unperturbed relative-permittivity callbacks. ``
 ``eps_r`` defines the actual device. ``eps_background`` must define the z-invariant unperturbed lead used by the equivalent source. Callback devices use ``mu_r = 1`` and cannot be mixed with geometry primitives.
 
 Automatic cross-section inference is intentionally disabled for callbacks. Create a compatible ``CrossSection``, solve it with ``ModeSolver``, then call ``set_modes`` after meshing:
+
+Callback-defined simulations currently support ``angle=0`` or an explicitly prescribed compatibility ``ky``. Resolving a nonzero angle requires the integrated geometry-backed lead so WaveFEM can re-solve the selected modal family.
 
 .. code-block:: python
 
@@ -430,7 +436,7 @@ Builds the z-invariant background ``CrossSection`` and solves forward mode famil
 
 * Open guides require an x-PML. With one present, the integrated workflow filters PML/radiation candidates and retains bound modes above the exterior light line.
 
-The method stores and returns the resulting ``ModeSet`` and clears any previous incident selection. Callback devices must use ``set_modes`` instead.
+The method stores and returns the resulting ``ModeSet`` and clears any previous incident selection. With a nonzero ``angle``, this first set is the normal-incidence family catalogue used to choose the incident family. Callback devices must use ``set_modes`` instead.
 
 ``set_modes``
 ^^^^^^^^^^^^^
@@ -456,7 +462,7 @@ The caller must currently supply positive-z modal family members (``forward`` or
        amplitude: complex = 1.0,
    ) -> wf.IncidentMode
 
-Selects a propagating, unit-power mode from the simulation's current ``ModeSet``.
+Selects a propagating, unit-power mode from the simulation's current ``ModeSet``. For an integrated simulation with nonzero ``angle``, this call re-solves the selected normal-incidence family at the requested angle, updates ``sim.ky`` and ``sim.modes`` to the actual oblique solution, and launches the matching resolved mode.
 
 * ``mode`` may be a zero-based index or the exact ``Mode`` object contained in the current set. External and stale mode objects are rejected.
 
@@ -527,7 +533,7 @@ Use ``run`` for normal application workflows, ``solve(h5_path=some_path)`` when 
        mode_factory: Callable[[float], wf.ModeSet] | None = None,
    ) -> wf.FrequencySweepResult
 
-Runs independent scattering simulations at a nonempty, strictly increasing sequence of positive ordinary frequencies in hertz. The source ``sim`` acts as a physical-configuration template and is not mutated: material regions, PEC sheets and slots, material callbacks, PMLs, monitors, transverse boundary, ``ky``, and solver options are copied into a new simulation for every frequency. Each point is then meshed, given a fresh compatible mode set, launched, and solved.
+Runs independent scattering simulations at a nonempty, strictly increasing sequence of positive ordinary frequencies in hertz. The source ``sim`` acts as a physical-configuration template and is not mutated: material regions, PEC sheets and slots, material callbacks, PMLs, monitors, transverse boundary, propagation angle (or compatibility ``ky``), and solver options are copied into a new simulation for every frequency. Each point is then meshed, given a fresh compatible mode set, launched, and solved. Angle-based sweeps recompute ``ky`` from the selected incident family at every frequency.
 
 Parameters:
 

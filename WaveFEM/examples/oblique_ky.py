@@ -1,4 +1,4 @@
-"""Open transverse slab guide with nonzero prescribed ``ky``."""
+"""Open transverse slab guide at a nonzero oblique propagation angle."""
 
 from __future__ import annotations
 
@@ -9,10 +9,9 @@ import wavefem as wf
 
 def main() -> None:
     frequency_hz = 193.414489e12
-    k0 = 2.0 * np.pi * frequency_hz / wf.C0
     simulation = wf.Scattering2D(
         frequency=frequency_hz,
-        ky=0.10 * k0,
+        angle=np.degrees(np.arcsin(0.10)),
         x_span=(-1.5e-6, 1.5e-6),
         z_span=(-2.5e-6, 2.5e-6),
         background_eps=1.44**2,
@@ -38,10 +37,12 @@ def main() -> None:
     simulation.mesh(wavelength_elements=9)
 
     modes = simulation.solve_modes(num_modes=1, neff_guess=3.2, num_elements=54)
-    simulation.set_incident_mode(modes[0])
-    result = simulation.run(h5_path="oblique_ky.h5")
+    incident = simulation.set_incident_mode(modes[0])
+    result = simulation.run(h5_path="oblique_angle.h5")
 
-    print("neff =", modes[0].neff)
+    print("propagation angle (deg) =", simulation.angle)
+    print("resolved ky =", simulation.ky)
+    print("z-directed neff =", incident.mode.neff)
     print("S11 =", result.S11)
     print("S21 =", result.S21)
     print("power-balance error =", result.power_balance_error)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from math import ceil
+from math import ceil, cos, radians, sin
 from os import PathLike
 from operator import index as integer_index
 from typing import Callable, Literal, Mapping, Sequence
@@ -40,6 +40,48 @@ from .sweep import FrequencySweepResult
 
 
 MaterialFunction = Callable[..., object]
+
+
+def _oblique_parameters(
+    *, angle: float | None, ky: float | None
+) -> tuple[float | None, float]:
+    """Return the requested angle and physical invariant-direction wavenumber."""
+
+    if angle is not None and ky is not None:
+        raise ConfigurationError("Specify angle or ky, not both.")
+    if angle is None:
+        if ky is None:
+            return 0.0, 0.0
+        try:
+            ky_value = complex(ky)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ConfigurationError("ky must be finite and real.") from exc
+        if (
+            isinstance(ky, (bool, np.bool_))
+            or not np.isfinite((ky_value.real, ky_value.imag)).all()
+            or ky_value.imag != 0.0
+        ):
+            raise ConfigurationError("ky must be finite and real.")
+        return None, float(ky_value.real)
+
+    try:
+        angle_value = complex(angle)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigurationError("angle must be a finite real value in degrees.") from exc
+    if (
+        isinstance(angle, (bool, np.bool_))
+        or not np.isfinite((angle_value.real, angle_value.imag)).all()
+        or angle_value.imag != 0.0
+    ):
+        raise ConfigurationError("angle must be a finite real value in degrees.")
+    angle_real = float(angle_value.real)
+    if not -90.0 < angle_real < 90.0:
+        raise ConfigurationError(
+            "angle must lie strictly between -90 and 90 degrees."
+        )
+    # The physical ky is resolved only after the incident modal family is
+    # selected, because its total effective index is mode-dependent.
+    return angle_real, 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +139,8 @@ class Scattering2D:
         frequency: float | None = None,
         omega: float | None = None,
         wavelength: float | None = None,
-        ky: float = 0.0,
+        angle: float | None = None,
+        ky: float | None = None,
         x_span: Sequence[float],
         z_span: Sequence[float],
         background_eps: complex | float = 1.0,
@@ -108,10 +151,9 @@ class Scattering2D:
         self.frequency: Frequency = resolve_frequency(
             wavelength=wavelength, frequency=frequency, omega=omega
         )
-        ky_value = complex(ky)
-        if not np.isfinite((ky_value.real, ky_value.imag)).all() or ky_value.imag != 0.0:
-            raise ConfigurationError("Scattering2D currently requires a finite real ky.")
-        self.ky = float(ky_value.real)
+        self.angle, self.ky = _oblique_parameters(
+            angle=angle, ky=ky
+        )
         exterior = Material(eps_r=background_eps, mu_r=background_mu)
         if not exterior.is_passive:
             raise ConfigurationError(
@@ -132,6 +174,8 @@ class Scattering2D:
         self.modes: ModeSet | None = None
         self.incident: IncidentMode | None = None
         self._incident_mode_index: int | None = None
+        self._angle_mode_request: tuple[int, int] | None = None
+        self._angle_modes_resolved = self.angle is None or self.angle == 0.0
         self.left_monitor: float | None = None
         self.right_monitor: float | None = None
         self._mesh_size: float | None = None
@@ -145,7 +189,8 @@ class Scattering2D:
         frequency: float | None = None,
         omega: float | None = None,
         wavelength: float | None = None,
-        ky: float = 0.0,
+        angle: float | None = None,
+        ky: float | None = None,
         domain: tuple[Sequence[float], Sequence[float]],
         eps_r: MaterialFunction,
         eps_background: MaterialFunction,
@@ -160,6 +205,7 @@ class Scattering2D:
             wavelength=wavelength,
             frequency=frequency,
             omega=omega,
+            angle=angle,
             ky=ky,
             x_span=domain[0],
             z_span=domain[1],
@@ -184,9 +230,14 @@ class Scattering2D:
 
         if self._material_actual is not None:
             assert self._material_background is not None
+            oblique = (
+                {"angle": self.angle}
+                if self.angle is not None
+                else {"ky": self.ky}
+            )
             clone = type(self).from_material_function(
                 frequency=frequency_hz,
-                ky=self.ky,
+                **oblique,
                 domain=(self.x_span, self.z_span),
                 eps_r=self._material_actual,
                 eps_background=self._material_background,
@@ -194,9 +245,14 @@ class Scattering2D:
                 solver_options=self.solver_options,
             )
         else:
+            oblique = (
+                {"angle": self.angle}
+                if self.angle is not None
+                else {"ky": self.ky}
+            )
             clone = type(self)(
                 frequency=frequency_hz,
-                ky=self.ky,
+                **oblique,
                 x_span=self.x_span,
                 z_span=self.z_span,
                 background_eps=self.geometry.exterior.eps_r,
@@ -219,6 +275,10 @@ class Scattering2D:
         self.modes = None
         self.incident = None
         self._incident_mode_index = None
+        self._angle_mode_request = None
+        self._angle_modes_resolved = self.angle is None or self.angle == 0.0
+        if self.angle is not None:
+            self.ky = 0.0
 
     def _require_region_geometry(self) -> None:
         if self._material_actual is not None:
@@ -730,6 +790,10 @@ class Scattering2D:
         self.modes = None
         self.incident = None
         self._incident_mode_index = None
+        self._angle_mode_request = None
+        self._angle_modes_resolved = self.angle is None or self.angle == 0.0
+        if self.angle is not None:
+            self.ky = 0.0
         return self.mesh_data
 
     def _cross_section(self) -> CrossSection:
@@ -864,7 +928,86 @@ class Scattering2D:
         self.modes = selected
         self.incident = None
         self._incident_mode_index = None
+        self._angle_mode_request = None
+        self._angle_modes_resolved = self.angle is None or self.angle == 0.0
         return selected
+
+    def _resolve_modes_for_angle(self, selected_index: int) -> int:
+        """Resolve the selected normal-incidence family at ``self.angle``."""
+
+        if self.angle is None or self.angle == 0.0:
+            return selected_index
+        if self._angle_mode_request is None or self.modes is None:
+            raise ConfigurationError(
+                "A nonzero angle must be resolved from modes produced by "
+                "Scattering2D.solve_modes() before selecting the incident mode."
+            )
+        if self._material_background is not None:
+            raise ConfigurationError(
+                "Nonzero-angle callback simulations cannot derive an oblique mode "
+                "from an injected ModeSet; use an integrated geometry-backed lead."
+            )
+
+        seed = self.modes[selected_index]
+        if seed.classification != "propagating" or seed.neff.real <= 0.0:
+            raise ConfigurationError(
+                "The incident family used to resolve angle must be a forward "
+                "propagating mode with positive effective index."
+            )
+        num_modes, num_elements = self._angle_mode_request
+        total_neff = float(seed.neff.real)
+        angle_radians = radians(self.angle)
+        self.ky = float(
+            self.frequency.k0 * total_neff * sin(angle_radians)
+        )
+        expected_z_neff = seed.neff * cos(angle_radians)
+        solver = ModeSolver(
+            self._cross_section(),
+            omega=self.frequency.omega,
+            ky=self.ky,
+            num_elements=num_elements,
+        )
+        candidates = solver.solve(
+            num_modes=num_modes,
+            neff_guess=expected_z_neff,
+            direction="forward",
+        )
+        resolved = self.set_modes(candidates)
+        self._angle_mode_request = (num_modes, num_elements)
+        propagating = [
+            index for index, candidate in enumerate(resolved)
+            if candidate.classification == "propagating" and candidate.neff.real > 0.0
+        ]
+        if not propagating:
+            raise ModeSolverError(
+                "No propagating mode remained after resolving the requested angle."
+            )
+        resolved_index = min(
+            propagating,
+            key=lambda index: abs(resolved[index].neff - expected_z_neff),
+        )
+        selected = resolved[resolved_index]
+        eta = self.ky / self.frequency.k0
+        resolved_angle = float(np.degrees(np.arctan2(eta, selected.neff.real)))
+        resolved_total_neff = float(np.hypot(selected.neff.real, eta))
+        if not np.isclose(resolved_angle, self.angle, rtol=0.0, atol=5e-4):
+            raise ModeSolverError(
+                "The selected modal family did not preserve the requested "
+                "propagation angle after the oblique solve."
+            )
+        self.modes = ModeSet(
+            modes=resolved.modes,
+            system=resolved.system,
+            solve_info={
+                **resolved.solve_info,
+                "angle_degrees": self.angle,
+                "angle_seed_mode_index": selected_index,
+                "angle_resolved_mode_index": resolved_index,
+                "angle_total_neff": resolved_total_neff,
+            },
+        )
+        self._angle_modes_resolved = True
+        return resolved_index
 
     def solve_modes(
         self,
@@ -879,6 +1022,8 @@ class Scattering2D:
         if num_elements is None:
             h = self._mesh_size or self.frequency.wavelength / (10 * max(self._maximum_index(), 1.0))
             num_elements = max(40, int(ceil((self.x_span[1] - self.x_span[0]) / h)))
+        if self.angle is not None:
+            self.ky = 0.0
         solver = ModeSolver(
             self._cross_section(),
             omega=self.frequency.omega,
@@ -890,7 +1035,11 @@ class Scattering2D:
             neff_guess=neff_guess,
             direction="forward",
         )
-        return self.set_modes(candidates)
+        selected = self.set_modes(candidates)
+        if self.angle is not None and self.angle != 0.0:
+            self._angle_mode_request = (int(num_modes), int(num_elements))
+            self._angle_modes_resolved = False
+        return selected
 
     def set_incident_mode(
         self,
@@ -926,6 +1075,10 @@ class Scattering2D:
             selected = mode
         else:
             raise ConfigurationError("mode must be a Mode or integer index.")
+        if self.angle is not None and self.angle != 0.0 and not self._angle_modes_resolved:
+            selected_index = self._resolve_modes_for_angle(selected_index)
+            assert self.modes is not None
+            selected = self.modes[selected_index]
         if (
             selected.classification != "propagating"
             or selected.normalization != "unit-power"
@@ -1344,6 +1497,8 @@ class Scattering2D:
             ndofs=system.ndofs,
             solve_info={
                 **dict(scattered.field.solve_info),
+                "angle_degrees": self.angle,
+                "ky": self.ky,
                 "length_scale": length_scale,
                 "source_active_fraction": scattered.source.active_quadrature_fraction,
                 "released_pec_facet_count": scattered.source.released_pec_facet_count,

@@ -28,6 +28,8 @@ Features
 
 * Total, incident, and scattered 2D E/H vector fields.
 
+* Cached full-domain mesh view with material shading and saved boundary overlays.
+
 * Physical plotting convention: z is the horizontal axis and x is the vertical axis.
 
 * Every nonzero vector arrow has the same screen length; viridis colour and a colorbar carry the original in-plane magnitude.

@@ -13,10 +13,9 @@ MM = 1.0e-3
 @pytest.mark.slow
 def test_oblique_ground_slot_with_finite_top_plates_uses_both_pec_perturbations() -> None:
     frequency_hz = 20.0e9
-    k0 = 2.0 * np.pi * frequency_hz / wf.C0
     simulation = wf.Scattering2D(
         frequency=frequency_hz,
-        ky=0.10 * k0,
+        angle=np.degrees(np.arcsin(0.10)),
         x_span=(-8.0 * MM, 10.0 * MM),
         z_span=(-15.0 * MM, 15.0 * MM),
     )
