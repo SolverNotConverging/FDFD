@@ -37,7 +37,7 @@ def main() -> None:
         name="top_pec_perturbation",
     )
     solver.add_pml(2.5 * MM, direction="x+")
-    solver.discretize(max_element_size=0.65 * MM)
+    solver.discretize(max_element_size=0.35 * MM)
 
     modes = solver.solve(
         direction="all",
