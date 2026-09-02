@@ -190,6 +190,66 @@ def test_boundary_refinement_densifies_walls_and_can_be_disabled() -> None:
 
 
 @pytest.mark.gmsh
+def test_internal_pec_and_sibc_use_smooth_distance_grading() -> None:
+    geometry = GeometryModel2D(1.0, 1.0, Material())
+    pec = Rectangle((0.22, 0.32), (0.45, 0.55))
+    sibc = Rectangle((0.68, 0.78), (0.45, 0.55))
+    geometry.add_boundary(pec, "pec", name="pec_insert")
+    geometry.add_boundary(
+        sibc, "impedance", impedance=50.0, name="sibc_insert"
+    )
+
+    mesh = discretize_2d(
+        geometry,
+        max_element_size=0.14,
+        material_aware=False,
+        boundary_refinement=0.3,
+        boundary_refinement_width=0.16,
+    )
+    centers = mesh.nodes[mesh.elements].mean(axis=1)
+    edges = _element_maximum_edges(mesh)
+
+    def distance_to_rectangle(rectangle: Rectangle) -> np.ndarray:
+        dx = np.maximum.reduce(
+            (
+                rectangle.x[0] - centers[:, 0],
+                centers[:, 0] - rectangle.x[1],
+                np.zeros(len(centers)),
+            )
+        )
+        dy = np.maximum.reduce(
+            (
+                rectangle.y[0] - centers[:, 1],
+                centers[:, 1] - rectangle.y[1],
+                np.zeros(len(centers)),
+            )
+        )
+        return np.hypot(dx, dy)
+
+    pec_distance = distance_to_rectangle(pec)
+    sibc_distance = distance_to_rectangle(sibc)
+    outer_distance = np.minimum.reduce(
+        (
+            centers[:, 0],
+            1.0 - centers[:, 0],
+            centers[:, 1],
+            1.0 - centers[:, 1],
+        )
+    )
+    bulk = edges[
+        (pec_distance > 0.20)
+        & (sibc_distance > 0.20)
+        & (outer_distance > 0.20)
+    ]
+    pec_near = edges[pec_distance < 0.045]
+    sibc_near = edges[sibc_distance < 0.045]
+
+    assert bulk.size > 0 and pec_near.size > 0 and sibc_near.size > 0
+    assert np.median(pec_near) < 0.55 * np.median(bulk)
+    assert np.median(sibc_near) < 0.55 * np.median(bulk)
+
+
+@pytest.mark.gmsh
 def test_meshing_restores_options_in_an_existing_gmsh_session() -> None:
     import gmsh
 
@@ -203,6 +263,7 @@ def test_meshing_restores_options_in_an_existing_gmsh_session() -> None:
         "Mesh.MeshSizeExtendFromBoundary",
         "Mesh.MeshSizeFromPoints",
         "Mesh.MeshSizeFromCurvature",
+        "Mesh.Algorithm",
     )
     original = {name: float(gmsh.option.getNumber(name)) for name in names}
     requested = {
@@ -212,6 +273,7 @@ def test_meshing_restores_options_in_an_existing_gmsh_session() -> None:
         "Mesh.MeshSizeExtendFromBoundary": 1.0,
         "Mesh.MeshSizeFromPoints": 1.0,
         "Mesh.MeshSizeFromCurvature": 1.0,
+        "Mesh.Algorithm": 6.0,
     }
     try:
         for name, value in requested.items():

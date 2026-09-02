@@ -1,10 +1,12 @@
 #include "field_plot.hpp"
 
 #include <QLinearGradient>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
+#include <QWheelEvent>
 
 #include <algorithm>
 #include <array>
@@ -38,6 +40,17 @@ namespace {
     const auto x = (point.x - bounds.xMin) / (bounds.xMax - bounds.xMin);
     const auto y = (point.y - bounds.yMin) / (bounds.yMax - bounds.yMin);
     return {area.left() + x * area.width(), area.bottom() - y * area.height()};
+}
+
+[[nodiscard]] Vec2 unmapPoint(const QPointF& point,
+                              const FieldViewBounds& bounds,
+                              const QRectF& area) {
+    const auto x = (point.x() - area.left()) / area.width();
+    const auto y = (area.bottom() - point.y()) / area.height();
+    return {
+        bounds.xMin + x * (bounds.xMax - bounds.xMin),
+        bounds.yMin + y * (bounds.yMax - bounds.yMin),
+    };
 }
 
 [[nodiscard]] QColor interpolateColour(const std::array<QColor, 5>& colours,
@@ -115,10 +128,16 @@ FieldPlot::FieldPlot(FieldFamily family, QWidget* parent)
                         : QStringLiteral("H-field appears after calculation")) {
     setAutoFillBackground(true);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setMouseTracking(true);
+    setCursor(Qt::OpenHandCursor);
+    setToolTip(QStringLiteral(
+        "Mouse wheel: zoom · Left drag: pan · Double-click: reset view"
+    ));
 }
 
 void FieldPlot::setResult(std::shared_ptr<const Result> result) {
     result_ = std::move(result);
+    resetView();
     update();
 }
 
@@ -135,17 +154,121 @@ void FieldPlot::setViewMode(const FieldViewMode mode) {
         return;
     }
     viewMode_ = mode;
+    resetView();
     update();
 }
 
 void FieldPlot::setEmptyMessage(QString message) {
     result_.reset();
+    resetView();
     emptyMessage_ = std::move(message);
     update();
 }
 
 QSize FieldPlot::minimumSizeHint() const {
     return {380, 360};
+}
+
+std::optional<FieldViewBounds> FieldPlot::defaultBounds() const {
+    return result_ ? fieldDisplayBounds(*result_, viewMode_) : std::nullopt;
+}
+
+std::optional<FieldViewBounds> FieldPlot::activeBounds() const {
+    if (userBounds_) {
+        return userBounds_;
+    }
+    return defaultBounds();
+}
+
+QRectF FieldPlot::plotArea(const FieldViewBounds& bounds) const {
+    const QRectF available =
+        QRectF(rect()).adjusted(58.0, 46.0, -72.0, -47.0);
+    if (available.width() < 20.0 || available.height() < 20.0) {
+        return {};
+    }
+    return aspectFit(available, bounds);
+}
+
+void FieldPlot::resetView() {
+    userBounds_.reset();
+    dragging_ = false;
+    setCursor(Qt::OpenHandCursor);
+}
+
+void FieldPlot::wheelEvent(QWheelEvent* event) {
+    const auto bounds = activeBounds();
+    const auto limits = result_ ? fieldMeshBounds(*result_) : std::nullopt;
+    if (!bounds || !limits || event->angleDelta().y() == 0) {
+        event->ignore();
+        return;
+    }
+    const auto area = plotArea(*bounds);
+    if (area.isEmpty() || !area.contains(event->position())) {
+        event->ignore();
+        return;
+    }
+    const auto steps = static_cast<double>(event->angleDelta().y()) / 120.0;
+    const auto scale = std::pow(1.2, -steps);
+    const auto anchor = unmapPoint(event->position(), *bounds, area);
+    userBounds_ = zoomFieldView(*bounds, *limits, anchor, scale);
+    update();
+    event->accept();
+}
+
+void FieldPlot::mousePressEvent(QMouseEvent* event) {
+    const auto bounds = activeBounds();
+    if (event->button() != Qt::LeftButton || !bounds
+        || !plotArea(*bounds).contains(event->position())) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    userBounds_ = *bounds;
+    lastMousePosition_ = event->position();
+    dragging_ = true;
+    setCursor(Qt::ClosedHandCursor);
+    event->accept();
+}
+
+void FieldPlot::mouseMoveEvent(QMouseEvent* event) {
+    if (!dragging_ || !(event->buttons() & Qt::LeftButton) || !userBounds_
+        || !result_) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+    const auto limits = fieldMeshBounds(*result_);
+    const auto area = plotArea(*userBounds_);
+    if (!limits || area.isEmpty()) {
+        return;
+    }
+    const auto delta = event->position() - lastMousePosition_;
+    const auto xOffset = -delta.x() / area.width()
+        * (userBounds_->xMax - userBounds_->xMin);
+    const auto yOffset = delta.y() / area.height()
+        * (userBounds_->yMax - userBounds_->yMin);
+    userBounds_ = panFieldView(*userBounds_, *limits, xOffset, yOffset);
+    lastMousePosition_ = event->position();
+    update();
+    event->accept();
+}
+
+void FieldPlot::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton && dragging_) {
+        dragging_ = false;
+        setCursor(Qt::OpenHandCursor);
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void FieldPlot::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        resetView();
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::mouseDoubleClickEvent(event);
 }
 
 void FieldPlot::paintEvent(QPaintEvent* event) {
@@ -176,18 +299,17 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
     }
 
     const auto fullBounds = fieldMeshBounds(*result_);
-    const auto bounds = fieldDisplayBounds(*result_, viewMode_);
+    const auto bounds = activeBounds();
     if (!fullBounds || !bounds) {
         painter.setPen(QColor(170, 30, 45));
         painter.drawText(rect(), Qt::AlignCenter,
                          QStringLiteral("Field mesh contains invalid coordinates."));
         return;
     }
-    const QRectF available = QRectF(rect()).adjusted(58.0, 46.0, -72.0, -47.0);
-    if (available.width() < 20.0 || available.height() < 20.0) {
+    const auto plotArea = this->plotArea(*bounds);
+    if (plotArea.isEmpty()) {
         return;
     }
-    const auto plotArea = aspectFit(available, *bounds);
     const auto cropped = fieldViewIsCropped(*fullBounds, *bounds);
 
     std::vector<double> magnitudes;
@@ -279,7 +401,9 @@ void FieldPlot::paintEvent(QPaintEvent* event) {
         QFont badgeFont = bodyFont;
         badgeFont.setPointSizeF(std::max(7.0, bodyFont.pointSizeF() - 1.0));
         painter.setFont(badgeFont);
-        const auto badgeText = QStringLiteral("Focused view — display only");
+        const auto badgeText = userBounds_
+            ? QStringLiteral("Wheel: zoom · Drag: pan · Double-click: reset")
+            : QStringLiteral("Focused view — wheel to zoom, drag to pan");
         const auto textBounds = painter.fontMetrics().boundingRect(badgeText);
         const QRectF badge(
             plotArea.left() + 6.0,

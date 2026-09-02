@@ -7,6 +7,7 @@
 #include <QWidget>
 
 #include <memory>
+#include <optional>
 
 namespace tl {
 
@@ -25,13 +26,26 @@ public:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
+    [[nodiscard]] std::optional<FieldViewBounds> defaultBounds() const;
+    [[nodiscard]] std::optional<FieldViewBounds> activeBounds() const;
+    [[nodiscard]] QRectF plotArea(const FieldViewBounds& bounds) const;
+    void resetView();
+
     FieldFamily family_;
     std::shared_ptr<const Result> result_;
     QString emptyMessage_;
     bool meshVisible_{};
     FieldViewMode viewMode_{FieldViewMode::Focused};
+    std::optional<FieldViewBounds> userBounds_;
+    QPointF lastMousePosition_;
+    bool dragging_{};
 };
 
 } // namespace tl

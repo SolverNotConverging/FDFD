@@ -7,7 +7,7 @@ is generated inside the metal.
 
 from __future__ import annotations
 
-from FEM_Mode_Solver import ModeSolver2D, Rectangle
+from FEM_Mode_Solver import ModeSolver2D
 
 
 FREQUENCY = 10.0e9
@@ -60,17 +60,6 @@ def build_solver() -> ModeSolver2D:
         name="copper_strip",
     )
 
-    # Resolve the strip edges and their fringing-field region more finely
-    # than the rest of the air/substrate cross-section.
-    solver.add_mesh_refinement(
-        Rectangle(
-            (-0.75 * STRIP_WIDTH, 0.75 * STRIP_WIDTH),
-            (SUBSTRATE_HEIGHT - 0.45e-3, SUBSTRATE_HEIGHT + 0.55e-3),
-        ),
-        max_element_size=0.12e-3,
-        transition_width=0.60e-3,
-        name="strip_edge_refinement",
-    )
     return solver
 
 

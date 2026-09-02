@@ -49,6 +49,30 @@ double relativeError(
     return std::abs(actual - expected) / std::abs(expected);
 }
 
+double median(std::vector<double> values) {
+    check(!values.empty(), "median requires at least one value");
+    std::sort(values.begin(), values.end());
+    const std::size_t middle = values.size() / 2U;
+    if (values.size() % 2U == 0U) {
+        return 0.5 * (values[middle - 1U] + values[middle]);
+    }
+    return values[middle];
+}
+
+double maximumEdge(const tl::Triangle& triangle, const tl::Mesh& mesh) {
+    double result{};
+    for (const auto pair : {std::array{0U, 1U}, std::array{1U, 2U},
+                            std::array{2U, 0U}}) {
+        const tl::Vec2 first =
+            mesh.nodes[static_cast<std::size_t>(triangle.nodes[pair[0]])];
+        const tl::Vec2 second =
+            mesh.nodes[static_cast<std::size_t>(triangle.nodes[pair[1]])];
+        result = std::max(result,
+                          std::hypot(second.x - first.x, second.y - first.y));
+    }
+    return result;
+}
+
 void checkPhysicalResult(const tl::Result& result) {
     check(!result.mesh.nodes.empty(), "the mesh must contain nodes");
     check(!result.mesh.triangles.empty(), "the mesh must contain triangles");
@@ -164,6 +188,35 @@ void testAllDefaults() {
             );
         }
     }
+}
+
+void testConductorMeshUsesDistanceGrading() {
+    auto parameters = tl::defaultParameters(tl::LineType::Coaxial);
+    parameters.maxElementSize = 0.60e-3;
+    const auto result = tl::solve(parameters);
+    std::vector<double> nearConductor;
+    std::vector<double> bulk;
+    for (const tl::Triangle& triangle : result.mesh.triangles) {
+        tl::Vec2 center{};
+        for (const int node : triangle.nodes) {
+            center.x += result.mesh.nodes[static_cast<std::size_t>(node)].x / 3.0;
+            center.y += result.mesh.nodes[static_cast<std::size_t>(node)].y / 3.0;
+        }
+        const double radius = std::hypot(center.x, center.y);
+        const double wallDistance =
+            std::min(radius - parameters.innerRadius,
+                     parameters.outerRadius - radius);
+        const double edge = maximumEdge(triangle, result.mesh);
+        if (wallDistance < 0.10e-3) {
+            nearConductor.push_back(edge);
+        } else if (wallDistance > 0.48e-3) {
+            bulk.push_back(edge);
+        }
+    }
+    check(!nearConductor.empty(), "coax mesh needs near-conductor triangles");
+    check(!bulk.empty(), "coax mesh needs bulk triangles");
+    check(median(nearConductor) < 0.45 * median(bulk),
+          "coax conductor mesh must grade smoothly from fine walls to coarse bulk");
 }
 
 void testPythonParityAtReferenceInputs() {
@@ -561,6 +614,7 @@ using Test = std::pair<std::string_view, std::function<void()>>;
 int main() {
     const std::vector<Test> tests {
         {"all four defaults", testAllDefaults},
+        {"distance-graded conductor mesh", testConductorMeshUsesDistanceGrading},
         {"Python padding-1 numerical parity", testPythonParityAtReferenceInputs},
         {"open-domain default padding convergence", testOpenDomainDefaultPaddingIsConverged},
         {"ideal coax exact TEM", testIdealCoaxAgainstExactTem},

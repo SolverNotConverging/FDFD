@@ -451,6 +451,7 @@ def discretize_2d(
         "Mesh.MeshSizeExtendFromBoundary",
         "Mesh.MeshSizeFromPoints",
         "Mesh.MeshSizeFromCurvature",
+        "Mesh.Algorithm",
     )
     with _GMSH_LOCK:
         owned = not bool(gmsh.isInitialized())
@@ -696,6 +697,7 @@ def discretize_2d(
                         gmsh.model.mesh.field.setNumbers(
                             distance, "CurvesList", curves
                         )
+                        gmsh.model.mesh.field.setNumber(distance, "Sampling", 100)
                         threshold = gmsh.model.mesh.field.add("Threshold")
                         gmsh.model.mesh.field.setNumber(
                             threshold, "InField", distance
@@ -748,6 +750,7 @@ def discretize_2d(
                     gmsh.model.mesh.field.setNumbers(
                         distance, "CurvesList", curves
                     )
+                    gmsh.model.mesh.field.setNumber(distance, "Sampling", 100)
                     threshold = gmsh.model.mesh.field.add("Threshold")
                     gmsh.model.mesh.field.setNumber(threshold, "InField", distance)
                     gmsh.model.mesh.field.setNumber(
@@ -792,6 +795,7 @@ def discretize_2d(
                     gmsh.model.mesh.field.setNumbers(
                         distance, "CurvesList", curves
                     )
+                    gmsh.model.mesh.field.setNumber(distance, "Sampling", 100)
                     threshold = gmsh.model.mesh.field.add("Threshold")
                     gmsh.model.mesh.field.setNumber(threshold, "InField", distance)
                     gmsh.model.mesh.field.setNumber(
@@ -800,11 +804,14 @@ def discretize_2d(
                     gmsh.model.mesh.field.setNumber(
                         threshold, "SizeMax", maximum * scale
                     )
-                    gmsh.model.mesh.field.setNumber(threshold, "DistMin", 0.0)
                     transition = (
                         boundary_width
                         if boundary_width is not None
                         else 3.0 * target
+                    )
+                    fine_band = min(target, 0.5 * transition)
+                    gmsh.model.mesh.field.setNumber(
+                        threshold, "DistMin", fine_band * scale
                     )
                     gmsh.model.mesh.field.setNumber(
                         threshold, "DistMax", transition * scale
@@ -829,6 +836,10 @@ def discretize_2d(
             gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
             gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
             gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
+            # Gmsh's Delaunay algorithm handles the large gradients in
+            # distance/threshold background fields more robustly than the
+            # default Frontal-Delaunay algorithm.
+            gmsh.option.setNumber("Mesh.Algorithm", 5)
             gmsh.model.mesh.generate(2)
 
             node_tags, coordinates, _ = gmsh.model.mesh.getNodes()

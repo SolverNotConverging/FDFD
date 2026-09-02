@@ -233,6 +233,10 @@ Material-aware sizing reduces the local element size where the conservative
 ``sqrt(max(abs(epsilon)) * max(abs(mu)))`` estimate is larger and enforces
 ``wavelength_elements`` across the local material wavelength.  In 2D,
 ``boundary_refinement=0.5`` is the default and halves the nearby size target.
+PEC, PMC, and surface-impedance walls use a sampled Gmsh ``Distance`` field
+feeding a ``Threshold`` field, so the target grows smoothly back to the local
+material size instead of imposing a constant-size conductor box.  Set
+``boundary_refinement_width`` to control that transition distance explicitly.
 Optional interface refinement and explicit geometry-only sizing regions can be
 combined, for example:
 

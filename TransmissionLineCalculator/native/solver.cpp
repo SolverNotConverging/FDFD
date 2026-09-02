@@ -82,7 +82,6 @@ struct RectangularDefinition {
     Complex backgroundPermittivity{1.0, 0.0};
     std::vector<MaterialRegion> materials;
     std::vector<RectConductor> conductors;
-    std::vector<Rectangle> refinementRegions;
     double localTarget{};
     double transitionWidth{};
 };
@@ -308,14 +307,6 @@ void validate(const Parameters& p) {
                                      (10.0 * p.refinementFactor));
         definition.transitionWidth =
             std::max(0.5 * p.substrateHeight, 0.25 * p.traceWidth);
-        const double fringeX =
-            std::max(0.75 * p.traceWidth, 0.75 * p.substrateHeight);
-        const double fringeY = std::min(0.5 * p.substrateHeight, p.traceWidth);
-        definition.refinementRegions.push_back(
-            {-0.5 * p.traceWidth - fringeX,
-             0.5 * p.traceWidth + fringeX,
-             p.substrateHeight - fringeY,
-             p.substrateHeight + p.conductorThickness + fringeY});
         return definition;
     }
     if (p.type == LineType::Stripline) {
@@ -357,9 +348,6 @@ void validate(const Parameters& p) {
             std::min(baseTarget, std::min(p.traceWidth, dielectricGap) /
                                      (10.0 * p.refinementFactor));
         definition.transitionWidth = 0.5 * dielectricGap;
-        definition.refinementRegions.push_back(
-            {-1.25 * p.traceWidth, 1.25 * p.traceWidth,
-             -0.45 * dielectricGap, 0.45 * dielectricGap});
         return definition;
     }
     if (p.type == LineType::CoplanarWaveguide) {
@@ -403,14 +391,10 @@ void validate(const Parameters& p) {
                      std::min({p.centerWidth, p.gap, p.groundWidth,
                                p.substrateHeight}) /
                          (8.0 * p.refinementFactor));
+        // Keep the narrow slots inside the graded band that replaces the old
+        // constant-size CPW rectangle.
         definition.transitionWidth =
-            std::max(2.0 * p.gap, 0.25 * p.substrateHeight);
-        const double refinementDepth =
-            std::min(0.5 * p.substrateHeight, 2.0 * p.gap);
-        definition.refinementRegions.push_back(
-            {-metalHalfWidth - p.gap, metalHalfWidth + p.gap,
-             -refinementDepth,
-             p.conductorThickness + refinementDepth});
+            std::max(3.0 * p.gap, 0.5 * p.substrateHeight);
         return definition;
     }
     throw std::invalid_argument("rectangular geometry requested for a coaxial line");
@@ -434,12 +418,21 @@ void addDistanceField(const std::vector<int>& curves, const double minimumSize,
     }
     const int distance = gmsh::model::mesh::field::add("Distance");
     gmsh::model::mesh::field::setNumbers(distance, "CurvesList", numericTags(curves));
+    // Gmsh evaluates curve-distance fields through sampled points.  The
+    // default sampling is visibly too sparse when a long ground plane and a
+    // narrow trace share one field, producing lobed rather than wall-normal
+    // grading near the conductor.
+    gmsh::model::mesh::field::setNumber(distance, "Sampling", 100.0);
     const int threshold = gmsh::model::mesh::field::add("Threshold");
     gmsh::model::mesh::field::setNumber(threshold, "InField",
                                         static_cast<double>(distance));
     gmsh::model::mesh::field::setNumber(threshold, "SizeMin", minimumSize * scale);
     gmsh::model::mesh::field::setNumber(threshold, "SizeMax", maximumSize * scale);
-    gmsh::model::mesh::field::setNumber(threshold, "DistMin", 0.0);
+    // Hold the minimum size for several element layers before grading out.
+    // A zero-width SizeMin zone asks only points exactly on the curve to use
+    // the fine target and can under-resolve the first volume-element row.
+    const double fineBand = std::min(3.0 * minimumSize, 0.9 * transition);
+    gmsh::model::mesh::field::setNumber(threshold, "DistMin", fineBand * scale);
     gmsh::model::mesh::field::setNumber(threshold, "DistMax", transition * scale);
     fields.push_back(threshold);
     smallestSize = std::min(smallestSize, minimumSize);
@@ -447,8 +440,6 @@ void addDistanceField(const std::vector<int>& curves, const double minimumSize,
 
 void applyMeshFields(const std::vector<int>& physicalCurves,
                      const std::vector<int>& outerCurves,
-                     const std::vector<int>& refinementSurfaces,
-                     const std::vector<int>& refinementCurves,
                      const std::unordered_map<int, Complex>& surfaceMaterials,
                      const Complex background, const double localTarget,
                      const double transition, const double baseTarget,
@@ -461,19 +452,6 @@ void applyMeshFields(const std::vector<int>& physicalCurves,
     const double outerTarget = 0.4 * baseTarget;
     addDistanceField(outerCurves, outerTarget, baseTarget, 3.0 * outerTarget, scale,
                      fields, smallestSize);
-
-    if (!refinementSurfaces.empty()) {
-        const int constant = gmsh::model::mesh::field::add("Constant");
-        gmsh::model::mesh::field::setNumber(constant, "VIn", localTarget * scale);
-        gmsh::model::mesh::field::setNumber(constant, "VOut", baseTarget * scale);
-        gmsh::model::mesh::field::setNumbers(
-            constant, "SurfacesList", numericTags(refinementSurfaces));
-        fields.push_back(constant);
-        smallestSize = std::min(smallestSize, localTarget);
-        addDistanceField(refinementCurves, localTarget, baseTarget,
-                         std::max(transition, 2.0 * localTarget), scale, fields,
-                         smallestSize);
-    }
 
     struct MaterialGroup {
         Complex material{};
@@ -529,7 +507,10 @@ void applyMeshFields(const std::vector<int>& physicalCurves,
     gmsh::option::setNumber("Mesh.MeshSizeFromCurvature", 0.0);
     gmsh::option::setNumber("Mesh.ElementOrder", 1.0);
     gmsh::option::setNumber("Mesh.RecombineAll", 0.0);
-    gmsh::option::setNumber("Mesh.Algorithm", 6.0);
+    // Gmsh recommends Delaunay for background fields with large size
+    // gradients; the default Frontal-Delaunay algorithm can create irregular
+    // transition bands around small conductors.
+    gmsh::option::setNumber("Mesh.Algorithm", 5.0);
 }
 
 [[nodiscard]] std::vector<int> boundaryCurves(
@@ -554,42 +535,6 @@ void applyMeshFields(const std::vector<int>& physicalCurves,
                 return solveSurfaces.contains(surface);
             }));
         if (adjacent == 1) {
-            result.push_back(curve);
-        }
-    }
-    return result;
-}
-
-[[nodiscard]] std::vector<int> selectedSurfaceBoundaryCurves(
-    const std::unordered_set<int>& selectedSurfaces,
-    const std::unordered_map<int, Complex>& surfaceMaterials) {
-    if (selectedSurfaces.empty()) {
-        return {};
-    }
-    std::vector<DimTag> curveEntities;
-    gmsh::model::getEntities(curveEntities, 1);
-    std::vector<int> result;
-    for (const auto& [dimension, curve] : curveEntities) {
-        (void)dimension;
-        std::vector<int> upward;
-        std::vector<int> downward;
-        gmsh::model::getAdjacencies(1, curve, upward, downward);
-        (void)downward;
-        bool hasSelected{};
-        bool hasUnselected{};
-        int adjacentSolveSurfaces{};
-        for (const int surface : upward) {
-            if (!surfaceMaterials.contains(surface)) {
-                continue;
-            }
-            ++adjacentSolveSurfaces;
-            if (selectedSurfaces.contains(surface)) {
-                hasSelected = true;
-            } else {
-                hasUnselected = true;
-            }
-        }
-        if (hasSelected && (hasUnselected || adjacentSolveSurfaces == 1)) {
             result.push_back(curve);
         }
     }
@@ -730,21 +675,16 @@ void extractBoundaryEdges(const std::vector<int>& curves,
                            definition.ymax};
     const int domainTag = addRectangle(domain);
     std::vector<DimTag> tools;
-    tools.reserve(definition.materials.size() + definition.conductors.size() +
-                  definition.refinementRegions.size());
+    tools.reserve(definition.materials.size() + definition.conductors.size());
     for (const MaterialRegion& material : definition.materials) {
         tools.emplace_back(2, addRectangle(material));
     }
     for (const RectConductor& conductor : definition.conductors) {
         tools.emplace_back(2, addRectangle(conductor));
     }
-    for (const Rectangle& refinement : definition.refinementRegions) {
-        tools.emplace_back(2, addRectangle(refinement));
-    }
     std::vector<std::unordered_set<int>> materialSurfaceTags(
         definition.materials.size());
     std::unordered_set<int> conductorSurfaceTags;
-    std::unordered_set<int> refinementSurfaceTags;
     if (!tools.empty()) {
         std::vector<DimTag> fragments;
         std::vector<std::vector<DimTag>> fragmentMap;
@@ -770,17 +710,6 @@ void extractBoundaryEdges(const std::vector<int>& curves,
                  fragmentMap[firstConductor + conductor]) {
                 if (dimension == 2) {
                     conductorSurfaceTags.insert(surface);
-                }
-            }
-        }
-        const std::size_t firstRefinement =
-            firstConductor + definition.conductors.size();
-        for (std::size_t refinement = 0;
-             refinement < definition.refinementRegions.size(); ++refinement) {
-            for (const auto& [dimension, surface] :
-                 fragmentMap[firstRefinement + refinement]) {
-                if (dimension == 2) {
-                    refinementSurfaceTags.insert(surface);
                 }
             }
         }
@@ -815,16 +744,10 @@ void extractBoundaryEdges(const std::vector<int>& curves,
     }
 
     const std::vector<int> curves = boundaryCurves(surfaceMaterials);
-    std::vector<int> refinementSurfaces;
-    refinementSurfaces.reserve(refinementSurfaceTags.size());
-    for (const int surface : refinementSurfaceTags) {
-        if (surfaceMaterials.contains(surface)) {
-            refinementSurfaces.push_back(surface);
-        }
-    }
-    const std::vector<int> refinementCurves =
-        selectedSurfaceBoundaryCurves(refinementSurfaceTags, surfaceMaterials);
-    const double tolerance = 1.0e-7 * std::max(width, height);
+    // OCC curve bounding boxes are padded by about 1e-7 in normalized model
+    // coordinates.  Allow a larger physical tolerance so their opposite box
+    // corners still classify as lying on the same conductor side.
+    const double tolerance = 1.0e-6 * std::max(width, height);
     std::vector<int> physicalCurves;
     std::vector<int> outerCurves;
     for (const int curve : curves) {
@@ -834,9 +757,12 @@ void extractBoundaryEdges(const std::vector<int>& curves,
             outerCurves.push_back(curve);
         }
     }
+    if (physicalCurves.empty()) {
+        throw std::runtime_error(
+            "Gmsh conductor boundaries could not be classified for mesh sizing");
+    }
     const double baseTarget = p.maxElementSize / p.refinementFactor;
-    applyMeshFields(physicalCurves, outerCurves, refinementSurfaces,
-                    refinementCurves, surfaceMaterials,
+    applyMeshFields(physicalCurves, outerCurves, surfaceMaterials,
                     definition.backgroundPermittivity, definition.localTarget,
                     definition.transitionWidth, baseTarget, transform.scale);
     gmsh::model::mesh::generate(2);
@@ -891,13 +817,7 @@ void extractBoundaryEdges(const std::vector<int>& curves,
         std::min(baseTarget,
                  std::min(p.innerRadius, p.outerRadius - p.innerRadius) /
                      (8.0 * p.refinementFactor));
-    std::vector<int> refinementSurfaces;
-    refinementSurfaces.reserve(surfaceMaterials.size());
-    for (const auto& [surface, material] : surfaceMaterials) {
-        (void)material;
-        refinementSurfaces.push_back(surface);
-    }
-    applyMeshFields(curves, {}, refinementSurfaces, curves, surfaceMaterials,
+    applyMeshFields(curves, {}, surfaceMaterials,
                     relativePermittivity(p), localTarget,
                     0.35 * (p.outerRadius - p.innerRadius), baseTarget,
                     transform.scale);

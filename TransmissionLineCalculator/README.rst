@@ -224,6 +224,10 @@ The padding input is a dimensionless domain-padding factor rather than a distanc
 
 The Qt field panels default to a focused, equal-scale view for microstrip, CPW, and stripline. This display crop is equivalent to at most one padding unit and does not alter the mesh or extracted values; enable **Show full FEM domain** to inspect the complete padded mesh. Coaxial always shows its complete closed domain. Both native interfaces list the geometries as Microstrip, CPW, Stripline, then Coaxial, with Microstrip selected initially.
 
+In either field panel, use the mouse wheel to zoom around the pointer and drag
+with the left mouse button to pan.  A left-button double-click resets the view;
+zooming and panning are display-only and remain clamped to the FEM domain.
+
 Results are reported as ``Zc``/``Zwave`` in ohms, ``R'`` in ohms/m, ``L'`` in H/m, ``G'`` in S/m, ``C'`` in F/m, attenuation in 1/m, and power in W.
 
 Performance and accuracy
@@ -232,6 +236,11 @@ Performance and accuracy
 Both potential systems reuse the same mesh topology. The native executable avoids Python interpreter and object-allocation overhead, while both interactive front ends run meshing and solving away from their event thread. The result and performance panel expose separate mesh and solve timings; use the TUI benchmark repetitions field for measurements on the current machine instead of relying on a fixed speedup claim.
 
 ``Refine x2`` approximately doubles planar resolution, so triangle count and memory can grow by roughly four times. Reported engineering values should be checked by successive refinement until the quantities of interest stop changing. For microstrip and CPW, also increase domain padding to check the independent error caused by the remote zero-potential truncation wall; the same check applies to stripline's remote side walls.
+
+Conductor-adjacent sizing uses a sampled Gmsh ``Distance`` field followed by a
+``Threshold`` transition.  The old constant-size rectangles around traces and
+grounds have been removed; dielectric regions retain material-aware constant
+targets, while the conductor target now grades smoothly into those targets.
 
 The automated parity test fixes the 1 mm mesh and padding-1 reference inputs and requires the five principal extracted quantities for all four templates to remain within 4% of the established Python implementation. A separate native test requires padding 3 to remain stable when expanded to padding 4. Together they guard performance work and open-boundary defaults from silently changing the calculator's engineering results.
 

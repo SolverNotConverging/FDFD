@@ -18,7 +18,7 @@ from FEM_Mode_Solver.examples.microstrip_sibc import (
 )
 
 
-def test_microstrip_builder_places_dielectric_copper_and_refinement() -> None:
+def test_microstrip_builder_places_dielectric_and_copper() -> None:
     solver = build_solver()
 
     assert solver.frequency == FREQUENCY
@@ -42,11 +42,9 @@ def test_microstrip_builder_places_dielectric_copper_and_refinement() -> None:
         (SUBSTRATE_HEIGHT, SUBSTRATE_HEIGHT + COPPER_THICKNESS)
     )
 
-    assert len(solver.geometry.refinements) == 1
-    refinement = solver.geometry.refinements[0]
-    assert refinement.name == "strip_edge_refinement"
-    assert refinement.max_element_size == pytest.approx(0.12e-3)
-    assert refinement.transition_width == pytest.approx(0.60e-3)
+    # PEC/SIBC sizing is generated directly from conductor curves.  Keeping a
+    # rectangular constant-size overlay here would mask the smooth transition.
+    assert solver.geometry.refinements == []
 
 
 @pytest.mark.gmsh
@@ -74,7 +72,7 @@ def test_microstrip_mesh_keeps_material_and_named_sibc_facets() -> None:
     )
     assert mesh.info.material_aware
     assert mesh.info.boundary_refinement == pytest.approx(0.5)
-    assert mesh.info.refinement_regions == 1
+    assert mesh.info.refinement_regions == 0
 
     centroids = mesh.nodes[mesh.elements].mean(axis=1)
     for conductor in solver.geometry.boundaries:

@@ -81,6 +81,28 @@ namespace {
     return validBounds(focused) ? focused : full;
 }
 
+[[nodiscard]] FieldViewBounds clampToLimits(
+    const FieldViewBounds& bounds,
+    const FieldViewBounds& limits
+) {
+    if (!validBounds(bounds) || !validBounds(limits)) {
+        return bounds;
+    }
+    const auto width = bounds.xMax - bounds.xMin;
+    const auto height = bounds.yMax - bounds.yMin;
+    const auto limitWidth = limits.xMax - limits.xMin;
+    const auto limitHeight = limits.yMax - limits.yMin;
+    const auto xMin = width >= limitWidth
+        ? limits.xMin
+        : std::clamp(bounds.xMin, limits.xMin, limits.xMax - width);
+    const auto xMax = width >= limitWidth ? limits.xMax : xMin + width;
+    const auto yMin = height >= limitHeight
+        ? limits.yMin
+        : std::clamp(bounds.yMin, limits.yMin, limits.yMax - height);
+    const auto yMax = height >= limitHeight ? limits.yMax : yMin + height;
+    return {xMin, xMax, yMin, yMax};
+}
+
 } // namespace
 
 std::optional<FieldViewBounds> fieldMeshBounds(const Result& result) {
@@ -145,6 +167,60 @@ bool fieldViewIsCropped(
 bool fieldViewContains(const FieldViewBounds& bounds, const Vec2& point) {
     return point.x >= bounds.xMin && point.x <= bounds.xMax
         && point.y >= bounds.yMin && point.y <= bounds.yMax;
+}
+
+FieldViewBounds zoomFieldView(
+    const FieldViewBounds& bounds,
+    const FieldViewBounds& limits,
+    const Vec2& anchor,
+    const double scale
+) {
+    if (!validBounds(bounds) || !validBounds(limits) || !std::isfinite(scale)
+        || scale <= 0.0 || !std::isfinite(anchor.x) || !std::isfinite(anchor.y)) {
+        return bounds;
+    }
+    const auto width = bounds.xMax - bounds.xMin;
+    const auto height = bounds.yMax - bounds.yMin;
+    const auto limitWidth = limits.xMax - limits.xMin;
+    const auto limitHeight = limits.yMax - limits.yMin;
+    constexpr double minimumFraction = 1.0e-6;
+    const auto minimumScale = std::max(
+        minimumFraction * limitWidth / width,
+        minimumFraction * limitHeight / height
+    );
+    // Expand until both axes reach their limits.  One axis can reach its FEM
+    // boundary first (the focused stripline view already has full height), in
+    // which case that axis stays clamped while the other continues outward.
+    const auto maximumScale = std::max(limitWidth / width, limitHeight / height);
+    const auto boundedScale = std::clamp(scale, minimumScale, maximumScale);
+    const FieldViewBounds zoomed{
+        anchor.x + (bounds.xMin - anchor.x) * boundedScale,
+        anchor.x + (bounds.xMax - anchor.x) * boundedScale,
+        anchor.y + (bounds.yMin - anchor.y) * boundedScale,
+        anchor.y + (bounds.yMax - anchor.y) * boundedScale,
+    };
+    return clampToLimits(zoomed, limits);
+}
+
+FieldViewBounds panFieldView(
+    const FieldViewBounds& bounds,
+    const FieldViewBounds& limits,
+    const double xOffset,
+    const double yOffset
+) {
+    if (!validBounds(bounds) || !validBounds(limits)
+        || !std::isfinite(xOffset) || !std::isfinite(yOffset)) {
+        return bounds;
+    }
+    return clampToLimits(
+        {
+            bounds.xMin + xOffset,
+            bounds.xMax + xOffset,
+            bounds.yMin + yOffset,
+            bounds.yMax + yOffset,
+        },
+        limits
+    );
 }
 
 std::vector<std::size_t> visibleFieldSampleIndices(

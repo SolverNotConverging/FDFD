@@ -186,6 +186,50 @@ void testVisibleSampleSelection() {
           "arrow candidates must include only samples inside the viewport");
 }
 
+void testCursorAnchoredZoomAndLimits() {
+    const tl::FieldViewBounds limits{-10.0, 10.0, -5.0, 5.0};
+    const tl::FieldViewBounds initial{-4.0, 4.0, -2.0, 2.0};
+    const tl::Vec2 anchor{2.0, 1.0};
+    const auto zoomed = tl::zoomFieldView(initial, limits, anchor, 0.5);
+    checkNear(zoomed.xMin, -1.0, "zoom must preserve cursor-relative x minimum");
+    checkNear(zoomed.xMax, 3.0, "zoom must preserve cursor-relative x maximum");
+    checkNear(zoomed.yMin, -0.5, "zoom must preserve cursor-relative y minimum");
+    checkNear(zoomed.yMax, 1.5, "zoom must preserve cursor-relative y maximum");
+
+    const auto zoomedOut = tl::zoomFieldView(initial, limits, anchor, 100.0);
+    checkNear(zoomedOut.xMin, limits.xMin,
+              "maximum zoom-out must reach full x domain");
+    checkNear(zoomedOut.xMax, limits.xMax,
+              "maximum zoom-out must reach full x domain");
+    checkNear(zoomedOut.yMin, limits.yMin,
+              "maximum zoom-out must reach full y domain");
+    checkNear(zoomedOut.yMax, limits.yMax,
+              "maximum zoom-out must reach full y domain");
+}
+
+void testPanClampsToMeshDomain() {
+    const tl::FieldViewBounds limits{-10.0, 10.0, -5.0, 5.0};
+    const tl::FieldViewBounds initial{-4.0, 4.0, -2.0, 2.0};
+    const auto panned = tl::panFieldView(initial, limits, 20.0, -20.0);
+    checkNear(panned.xMin, 2.0, "pan must clamp at right domain edge");
+    checkNear(panned.xMax, 10.0, "pan must clamp at right domain edge");
+    checkNear(panned.yMin, -5.0, "pan must clamp at lower domain edge");
+    checkNear(panned.yMax, -1.0, "pan must preserve height when clamped");
+
+    const tl::FieldViewBounds fullHeight{-4.0, 4.0, -5.0, 5.0};
+    const auto horizontalPan = tl::panFieldView(
+        fullHeight, limits, 20.0, 2.0
+    );
+    checkNear(horizontalPan.xMin, 2.0,
+              "full-height view must still pan horizontally");
+    checkNear(horizontalPan.xMax, 10.0,
+              "full-height horizontal pan must clamp at domain edge");
+    checkNear(horizontalPan.yMin, -5.0,
+              "full-height pan must retain lower y limit");
+    checkNear(horizontalPan.yMax, 5.0,
+              "full-height pan must retain upper y limit");
+}
+
 } // namespace
 
 int main() {
@@ -194,7 +238,9 @@ int main() {
         testPaddingPolicy();
         testCoaxialAlwaysUsesFullDomain();
         testVisibleSampleSelection();
-        std::cout << "4 field-view test groups passed\n";
+        testCursorAnchoredZoomAndLimits();
+        testPanClampsToMeshDomain();
+        std::cout << "6 field-view test groups passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "[FAIL] " << error.what() << '\n';

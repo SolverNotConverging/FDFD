@@ -34,6 +34,20 @@ struct FieldViewBounds {
     const Vec2& point
 );
 
+[[nodiscard]] FieldViewBounds zoomFieldView(
+    const FieldViewBounds& bounds,
+    const FieldViewBounds& limits,
+    const Vec2& anchor,
+    double scale
+);
+
+[[nodiscard]] FieldViewBounds panFieldView(
+    const FieldViewBounds& bounds,
+    const FieldViewBounds& limits,
+    double xOffset,
+    double yOffset
+);
+
 [[nodiscard]] std::vector<std::size_t> visibleFieldSampleIndices(
     const Result& result,
     const FieldViewBounds& bounds
