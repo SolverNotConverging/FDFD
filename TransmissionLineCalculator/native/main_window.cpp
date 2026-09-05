@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <complex>
 #include <exception>
 #include <stdexcept>
@@ -88,6 +89,8 @@ template <typename Value>
            nearlyEqual(left.frequencyHz, right.frequencyHz) &&
            nearlyEqual(left.maxElementSize, right.maxElementSize) &&
            nearlyEqual(left.refinementFactor, right.refinementFactor) &&
+           left.maxRefinements == right.maxRefinements &&
+           nearlyEqual(left.adaptiveTolerance, right.adaptiveTolerance) &&
            nearlyEqual(left.innerRadius, right.innerRadius) &&
            nearlyEqual(left.outerRadius, right.outerRadius) &&
            nearlyEqual(left.outerConductorThickness,
@@ -299,6 +302,8 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             {InputKey::LossTangent, "Loss tangent", "0.0002", 1.0, false},
             conductivity,
             mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
         };
     case LineType::Microstrip:
         return {
@@ -311,6 +316,8 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             loss,
             conductivity,
             mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
         };
     case LineType::Stripline:
         return {
@@ -323,6 +330,8 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             loss,
             conductivity,
             mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
         };
     case LineType::CoplanarWaveguide:
         return {
@@ -337,6 +346,8 @@ std::vector<MainWindow::EntryDefinition> MainWindow::definitionsFor(LineType typ
             loss,
             conductivity,
             mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
         };
     }
     return {};
@@ -449,6 +460,15 @@ Parameters MainWindow::readParameters() const {
         case InputKey::MetalConductivity:
             parameters.metalConductivity = value;
             break;
+        case InputKey::MaxRefinements:
+            if (value != std::floor(value) || value > std::numeric_limits<int>::max()) {
+                inputError(QStringLiteral("Max adaptive refinements must be an integer."));
+            }
+            parameters.maxRefinements = static_cast<int>(value);
+            break;
+        case InputKey::AdaptiveTolerance:
+            parameters.adaptiveTolerance = value;
+            break;
         case InputKey::MaxElementSize:
             parameters.maxElementSize = value;
             break;
@@ -548,10 +568,11 @@ void MainWindow::applyOutcome(const SolveOutcome& outcome) {
     const auto timing = QStringLiteral(" Mesh %1 ms; solve %2 ms.")
         .arg(QString::number(result_->meshMilliseconds, 'f', 1),
              QString::number(result_->solveMilliseconds, 'f', 1));
-    setStatus((outcome.refinement
-                   ? QStringLiteral("Refined FEM solution complete.")
-                   : QStringLiteral("Solved. Refine x2 halves the current FEM element size."))
-              + timing);
+    setStatus(QStringLiteral("Solved with %1 adaptive refinements; residual %2 (%3).")
+        .arg(static_cast<int>(result_->adaptiveHistory.size()) - 1)
+        .arg(result_->adaptiveHistory.back()[1], 0, 'g', 4)
+        .arg(result_->adaptiveConverged ? QStringLiteral("threshold met")
+                                      : QStringLiteral("refinement limit reached")) + timing);
 }
 
 void MainWindow::invalidateSolution(const QString& status) {

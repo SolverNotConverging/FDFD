@@ -5,6 +5,45 @@ Transmission Line Calculator is a native C++20 application for fast quasi-TEM ex
 
 The numerical core is also available as the reusable ``tl-core`` CMake target.
 
+The `API reference <API_REFERENCE.rst>`_ documents the public C++ functions,
+every Parameters field, mesh/result records, and CMake integration. Each API
+has an input table showing required/optional status, expected type, and
+argument meaning.
+
+Simple library tutorial
+-----------------------
+
+.. code-block:: cpp
+
+   #include "solver.hpp"
+   #include <iostream>
+
+   int main() {
+       auto parameters = tl::defaultParameters(tl::LineType::Coaxial);
+       parameters.maxRefinements = 0;
+       const auto result = tl::solve(parameters);
+       std::cout << result.characteristicImpedance << " ohm\n";
+   }
+
+All example calculations disable refinement with ``maxRefinements = 0``;
+the library and interface defaults remain adaptive. For the same single-mesh
+tutorial in the GUI/TUI, choose Coaxial, set **Max adaptive refinements** to
+**0**, then calculate.
+
+``examples/line_comparison.cpp`` compares all four geometry templates and opens
+a Qt window with one tab per geometry, showing electric and magnetic fields
+with mesh overlays. Build
+it from the repository root after installing the dependencies below:
+
+.. code-block:: console
+
+   cmake -S TransmissionLineCalculator -B build -DTL_BUILD_EXAMPLES=ON
+   cmake --build build --target tl-line-comparison
+   ./build/tl-line-comparison
+
+On Windows use ``build\tl-line-comparison.exe``; multi-configuration generators
+place the executable under the selected configuration subdirectory.
+
 What it computes
 ----------------
 
@@ -13,6 +52,10 @@ The solver asks Gmsh to create a conforming triangular mesh and solves two scala
 #. the physical complex dielectric gives the electric field and complex capacitance per unit length;
 
 #. the same cross-section filled with vacuum gives vacuum capacitance and the unit-current magnetic-field dual.
+
+The two solves reuse the sparse symbolic ordering when their compressed matrix
+patterns match, while recomputing numerical factors for each material.  Pattern
+comparison protects this reuse if future assembly changes alter connectivity.
 
 The result contains the native mesh and transverse E/H samples as well as ``n_eff``, propagation constant, circuit characteristic impedance, field wave impedance, power, and the complete R/L/G/C per-length model. Optional finite bulk metal conductivity uses a first-order good-conductor surface-impedance correction on the named signal and ground conductors. The artificial remote PEC truncation boundary is never counted as lossy metal.
 
@@ -235,7 +278,26 @@ Performance and accuracy
 
 Both potential systems reuse the same mesh topology. The native executable avoids Python interpreter and object-allocation overhead, while both interactive front ends run meshing and solving away from their event thread. The result and performance panel expose separate mesh and solve timings; use the TUI benchmark repetitions field for measurements on the current machine instead of relying on a fixed speedup claim.
 
-``Refine x2`` approximately doubles planar resolution, so triangle count and memory can grow by roughly four times. Reported engineering values should be checked by successive refinement until the quantities of interest stop changing. For microstrip and CPW, also increase domain padding to check the independent error caused by the remote zero-potential truncation wall; the same check applies to stripline's remote side walls.
+Every calculation now adapts by default. The GUI and TUI expose maximum adaptive
+refinements (default 2) and a residual threshold (default 0.05); the C++ API uses
+``Parameters::maxRefinements`` and ``Parameters::adaptiveTolerance``. There is
+one initial solve, followed by at most that many refinements, each increasing
+mesh density by 1.5. Coarse initial meshes can be supplied with
+``maxElementSize``. Zero refinements keeps the initial mesh.
+
+The normalized normal-flux jump residual is evaluated independently for the
+dielectric and vacuum solves; the larger controls stopping. It estimates
+discretization error, independently of the sparse LU residual, and is not a
+certified error bound. ``Result::adaptiveHistory`` records element count and
+residual per pass; ``adaptiveConverged`` distinguishes meeting the threshold
+from exhausting the budget. The interfaces show the final residual and stop
+reason, and timings cover the entire adaptive run.
+
+``Refine x2`` doubles the initial planar resolution for a new adaptive run, so
+triangle count and memory can grow by roughly four times before adaptation.
+For microstrip and CPW, also increase domain padding to check the independent
+error caused by the remote zero-potential truncation wall; the same check applies
+to stripline's remote side walls.
 
 Conductor-adjacent sizing uses a sampled Gmsh ``Distance`` field followed by a
 ``Threshold`` transition.  The old constant-size rectangles around traces and

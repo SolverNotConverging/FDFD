@@ -10,6 +10,46 @@ Electrostatic FEM Solver
 It uses Gmsh for interface-conforming, locally refined line/triangle meshes and
 scikit-fem P1 elements for sparse assembly.  It is not an FDFD solver.
 
+The `API reference <API_REFERENCE.rst>`_ documents every public constructor,
+method, property, and module helper with argument tables showing required or
+optional status, expected types, defaults, and explanations.
+
+All examples and tutorials use ``max_refinements=0`` for a reproducible
+single-mesh solve. This does not change the library's adaptive defaults.
+
+Simple capacitor tutorial
+-------------------------
+
+.. code-block:: python
+
+   from Electrostatic_Solver import ElectrostaticSolver
+
+   solver = ElectrostaticSolver(dim=1, domain=(0.0, 1e-3), outer_potential=None)
+   solver.set_potential("left", 0.0)
+   solver.set_potential("right", 1.0)
+   solver.discretize(max_element_size=0.1e-3)
+   result = solver.solve(max_refinements=0)
+   print(result.energy)
+   print(result.adaptive_history)
+   solver.visualize()
+
+This produces a linear potential and a uniform electric field. Use
+``result.coordinates`` to locate the nodal values and
+``result.element_electric_field`` for unsmoothed element fields.
+
+Runnable cases
+--------------
+
+Run these modules from the repository root:
+
+* ``python -m Electrostatic_Solver.examples.capacitor_1d``: basic capacitor.
+* ``python -m Electrostatic_Solver.examples.anisotropic_2d``: tensor dielectric.
+* ``python -m Electrostatic_Solver.examples.layered_and_charged``: layered
+  dielectric energy check and a charged 2D domain with an analytic potential.
+
+Every example opens Matplotlib GUI plots; the layered/charged example opens
+both results together. Use an interactive Matplotlib backend for desktop runs.
+
 Breaking 1.0 Change
 -------------------
 
@@ -110,12 +150,33 @@ fixed-potential boundaries.  Set either factor to ``None`` to disable it;
 optional ``*_refinement_width`` values control grading distance in physical
 units.
 
+Each ``solve()`` also performs solution-driven local refinement by default.
+The estimator combines jumps in normal displacement with the Poisson volume
+residual, so a physical electric-field jump at a dielectric interface alone
+does not cause refinement.  Marked cells are bisected conformingly and inherit
+their parent's material.  The defaults allow two refinement passes, stop at a
+relative flux indicator of 0.05, and cap the final mesh at 200,000 elements.
+
+.. code-block:: python
+
+   result = solver.solve(max_refinements=0, adaptive_tolerance=0.02,
+                         marking_fraction=0.5, max_elements=100_000)
+   print(result.adaptive_history)
+   fixed_mesh_result = solver.solve(max_refinements=0, adaptive=False)
+
+``marking_fraction`` selects the smallest set of cells accounting for that
+fraction of the squared indicator.  History records the mesh sizes, indicators,
+and whether tolerance, refinement count, or element budget stopped adaptation.
+This indicator is a refinement heuristic, not a certified solution-error bound.
+Use the returned result's mesh when indexing fields; adaptation may replace
+the mesh originally returned by ``discretize()``.
+
 Solving and Results
 -------------------
 
 .. code-block:: python
 
-   result = solver.solve()
+   result = solver.solve(max_refinements=0)
    phi = result.potential
    ex, ey = solver.compute_electric_field()
 
@@ -124,6 +185,9 @@ Solving and Results
 * ``coordinates`` and ``elements``: unstructured mesh topology;
 * ``potential``: nodal voltage;
 * ``electric_field`` and ``displacement_field``: measure-weighted nodal fields;
+* ``element_electric_field`` and ``element_displacement_field``: unaveraged
+  fields of shape ``(elements, dimension)``, preserving dielectric jumps;
+* ``adaptive_history``: per-pass error indicators and stopping reason;
 * ``energy``: electrostatic energy (per unit depth in 2D);
 * ``reaction`` and ``conductor_charges``: Dirichlet reaction charge;
 * ``residual_norm``: relative residual on unconstrained degrees of freedom.
@@ -141,7 +205,7 @@ The familiar calls still exist:
    solver = ElectrostaticSolver(mesh_size=(50, 50), dim=2)
    solver.add_object((slice(10, 20), slice(15, 35)), erxx=7, eryy=3)
    solver.set_potential((slice(24, 26), slice(10, 40)), 100)
-   solver.solve()
+   solver.solve(max_refinements=0)
 
 Here slices are converted to physical rectangles first; ``mesh_size`` supplies
 the implicit domain and target sizing, rather than allocating a finite-

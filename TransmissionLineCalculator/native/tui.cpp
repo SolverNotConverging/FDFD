@@ -16,6 +16,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <complex>
 #include <cstdlib>
 #include <functional>
@@ -53,6 +54,8 @@ enum class InputKey {
     DomainPaddingFactor,
     MetalConductivity,
     MaxElementSize,
+    MaxRefinements,
+    AdaptiveTolerance,
 };
 
 struct FieldDefinition {
@@ -117,6 +120,8 @@ struct GeometryForm {
                 {InputKey::LossTangent, "Loss tangent", "0.0002", 1.0, false},
                 conductivity,
                 mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
             };
         case LineType::Microstrip:
             return {
@@ -131,6 +136,8 @@ struct GeometryForm {
                 loss,
                 conductivity,
                 mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
             };
         case LineType::Stripline:
             return {
@@ -144,6 +151,8 @@ struct GeometryForm {
                 loss,
                 conductivity,
                 mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
             };
         case LineType::CoplanarWaveguide:
             return {
@@ -159,6 +168,8 @@ struct GeometryForm {
                 loss,
                 conductivity,
                 mesh,
+            {InputKey::MaxRefinements, "Max adaptive refinements", "2", 1.0, false},
+            {InputKey::AdaptiveTolerance, "Adaptive residual threshold", "0.05", 1.0},
             };
     }
     return {};
@@ -213,6 +224,8 @@ struct GeometryForm {
            nearlyEqual(left.frequencyHz, right.frequencyHz) &&
            nearlyEqual(left.maxElementSize, right.maxElementSize) &&
            nearlyEqual(left.refinementFactor, right.refinementFactor) &&
+           left.maxRefinements == right.maxRefinements &&
+           nearlyEqual(left.adaptiveTolerance, right.adaptiveTolerance) &&
            nearlyEqual(left.innerRadius, right.innerRadius) &&
            nearlyEqual(left.outerRadius, right.outerRadius) &&
            nearlyEqual(left.outerConductorThickness,
@@ -709,6 +722,18 @@ private:
                 case InputKey::MetalConductivity:
                     parameters.metalConductivity = *value;
                     break;
+                case InputKey::MaxRefinements:
+                    if (*value != std::floor(*value) || *value > std::numeric_limits<int>::max()) {
+                        field->error = "Must be a nonnegative integer.";
+                        if (!firstInvalid) { firstInvalid = field->input; }
+                        valid = false;
+                    } else {
+                        parameters.maxRefinements = static_cast<int>(*value);
+                    }
+                    break;
+                case InputKey::AdaptiveTolerance:
+                    parameters.adaptiveTolerance = *value;
+                    break;
                 case InputKey::MaxElementSize:
                     parameters.maxElementSize = *value;
                     break;
@@ -983,6 +1008,12 @@ private:
             Elements rows{
                 valueRow("Nodes", std::to_string(result.mesh.nodes.size())),
                 valueRow("Triangles", std::to_string(result.mesh.triangles.size())),
+                valueRow("Refinements", result.adaptiveHistory.empty() ? "N/A" :
+                    std::to_string(result.adaptiveHistory.size() - 1)),
+                valueRow("Residual", result.adaptiveHistory.empty() ? "N/A" :
+                    formatScientific(result.adaptiveHistory.back()[1], "")),
+                valueRow("Adaptive stop", result.adaptiveHistory.empty() ? "N/A" :
+                    result.adaptiveConverged ? "Threshold met" : "Refinement limit"),
                 valueRow("Mesh", formatScientific(result.meshMilliseconds, "ms")),
                 valueRow("Assembly", formatScientific(result.assemblyMilliseconds, "ms")),
                 valueRow("Factorize", formatScientific(result.factorizationMilliseconds, "ms")),

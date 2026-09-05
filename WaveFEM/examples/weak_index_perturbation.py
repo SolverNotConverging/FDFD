@@ -12,6 +12,7 @@ import wavefem as wf
 
 def main() -> None:
     simulation = wf.Scattering2D(
+        solver_options=wf.SolverOptions(max_refinements=0),
         frequency=193.414489e12,
         angle=0.0,
         x_span=(0.0, 1.0e-6),
@@ -29,9 +30,9 @@ def main() -> None:
     mesh = simulation.mesh(wavelength_elements=8)
     print("selected max element size =", mesh.info.requested_maximum_edge)
 
-    modes = simulation.solve_modes(num_modes=1, neff_guess=1.0)
+    modes = simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0)
     simulation.set_incident_mode(modes[0])
-    result = simulation.run(h5_path="weak_index_perturbation.h5")
+    result = simulation.run(max_refinements=0, h5_path="weak_index_perturbation.h5")
 
     print("beta =", modes[0].beta)
     print("S11 =", result.S11)

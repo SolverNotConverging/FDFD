@@ -11,6 +11,27 @@ from FEM_Periodic_Solver import (
 from FEM_Periodic_Solver.constants import C_0
 
 
+@pytest.mark.parametrize("stage", ["mesh", "assembly"])
+def test_failed_refinement_preserves_previous_discretization(monkeypatch, stage):
+    import FEM_Periodic_Solver.solver_2d as module
+
+    solver = PeriodicModeSolver2D(10e9, 0.02, 0.005, num_modes=1, neff_guess=0.66)
+    mesh = solver.discretize(max_element_size=0.004)
+    systems = solver._require_current_systems()
+    result = solver.solve(max_refinements=0)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("simulated refinement failure")
+
+    monkeypatch.setattr(module, "discretize_periodic_2d" if stage == "mesh"
+                        else "assemble_periodic_system_2d", fail)
+    with pytest.raises(RuntimeError, match="simulated refinement"):
+        solver.refine()
+    assert solver.mesh_data is mesh
+    assert solver._require_current_systems() is systems
+    assert solver.result is result
+
+
 def _triangle_maximum_edges(mesh) -> np.ndarray:
     points = mesh.nodes[mesh.elements]
     return np.max(
@@ -81,7 +102,7 @@ def test_uniform_pec_te_mode_matches_analytic_cutoff() -> None:
         polarization="TE",
     )
     mesh = solver.discretize(max_element_size=2e-3)
-    mode = solver.solve(direction="forward")[0]
+    mode = solver.solve(max_refinements=0, direction="forward")[0]
     k0 = 2.0 * np.pi * frequency / C_0
     expected = np.sqrt(1.0 - (np.pi / (k0 * width)) ** 2)
     assert mode.neff.real == pytest.approx(expected, rel=6e-3)
@@ -131,7 +152,7 @@ def test_uniform_pec_tm_plane_wave_and_reconstructed_fields() -> None:
         boundary="pec",
     )
     solver.discretize(max_element_size=1e-3)
-    mode = solver.solve(direction="forward", eigensolver="dense")[0]
+    mode = solver.solve(max_refinements=0, direction="forward", eigensolver="dense")[0]
     assert mode.neff == pytest.approx(1.5, rel=2e-4, abs=1e-8)
     assert mode.polarization == "TM"
     assert np.max(np.abs(mode.component("Hy"))) > 0.0
@@ -143,11 +164,11 @@ def test_uniform_pec_tm_plane_wave_and_reconstructed_fields() -> None:
 def test_geometry_change_invalidates_discretization() -> None:
     solver = PeriodicModeSolver2D(10e9, 20e-3, 5e-3, polarization="TM")
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
     solver.discretize(max_element_size=2e-3)
     solver.add_rectangle(2.0, 1.0, (5e-3, 8e-3), (1e-3, 2e-3))
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
 
 
 def test_periodic_seam_allows_a_material_interface_when_topology_matches() -> None:
@@ -169,7 +190,7 @@ def test_uniform_guide_returns_reciprocal_aliases() -> None:
         neff_guess=0.0, polarization="TE",
     )
     solver.discretize(max_element_size=2e-3)
-    result = solver.solve(direction="all", eigensolver="dense")
+    result = solver.solve(max_refinements=0, direction="all", eigensolver="dense")
     assert result[0].neff == pytest.approx(-result[1].neff, abs=2e-12)
     assert {mode.direction for mode in result} == {"forward", "backward"}
 
@@ -207,7 +228,7 @@ def test_lossy_longitudinal_bilayer_matches_transfer_matrix() -> None:
     )
     solver.add_rectangle(epsilon_2, 1.0, (0.0, 4e-3), (thickness, period))
     solver.discretize(max_element_size=0.4e-3)
-    mode = solver.solve(direction="all", eigensolver="dense")[0]
+    mode = solver.solve(max_refinements=0, direction="all", eigensolver="dense")[0]
     assert mode.neff == pytest.approx(expected, rel=3e-4, abs=3e-5)
     assert mode.neff.imag < 0.0
     assert mode.residual is not None and mode.residual < 1e-9
@@ -227,18 +248,20 @@ def test_transverse_pml_has_passive_sign_and_converges() -> None:
         )
         solver.add_pml(3e-3, direction="x", sigma_max=3.0)
         solver.discretize(max_element_size=maximum)
-        mode = solver.solve(direction="all", eigensolver="dense")[0]
+        mode = solver.solve(max_refinements=0, direction="all", eigensolver="dense")[0]
         assert mode.neff.imag < 0.0
         assert mode.gamma.real > 0.0
         assert 0.0 < mode.pml_fraction < 1.0
         if maximum == 2.0e-3:
             with pytest.raises(SolverError, match=r"PML=[1-9]"):
                 solver.solve(
+                    max_refinements=0,
                     direction="all",
                     eigensolver="dense",
                     max_pml_fraction=0.0,
                 )
             unfiltered = solver.solve(
+                max_refinements=0,
                 direction="all",
                 eigensolver="dense",
                 max_pml_fraction=None,
@@ -275,5 +298,5 @@ def test_uniform_fem_and_fdfd_agree() -> None:
         boundary="pmc",
     )
     fem.discretize(max_element_size=1e-3)
-    fem_neff = fem.solve(direction="all", eigensolver="dense")[0].neff
+    fem_neff = fem.solve(max_refinements=0, direction="all", eigensolver="dense")[0].neff
     assert fem_neff == pytest.approx(fdfd.neff[0], rel=2.0e-2, abs=1.0e-8)

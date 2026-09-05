@@ -355,7 +355,7 @@ class PeriodicModeSolver2D:
         *,
         max_element_size: float | None = None,
         resolution: tuple[int, int] | None = None,
-        wavelength_elements: int = 10,
+        wavelength_elements: int = 4,
         element_order: int = 1,
         quadrature_order: int = 4,
     ) -> FEMPeriodicMesh2D:
@@ -376,9 +376,8 @@ class PeriodicModeSolver2D:
             maximum = _positive_real(max_element_size, "max_element_size")
         else:
             wavelength = C_0 / self.frequency / max(self._background_index(), 1.0)
-            maximum = min(wavelength / wavelength_count, min(self.x_range, self.period) / 12.0)
+            maximum = min(wavelength / wavelength_count, max(self.x_range, self.period) / 4.0)
 
-        self._invalidate_discretization()
         mesh_data = discretize_periodic_2d(
             self.geometry,
             max_element_size=maximum,
@@ -396,6 +395,9 @@ class PeriodicModeSolver2D:
             )
             for selected in polarizations
         }
+        # Commit only after meshing and every polarization assembly succeed.
+        # A failed refinement should leave the previous solved model usable.
+        self._invalidate_solution()
         self._mesh_data = mesh_data
         self._systems = systems
         self._discretized_revision = self.geometry.revision
@@ -637,7 +639,16 @@ class PeriodicModeSolver2D:
             return direction in ("forward", "right-decaying", "indeterminate")
         return direction in ("backward", "left-decaying")
 
-    def solve(
+    def solve(self, *args, max_refinements: int = 2,
+              adaptive_tolerance: float = 0.05, **options) -> PeriodicModeSet:
+        """Solve and remesh until the interface residual meets the threshold
+        or the refinement budget is exhausted. Gmsh regenerates periodic node
+        and edge constraints on every mesh. Zero refinements means one solve.
+        """
+        from .adaptive import solve_periodic
+        return solve_periodic(self, 2, args, options, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         neff_guess: complex | None = None,
         num_modes: int | None = None,

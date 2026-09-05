@@ -6,8 +6,7 @@ from FEM_Mode_Solver import ModeSolver2D
 
 
 def main() -> None:
-    wavelength = 0.5e-6
-    frequency = 299_792_458.0 / wavelength
+    frequency = 10e14
     solver = ModeSolver2D(
         frequency=frequency,
         x_range=(-2.0e-6, 2.0e-6),
@@ -32,7 +31,7 @@ def main() -> None:
     )
 
     solver.discretize(max_element_size=100e-9, quadrature_order=4)
-    modes = solver.solve(neff_guess=3.2, divergence_tolerance=1e-6)
+    modes = solver.solve(max_refinements=0)
 
     for number, mode in enumerate(modes, start=1):
         print(

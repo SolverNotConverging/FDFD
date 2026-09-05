@@ -5,9 +5,40 @@ WaveFEM is a compact full-vector finite-element solver for 2.5D frequency-domain
 
 The `complete API reference <API_REFERENCE.rst>`_ documents every top-level class, method, property, parameter, return value, unit, exception category, and the lower-level research interfaces for geometry, meshing, FEM assembly, equivalent sources, monitor sampling, and modal projection.
 
+Every documented API has an input table describing required/optional status,
+expected types, defaults, and argument meaning. All example mode and scattering
+solves explicitly use ``max_refinements=0``; sweep examples also set this on
+``SolverOptions`` so every cloned frequency point uses a fixed mesh. The
+library's adaptive defaults remain available to application code.
+
+Simple uniform-guide tutorial
+-----------------------------
+
+.. code-block:: python
+
+   import wavefem as wf
+
+   sim = wf.Scattering2D(
+       wavelength=1.0, x_span=(0.0, 0.5), z_span=(-2.0, 2.0),
+       transverse_boundary="pec",
+       solver_options=wf.SolverOptions(max_refinements=0),
+   )
+   sim.add_pml(z=0.5)
+   sim.mesh(max_element_size=0.15)
+   result = sim.solve(max_refinements=0)
+   print(result.reflection, result.transmission)  # approximately 0, 1
+   result.visualize_with_gui()
+
+Run ``python WaveFEM/examples/uniform_guide.py`` from the repository root for
+a separate lead-mode solve and second-order scattering on the same uniform
+guide. Existing scripts demonstrate weak index perturbations, oblique
+incidence, grounded-slab PEC slots, and frequency sweeps.
+Every example opens the native interactive viewer for its results.
+
 The current MVP provides:
 
-* a mixed first-order Nedelec + continuous P1 Maxwell discretization;
+* compatible Nedelec/scalar Maxwell discretizations: N1/P1 by default and
+  optional N2/P2 through ``SolverOptions(element_order=2)``;
 
 * fixed-frequency full-vector lead modes with angle-based oblique incidence;
 
@@ -24,6 +55,31 @@ The current MVP provides:
 * a separate ``WaveFEMViewer`` desktop application for persisted HDF5 results;
 
 * Gmsh geometry and conforming triangular meshes.
+
+The second-order option upgrades both components on the same affine triangles;
+it does not mix polynomial orders between cells.  Material and PEC mesh
+refinement remain enabled by default. All lead-mode and scattering solves now
+also adapt to the computed fields. The defaults ``max_refinements=2`` and
+``adaptive_tolerance=0.05`` allow two refinements after the initial solve and
+stop early when the normalized normal-D/tangential-H jump residual meets the
+threshold. Set them on ``SolverOptions`` or override them on ``solve()``,
+``run()``, or ``solve_modes()``. ``max_refinements=0`` keeps the starting mesh.
+The residual is separate from the algebraic tolerances and is not a certified
+error bound. ``result.solve_info`` records ``adaptive_history``,
+``adaptive_residual``, and ``adaptive_converged``; exhausting the budget does
+not imply convergence.
+
+A geometry-backed ``sim.solve()`` creates a coarse mesh, solves one lead mode,
+and selects incident mode zero when those steps have not been supplied. Configure
+geometry and PMLs first. The mesh defaults to four elements per material
+wavelength. Lead modes bisect marked intervals locally; scattering remeshes at
+1.5 times the previous density, preserving material, monitor, PML, PEC, and slot
+interfaces. Only the final adapted result is persisted. Sweep points inherit
+the simulation's ``SolverOptions`` independently.
+
+Lead modes retain their existing 1D
+mixed formulation; their sparse shift-invert now factors the original
+quadratic polynomial instead of the doubled companion pencil.
 
 The public API uses SI units. Ordinary ``frequency`` in hertz is the preferred spectral input throughout the high-level API. ``wavelength`` and angular ``omega`` remain accepted compatibility inputs, but new code and all examples use ``frequency``.
 
@@ -68,6 +124,7 @@ From the ``WaveFEM`` directory:
 .. code-block:: powershell
 
    conda env update --name RF_Engineering_env --file environment.yml
+   conda run --name RF_Engineering_env python -m pip install --editable ../fem_adaptivity --no-deps
    conda run --name RF_Engineering_env python -m pip install --editable . --no-deps
    conda run --name RF_Engineering_env python -m pytest
 
@@ -101,9 +158,9 @@ This deliberately small closed-transverse example is quick enough for a smoke te
    mesh = sim.mesh(wavelength_elements=8)
    print("maximum requested edge =", mesh.info.requested_maximum_edge)
 
-   modes = sim.solve_modes(num_modes=1, neff_guess=1.0)
+   modes = sim.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0)
    sim.set_incident_mode(modes[0])
-   result = sim.run(h5_path="weak_index_perturbation.h5")
+   result = sim.run(max_refinements=0, h5_path="weak_index_perturbation.h5")
 
    print("beta =", modes[0].beta)
    print("S11 =", result.S11)
@@ -118,53 +175,6 @@ This deliberately small closed-transverse example is quick enough for a smoke te
 
 ``visualize()`` displays the Matplotlib window before returning. Pass ``show=False`` only when embedding the returned axes in an existing application. See ``examples/weak_index_perturbation.py``, ``examples/slab_mode.py``, and ``examples/oblique_ky.py`` for runnable variants. The frequency-sweep workflow is shown in ``examples/frequency_sweep.py``; a grounded-slab leaky-wave antenna with a finite radiating slot is in ``examples/grounded_slab_slot.py``.
 
-Grounded-slab PEC slot and finite top plates
---------------------------------------------
-
-A zero-thickness ground plane inside the solve domain is a z-invariant background PEC sheet. Cut a finite opening only from the actual device:
-
-.. code-block:: python
-
-   sim = wf.Scattering2D(
-       frequency=20.0e9,
-       angle=0.0,
-       x_span=(-12e-3, 20e-3),
-       z_span=(-30e-3, 30e-3),
-   )
-   sim.add_rectangle(
-       x=(0.0, 4e-3), z="all", eps=4.0,
-       background=True, name="dielectric_slab",
-   )
-   ground = sim.add_pec(
-       x=0.0, z="all", background=True, name="ground_plane",
-   )
-   sim.add_slot(pec=ground, z=(-1e-3, 1e-3), name="ground_slot")
-   sim.add_pec(
-       x=4e-3, z=(-4e-3, -1.5e-3), background=False,
-       name="left_top_plate",
-   )
-   sim.add_pec(
-       x=4e-3, z=(1.5e-3, 4e-3), background=False,
-       name="right_top_plate",
-   )
-   sim.add_pml(x=4e-3, z=6e-3)
-   sim.set_monitors(left=-12e-3, right=12e-3)
-   sim.mesh(max_element_size=1e-3)
-   modes = sim.solve_modes(num_modes=1, neff_guess=1.8, num_elements=96)
-   sim.set_incident_mode(modes[0])
-   result = sim.run(h5_path="grounded_slab_slot.h5")
-
-The mode port contains the complete PEC sheet. In the 2D actual solve the slot facets are released, and their two one-sided incident magnetic reactions drive the scattered field. This is a boundary source: a valid slot solve has ``result.solve_info["source_active_fraction"] == 0`` when no material changes, but ``released_pec_facet_count > 0`` and a nonzero scattered field. In the HDF5 scene, the yellow ground line is split around the aperture.
-
-Finite actual-only PEC plates are compact boundary insertions and are absent from the lead-mode background. Their Nedelec/P1 tangential scattered-field trace is imposed as ``-E_inc``, so ``E_total,t=0`` on each plate. The mesh exposes these facets separately as ``mesh.inserted_pec_facets``, and integrated results record ``inserted_pec_facet_count`` and ``prescribed_pec_dof_count``. Background grounds must remain z-invariant; actual-only plates must lie strictly inside the non-PML interior.
-
-Run the example from the ``WaveFEM`` directory:
-
-.. code-block:: powershell
-
-   conda run --name RF_Engineering_env python examples/grounded_slab_slot.py
-
-The example has no command-line parser. It writes ``grounded_slab_slot.h5``, opens that result in ``wavefem-viewer``, and displays the field in Matplotlib. Run ``examples/frequency_sweep.py`` for a multi-frequency archive and response plot.
 
 Domain layout
 -------------
@@ -273,11 +283,13 @@ Run a strictly increasing ordinary-frequency sweep in hertz with:
    import wavefem as wf
 
    frequencies_hz = np.linspace(190.0e12, 196.0e12, 13)
+   from dataclasses import replace
+   sim.solver_options = replace(sim.solver_options, max_refinements=0)
    sweep = sim.sweep_frequencies(
        frequencies_hz,
        h5_path="frequency_sweep.h5",
        mesh_options={"wavelength_elements": 10},
-       mode_options={"num_modes": 2, "neff_guess": 2.4},
+       mode_options={"max_refinements": 0, "num_modes": 2, "neff_guess": 2.4},
        incident_mode=0,
    )
 
@@ -325,14 +337,13 @@ For a MinGW build-tree executable, Python reads its ``CMakeCache.txt`` and adds 
 
 See the `WaveFEMViewer README <../WaveFEMViewer/README.rst>`_ for complete installation, uninstallation, command-line, file-picker, and GUI usage instructions. Its lazy native reader indexes a sweep first and loads only the selected frequency's large field arrays. The viewer reads HDF5 only; no FEM solve is started. Its 2D plots put ``z`` on the horizontal axis and ``x`` on the vertical axis and render the stored dielectric, PEC, PMC, wave-port, and PML scene styles.
 
-The installed inspector remains headless by default. Add ``--gui`` to open a file or directory; with no path it opens the current directory. The runnable ``examples/inspect_h5.py`` convenience script opens the current directory in the GUI when it is invoked without arguments:
+The installed inspector remains headless by default. Add ``--gui`` to open a file or directory; with no path it opens the current directory:
 
 .. code-block:: bash
 
    wavefem-inspect-h5 result.h5
    wavefem-inspect-h5 --gui
-   python examples/inspect_h5.py
-   python examples/inspect_h5.py --gui results
+   wavefem-inspect-h5 --gui results
 
 Power and fields
 ----------------
@@ -381,11 +392,12 @@ For a callback-defined device, provide the lead modes explicitly instead of aski
        (0.0, 1.0e-6), background=wf.Material(), boundary="pec"
    )
    modes = wf.ModeSolver(cross_section, frequency=193.414489e12).solve(
+       max_refinements=0,
        num_modes=1, neff_guess=1.0
    )
    sim.set_modes(modes)
    sim.set_incident_mode(0)
-   result = sim.run(h5_path="callback_result.h5")
+   result = sim.run(max_refinements=0, h5_path="callback_result.h5")
 
 The injected ``ModeSet`` is checked against the simulation frequency, ``ky``, and transverse span before it can be launched. Callback-defined simulations currently require ``angle=0`` or a directly prescribed compatibility ``ky``; nonzero angle resolution needs an integrated geometry-backed lead. The caller must also ensure a lossless z-invariant callback background, positive-z modal roots, and compact contrast bracketed by the explicit monitors; see the callback section of the `API reference <API_REFERENCE.rst>`_ for the complete contract.
 
@@ -398,7 +410,7 @@ Current explicit limits are:
 
 * scalar isotropic physical materials; PML tensors are internal diagonals;
 
-* triangular meshes with first-order Nedelec/P1 fields;
+* affine triangular meshes with compatible N1/P1 or N2/P2 fields;
 
 * passive reciprocal linear media and one incident mode per solve; compact material loss is supported, while active media and lossy uniform leads are rejected by the integrated power-accounting path;
 

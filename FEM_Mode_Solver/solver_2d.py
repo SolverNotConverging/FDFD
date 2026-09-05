@@ -565,9 +565,9 @@ class ModeSolver2D:
         *,
         max_element_size: float | None = None,
         resolution: tuple[int, int] | None = None,
-        wavelength_elements: int = 10,
+        wavelength_elements: int = 4,
         material_aware: bool = True,
-        interface_refinement: float | None = None,
+        interface_refinement: float | None = 0.7,
         interface_refinement_width: float | None = None,
         boundary_refinement: float | None = 0.5,
         boundary_refinement_width: float | None = None,
@@ -659,7 +659,7 @@ class ModeSolver2D:
             wavelength_size = C_0 / self.frequency / (
                 wavelength_count * max(self._background_refractive_index(), 1.0)
             )
-            maximum = min(wavelength_size, min(width, height) / 12.0)
+            maximum = min(wavelength_size, min(width, height) / 4.0)
         else:
             maximum = None
 
@@ -674,7 +674,6 @@ class ModeSolver2D:
                 f"Unsupported internal FEM boundary kind(s): {kinds}."
             )
 
-        self._invalidate_discretization()
         mesh_data = discretize_2d(
             self.geometry,
             max_element_size=maximum,
@@ -731,9 +730,11 @@ class ModeSolver2D:
             material_at=evaluator,
             boundary=self.geometry.outer_boundary,
             quadrature_order=quadrature,
+            element_order=order,
             pec_facets=pec_facets,
             impedance_boundaries=impedance_boundaries,
         )
+        self._invalidate_solution()
         self._mesh_data = mesh_data
         self._system = system
         self._discretized_revision = self.geometry.revision
@@ -1018,7 +1019,17 @@ class ModeSolver2D:
             return direction in ("forward", "right-decaying")
         return direction in ("backward", "left-decaying")
 
-    def solve(
+    def solve(self, *args, max_refinements: int = 2,
+              adaptive_tolerance: float = 0.05, **options) -> ModeSet:
+        """Solve from a coarse mesh and refine until the discretization residual
+        meets adaptive_tolerance or max_refinements mesh updates are used.
+        Pass max_refinements=0 for one solve on the initial mesh.
+        Remaining options are passed to the algebraic mode solve.
+        """
+        from .adaptive import solve_2d
+        return solve_2d(self, args, options, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         neff_guess: complex | None = None,
         num_modes: int | None = None,

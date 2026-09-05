@@ -607,6 +607,33 @@ void testRestoresExternalGmshState() {
     }
 }
 
+void testAdaptiveStopping() {
+    auto parameters = tl::defaultParameters(tl::LineType::Coaxial);
+    parameters.maxElementSize = 2.0e-3;
+    parameters.adaptiveTolerance = 1.0e-8;
+    const auto adapted = tl::solve(parameters);
+    check(adapted.adaptiveHistory.size() == 3, "default permits two refinements");
+    check(!adapted.adaptiveConverged, "a spent budget is not convergence");
+    check(adapted.adaptiveHistory.back()[0] > adapted.adaptiveHistory.front()[0],
+          "adaptive solve must increase mesh density");
+    check(adapted.adaptiveHistory.back()[1] < adapted.adaptiveHistory.front()[1],
+          "coax displacement residual must decrease with refinement");
+    parameters.adaptiveTolerance = 100.0;
+    const auto stopped = tl::solve(parameters);
+    check(stopped.adaptiveHistory.size() == 1 && stopped.adaptiveConverged,
+          "threshold must stop refinement immediately");
+    parameters.maxRefinements = 0;
+    parameters.adaptiveTolerance = 1.0e-8;
+    const auto fixed = tl::solve(parameters);
+    check(fixed.adaptiveHistory.size() == 1 && !fixed.adaptiveConverged,
+          "zero budget must perform only the initial solve");
+    parameters.maxRefinements = -1;
+    expectInvalid(parameters, "negative adaptive refinement budget");
+    parameters.maxRefinements = 2;
+    parameters.adaptiveTolerance = std::numeric_limits<double>::quiet_NaN();
+    expectInvalid(parameters, "non-finite adaptive residual threshold");
+}
+
 using Test = std::pair<std::string_view, std::function<void()>>;
 
 } // namespace
@@ -614,6 +641,7 @@ using Test = std::pair<std::string_view, std::function<void()>>;
 int main() {
     const std::vector<Test> tests {
         {"all four defaults", testAllDefaults},
+        {"adaptive stopping", testAdaptiveStopping},
         {"distance-graded conductor mesh", testConductorMeshUsesDistanceGrading},
         {"Python padding-1 numerical parity", testPythonParityAtReferenceInputs},
         {"open-domain default padding convergence", testOpenDomainDefaultPaddingIsConverged},

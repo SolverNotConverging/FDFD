@@ -6,8 +6,9 @@ field pencil is
 
 ``(A0 + lambda*A1 + lambda**2*A2) e = 0``.
 
-The transverse field ``(Ex, Ey)`` uses a first-order H(curl) Nedelec space and
-the longitudinal field ``Ez`` uses continuous P1.  This pairing preserves the
+The transverse field ``(Ex, Ey)`` uses an H(curl) Nedelec space and
+the longitudinal field ``Ez`` uses continuous scalars (N1/P1 or N2/P2).
+These compatible pairings preserve the
 curl conformity needed at material interfaces and avoids representing the
 longitudinal component with edge degrees of freedom.
 """
@@ -30,7 +31,7 @@ from scipy.sparse.linalg import (
     splu,
 )
 from skfem import Basis, BilinearForm, FacetBasis, MeshTri, asm
-from skfem.element import ElementComposite, ElementTriN1, ElementTriP1
+from skfem.element import ElementComposite, ElementTriN1, ElementTriN2, ElementTriP1, ElementTriP2
 
 from .boundaries import validate_surface_impedance
 from .constants import ETA_0
@@ -336,6 +337,7 @@ def assemble_mode_system_2d(
     material_at: MaterialEvaluator,
     boundary: str = "pec",
     quadrature_order: int = 4,
+    element_order: int = 1,
     pec_facets: ArrayLike | None = None,
     impedance_boundaries: Sequence[ImpedanceBoundaryInput] | None = None,
 ) -> ModeFEMSystem2D:
@@ -358,6 +360,11 @@ def assemble_mode_system_2d(
         raise ConfigurationError("boundary must be 'pec' or 'pmc'.")
     if isinstance(quadrature_order, bool) or int(quadrature_order) != quadrature_order or quadrature_order < 2:
         raise ConfigurationError("quadrature_order must be an integer of at least two.")
+    if isinstance(element_order, (bool, np.bool_)) or element_order not in (1, 2):
+        raise ConfigurationError("element_order must be 1 or 2.")
+    quadrature_order = max(int(quadrature_order), 2 * int(element_order))
+    transverse_element = ElementTriN1() if element_order == 1 else ElementTriN2()
+    scalar_element = ElementTriP1() if element_order == 1 else ElementTriP2()
 
     normalized_impedance = _impedance_boundary_data(mesh, impedance_boundaries)
     impedance_facets = (
@@ -371,7 +378,7 @@ def assemble_mode_system_2d(
     computational_mesh = mesh.scaled(float(k0))
     basis = Basis(
         computational_mesh,
-        ElementTriN1() * ElementTriP1(),
+        transverse_element * scalar_element,
         intorder=int(quadrature_order),
     )
     if not isinstance(basis.elem, ElementComposite):  # pragma: no cover - defensive
@@ -445,10 +452,10 @@ def assemble_mode_system_2d(
     longitudinal_indices = np.asarray(split_indices[1], dtype=np.int64)
 
     transverse_basis = Basis(
-        computational_mesh, ElementTriN1(), intorder=int(quadrature_order)
+        computational_mesh, transverse_element, intorder=int(quadrature_order)
     )
     scalar_basis = Basis(
-        computational_mesh, ElementTriP1(), intorder=int(quadrature_order)
+        computational_mesh, scalar_element, intorder=int(quadrature_order)
     )
     scalar_coordinates = scalar_basis.global_coordinates()
     gauss_epsilon, _ = evaluate_material(
@@ -529,11 +536,11 @@ def solve_qep_candidates(
 
     if candidate_count < 1:
         raise ValueError("candidate_count must be positive.")
-    left, right = linearized_pencil(system)
-    size = int(left.shape[0])
     n = system.ndofs
+    size = 2 * n
 
-    if size <= dense_linearization_limit:
+    if size <= dense_linearization_limit or size <= 3:
+        left, right = linearized_pencil(system)
         try:
             homogeneous, eigenvectors = linalg.eig(
                 left.toarray(),
@@ -563,21 +570,26 @@ def solve_qep_candidates(
 
     requested = min(max(2 * candidate_count, 8), size - 2)
     shift = complex(target)
-    perturbation = 1e-10j * max(1.0, abs(shift))
+    perturbation = 1e-6j * max(1.0, abs(shift))
     shifted = shift + perturbation
     try:
-        factor = splu(csc_matrix(left - shifted * right))
+        factor = splu(csc_matrix(system.polynomial(shifted)))
     except RuntimeError as exc:
         raise SolverError(
             f"The linearized FEM pencil could not be factorized near neff={target!r}."
         ) from exc
 
+    # Block elimination applies (L - s R)^-1 R using a factorization of
+    # Q(s), with n rows instead of the 2n-row companion pencil.  It also
+    # works when A2 is singular; no inverse of the mass block is needed.
+    coupling = system.A1 + shifted * system.A2
+
+    def apply_shift_invert(vector: ComplexArray) -> ComplexArray:
+        first = factor.solve(-(coupling @ vector[:n] + system.A2 @ vector[n:]))
+        return np.concatenate((first, vector[:n] + shifted * first))
+
     operator = LinearOperator(
-        (size, size),
-        matvec=lambda vector: np.asarray(
-            factor.solve(right @ vector), dtype=np.complex128
-        ),
-        dtype=np.complex128,
+        (size, size), matvec=apply_shift_invert, dtype=np.complex128
     )
     rng = np.random.default_rng(20260828)
     initial = rng.standard_normal(size) + 1j * rng.standard_normal(size)

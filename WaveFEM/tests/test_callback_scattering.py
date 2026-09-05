@@ -28,11 +28,11 @@ def test_callback_material_device_runs_with_injected_mode_set() -> None:
         wavelength=1.0,
         ky=0.0,
         num_elements=32,
-    ).solve(num_modes=1, neff_guess=np.sqrt(0.75))
+    ).solve(max_refinements=0, num_modes=1, neff_guess=np.sqrt(0.75))
     bound = simulation.set_modes(modes)
     simulation.set_incident_mode(bound[0])
 
-    result = simulation.solve()
+    result = simulation.solve(max_refinements=0)
 
     assert np.linalg.norm(result.E_scattered) > 0.0
     assert abs(result.S11) > 0.0

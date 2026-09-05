@@ -17,6 +17,24 @@ from FEM_Mode_Solver.solver_2d import ModeSolver2D
 
 
 @pytest.mark.gmsh
+def test_second_order_pair_improves_cutoff_on_the_same_mesh():
+    expected = np.sqrt(0.75)
+    errors = []
+    cells = []
+    for order in (1, 2):
+        solver = ModeSolver2D(C_0, 1.0, 0.5, num_modes=1, guess=expected)
+        mesh = solver.discretize(resolution=(5, 3), element_order=order)
+        mode = solver.solve(max_refinements=0, dense_linearization_limit=4)[0]
+        errors.append(abs(mode.neff - expected))
+        cells.append(mesh.elements)
+        assert mode.divergence_residual < 1e-7
+        assert mode.power.real == pytest.approx(1.0, rel=1e-9)
+        assert mesh.info.element_order == order
+    np.testing.assert_array_equal(cells[0], cells[1])
+    assert errors[1] < errors[0] * 0.15
+
+
+@pytest.mark.gmsh
 def test_geometry_is_placed_before_explicit_discretization() -> None:
     solver = ModeSolver2D(C_0, 1.0, 0.5, num_modes=1)
     assert solver.solution is None
@@ -36,7 +54,7 @@ def test_geometry_is_placed_before_explicit_discretization() -> None:
     assert region.name == "core"
     assert not solver.discretized
     with pytest.raises(NotDiscretizedError, match="discretized"):
-        solver.solve()
+        solver._solve_once()
 
     mesh = solver.discretize(resolution=(6, 4))
     assert solver.discretized
@@ -47,7 +65,7 @@ def test_geometry_is_placed_before_explicit_discretization() -> None:
     solver.add_circle(1.5, 1.0, (0.5, 0.25), 0.04, name="inclusion")
     assert not solver.discretized
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
 
 
 @pytest.mark.gmsh
@@ -65,7 +83,7 @@ def test_direct_scene_mutation_invalidates_mesh_and_result() -> None:
     assert not solver.discretized
     assert solver.solution is None
     with pytest.raises(NotDiscretizedError, match="discretized"):
-        solver.solve()
+        solver._solve_once()
 
 
 def test_constructor_accepts_neff_guess_and_rejects_two_guess_names() -> None:
@@ -104,6 +122,7 @@ def test_homogeneous_pec_te10_matches_the_rectangular_guide_limit() -> None:
 
     assert max(solver.system.relative_hermiticity_errors()) < 1e-12
     modes = solver.solve(
+        max_refinements=0,
         residual_tolerance=1e-9,
         divergence_tolerance=1e-8,
     )
@@ -152,7 +171,7 @@ def test_passive_bulk_loss_uses_negative_imaginary_neff() -> None:
         background_epsilon=epsilon,
     )
     solver.discretize(resolution=(7, 4))
-    mode = solver.solve(divergence_tolerance=1e-7)[0]
+    mode = solver.solve(max_refinements=0, divergence_tolerance=1e-7)[0]
 
     assert mode.neff.real == pytest.approx(expected.real, rel=4e-3)
     assert mode.neff.imag == pytest.approx(expected.imag, rel=8e-2)
@@ -186,6 +205,7 @@ def test_passive_sibc_post_uses_negative_imaginary_neff() -> None:
     assert solver.system.impedance_boundaries[0][1] == post.impedance
 
     mode = solver.solve(
+        max_refinements=0,
         residual_tolerance=1e-8,
         divergence_tolerance=1e-6,
     )[0]
@@ -209,6 +229,7 @@ def test_transformation_optics_pml_uses_forward_passive_branch() -> None:
     solver.add_pml(0.2, sigma_max=2.0)
     solver.discretize(resolution=(6, 3))
     mode = solver.solve(
+        max_refinements=0,
         direction="all",
         residual_tolerance=1e-7,
         divergence_tolerance=1e-6,

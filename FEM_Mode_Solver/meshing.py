@@ -88,7 +88,7 @@ def discretize_1d(
     if isinstance(max_element_size, (bool, np.bool_)):
         raise MeshError("max_element_size must be finite and positive.")
     if resolution is None and max_element_size is None:
-        resolution = 160
+        resolution = 24
     if resolution is not None:
         if isinstance(resolution, bool) or int(resolution) != resolution or resolution < 2:
             raise MeshError("resolution must be an integer of at least two elements.")
@@ -334,8 +334,8 @@ def discretize_2d(
     without changing material or boundary provenance.
     """
 
-    if isinstance(element_order, (bool, np.bool_)) or element_order != 1:
-        raise MeshError("The current 2D backend supports first-order Nedelec/P1 elements only.")
+    if isinstance(element_order, (bool, np.bool_)) or element_order not in (1, 2):
+        raise MeshError("The 2D backend supports element_order=1 or 2.")
     width = geometry.x_span[1] - geometry.x_span[0]
     height = geometry.y_span[1] - geometry.y_span[0]
     if isinstance(max_element_size, (bool, np.bool_)):

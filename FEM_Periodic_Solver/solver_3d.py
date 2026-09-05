@@ -39,13 +39,24 @@ Direction = Literal["forward", "backward", "all"]
 
 
 def _positive_integer(value: int, name: str, minimum: int = 1) -> int:
-    if isinstance(value, (bool, np.bool_)) or int(value) != value or int(value) < minimum:
+    if isinstance(value, (bool, np.bool_, str, bytes)) or not np.isscalar(value):
         raise ConfigurationError(f"{name} must be an integer of at least {minimum}.")
-    return int(value)
+    try:
+        result = int(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigurationError(f"{name} must be an integer of at least {minimum}.") from exc
+    if result != value or result < minimum:
+        raise ConfigurationError(f"{name} must be an integer of at least {minimum}.")
+    return result
 
 
 def _positive_real(value: float, name: str) -> float:
-    result = float(value)
+    if isinstance(value, (bool, np.bool_, str, bytes)) or not np.isscalar(value):
+        raise ConfigurationError(f"{name} must be finite and positive.")
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigurationError(f"{name} must be finite and positive.") from exc
     if not np.isfinite(result) or result <= 0.0:
         raise ConfigurationError(f"{name} must be finite and positive.")
     return result
@@ -205,14 +216,21 @@ class PeriodicModeSolver3D:
         self._discretized_revision: int | None = None
         self._discretize_options: dict[str, object] | None = None
         self._refinement_scale = 1.0
+        self._invalidate_solution()
+
+    def _invalidate_solution(self) -> None:
+        self.result = None
+        self.modes = None
+        self.neff = None
+        self.beta = None
+        self.gamma = None
 
     def _geometry_changed(self) -> None:
         self.mesh_data = None
         self.mesh = None
         self.native_mesh = None
         self.system = None
-        self.result = None
-        self.modes = None
+        self._invalidate_solution()
         self._discretized_revision = None
 
     def add_box(
@@ -291,10 +309,11 @@ class PeriodicModeSolver3D:
         self,
         *,
         max_element_size: float | None = None,
-        wavelength_elements: int = 8,
+        wavelength_elements: int = 4,
         material_aware: bool = True,
         quadrature_order: int = 3,
     ) -> PeriodicMesh3D:
+        quadrature_order = _positive_integer(quadrature_order, "quadrature_order", 2)
         options = {
             "max_element_size": max_element_size,
             "wavelength_elements": wavelength_elements,
@@ -320,8 +339,7 @@ class PeriodicModeSolver3D:
         self.mesh = mesh_data
         self.native_mesh = mesh_data.mesh
         self.system = system
-        self.result = None
-        self.modes = None
+        self._invalidate_solution()
         self._discretized_revision = self.geometry.revision
         self._discretize_options = options
         return mesh_data
@@ -332,8 +350,13 @@ class PeriodicModeSolver3D:
             raise ConfigurationError("factor must be greater than one.")
         if self._discretize_options is None:
             raise NotDiscretizedError("discretize() must be called before refine().")
+        previous_scale = self._refinement_scale
         self._refinement_scale /= selected
-        return self.discretize(**self._discretize_options)
+        try:
+            return self.discretize(**self._discretize_options)
+        except Exception:
+            self._refinement_scale = previous_scale
+            raise
 
     def _require_system(self) -> PeriodicFEMSystem3D:
         if self.system is None or self.mesh_data is None:
@@ -520,7 +543,16 @@ class PeriodicModeSolver3D:
             },
         )
 
-    def solve(
+    def solve(self, *args, max_refinements: int = 2,
+              adaptive_tolerance: float = 0.05, **options) -> PeriodicModeSet:
+        """Solve and remesh until the interface residual meets the threshold
+        or the refinement budget is exhausted. Gmsh regenerates periodic node
+        and edge constraints on every mesh. Zero refinements means one solve.
+        """
+        from .adaptive import solve_periodic
+        return solve_periodic(self, 3, args, options, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         neff_guess: complex | None = None,
         num_modes: int | None = None,
@@ -574,7 +606,16 @@ class PeriodicModeSolver3D:
         target = self._default_guess() if neff_guess is None and self.neff_guess is None else _finite_complex(
             self.neff_guess if neff_guess is None else neff_guess, "neff_guess"
         )
-        candidate_count = max(4 * requested, requested + 12)
+        dense_linearization_limit = _positive_integer(
+            dense_linearization_limit, "dense_linearization_limit", 4
+        )
+        max_restarts = _positive_integer(max_restarts, "max_restarts", 0)
+        random_seed = _positive_integer(random_seed, "random_seed", 0)
+        if ncv is not None:
+            ncv = _positive_integer(ncv, "ncv", 2)
+        candidate_count = min(
+            max(4 * requested, requested + 12), max(1, 2 * system.ndofs - 2)
+        )
         resolved_method = method
         if method == "auto":
             resolved_method = "dense" if 2 * system.ndofs <= int(dense_linearization_limit) else "refined"

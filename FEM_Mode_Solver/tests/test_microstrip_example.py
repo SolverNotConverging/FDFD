@@ -85,6 +85,7 @@ def test_microstrip_example_solves_a_passive_quasi_tem_mode() -> None:
     solver = build_solver()
     solver.discretize(**MESH_OPTIONS)
     mode = solver.solve(
+        max_refinements=0,
         residual_tolerance=1e-7,
         divergence_tolerance=2e-5,
     )[0]

@@ -22,7 +22,7 @@ def main() -> None:
     )
 
     solver.discretize(max_element_size=60e-9)
-    modes = solver.solve(neff_guess=3.2)
+    modes = solver.solve(neff_guess=3.2, max_refinements=0)
 
     for number, mode in enumerate(modes, start=1):
         print(

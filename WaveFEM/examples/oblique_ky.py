@@ -18,7 +18,7 @@ def main() -> None:
         # Sparse direct solves can accumulate a few 1e-10 of normalized
         # residual on this oblique, PML-stretched mesh.  Keep the example's
         # acceptance threshold comfortably below plotting accuracy.
-        solver_options=wf.SolverOptions(tolerance=1.0e-8),
+        solver_options=wf.SolverOptions(tolerance=1.0e-8, max_refinements=0),
     )
     simulation.add_rectangle(
         x=(-0.22e-6, 0.22e-6),
@@ -36,9 +36,9 @@ def main() -> None:
     simulation.add_pml(x=0.35e-6, z=0.65e-6)
     simulation.mesh(wavelength_elements=9)
 
-    modes = simulation.solve_modes(num_modes=1, neff_guess=3.2, num_elements=54)
+    modes = simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=3.2, num_elements=54)
     incident = simulation.set_incident_mode(modes[0])
-    result = simulation.run(h5_path="oblique_angle.h5")
+    result = simulation.run(max_refinements=0, h5_path="oblique_angle.h5")
 
     print("propagation angle (deg) =", simulation.angle)
     print("resolved ky =", simulation.ky)

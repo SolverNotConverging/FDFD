@@ -112,6 +112,31 @@ struct DirichletSolution {
     double factorizationMilliseconds{};
 };
 
+// Dielectric and vacuum systems share mesh connectivity and Dirichlet DOFs.
+// Reuse their symbolic ordering while recomputing the numeric factors.  Check
+// the compressed pattern so this remains safe if assembly changes later.
+class DirichletFactorization {
+public:
+    void compute(const SparseComplex& matrix) {
+        const std::vector<int> outer(matrix.outerIndexPtr(),
+                                     matrix.outerIndexPtr() + matrix.outerSize() + 1);
+        const std::vector<int> inner(matrix.innerIndexPtr(),
+                                     matrix.innerIndexPtr() + matrix.nonZeros());
+        if (outer != outer_ || inner != inner_) {
+            factor.analyzePattern(matrix);
+            outer_ = outer;
+            inner_ = inner;
+        }
+        factor.factorize(matrix);
+    }
+
+    Eigen::SparseLU<SparseComplex, Eigen::COLAMDOrdering<int>> factor;
+
+private:
+    std::vector<int> outer_;
+    std::vector<int> inner_;
+};
+
 class GmshSession {
 public:
     GmshSession() {
@@ -209,6 +234,10 @@ void requirePositive(const double value, const char* const name) {
 }
 
 void validate(const Parameters& p) {
+    if (p.maxRefinements < 0) {
+        throw std::invalid_argument("maxRefinements must be nonnegative");
+    }
+    requirePositive(p.adaptiveTolerance, "adaptiveTolerance");
     requirePositive(p.frequencyHz, "frequencyHz");
     requirePositive(p.maxElementSize, "maxElementSize");
     requirePositive(p.refinementFactor, "refinementFactor");
@@ -965,7 +994,8 @@ struct BoundaryNodes {
 }
 
 [[nodiscard]] DirichletSolution solveDirichlet(const SparseComplex& stiffness,
-                                               const BoundaryNodes& boundaries) {
+                                               const BoundaryNodes& boundaries,
+                                               DirichletFactorization& workspace) {
     if (stiffness.rows() > std::numeric_limits<int>::max()) {
         throw std::invalid_argument("stiffness matrix exceeds the supported index range");
     }
@@ -1005,9 +1035,8 @@ struct BoundaryNodes {
     reduced.setFromTriplets(reducedTriplets.begin(), reducedTriplets.end());
     reduced.makeCompressed();
     const auto factorBegin = Clock::now();
-    Eigen::SparseLU<SparseComplex, Eigen::COLAMDOrdering<int>> factorization;
-    factorization.analyzePattern(reduced);
-    factorization.factorize(reduced);
+    workspace.compute(reduced);
+    auto& factorization = workspace.factor;
     if (factorization.info() != Eigen::Success) {
         throw std::runtime_error(
             "scalar electrostatic stiffness factorization is singular");
@@ -1242,7 +1271,7 @@ Parameters defaultParameters(const LineType type) {
     return parameters;
 }
 
-Result solve(const Parameters& parameters) {
+static Result solveOnce(const Parameters& parameters) {
     validate(parameters);
     Result result;
     result.parameters = parameters;
@@ -1259,8 +1288,9 @@ Result solve(const Parameters& parameters) {
     result.assemblyMilliseconds = elapsedMilliseconds(assemblyBegin, assemblyEnd);
     const BoundaryNodes boundaries =
         collectBoundaryNodes(result.mesh.nodes.size(), generated.boundaryEdges);
-    const DirichletSolution electric = solveDirichlet(systems.dielectric, boundaries);
-    const DirichletSolution vacuum = solveDirichlet(systems.vacuum, boundaries);
+    DirichletFactorization factorization;
+    const DirichletSolution electric = solveDirichlet(systems.dielectric, boundaries, factorization);
+    const DirichletSolution vacuum = solveDirichlet(systems.vacuum, boundaries, factorization);
     result.factorizationMilliseconds = electric.factorizationMilliseconds +
                                        vacuum.factorizationMilliseconds;
     result.materialResidual = electric.residual;
@@ -1370,6 +1400,85 @@ Result solve(const Parameters& parameters) {
     const auto solveEnd = Clock::now();
     result.solveMilliseconds = elapsedMilliseconds(solveBegin, solveEnd);
     return result;
+}
+
+// P1 fields have elementwise constant flux. Their normal jumps across
+// dielectric interfaces measure discretization error independently of LU's
+// algebraic residual. Exterior edges are all prescribed conductor potentials.
+static double adaptiveResidual(const Result& result) {
+    struct EdgeCell { std::size_t cell; int first; int second; };
+    std::unordered_map<std::uint64_t, EdgeCell> edges;
+    std::array<double, 2> scale{};
+    std::array<double, 2> residual{};
+    std::vector<std::array<FieldVector, 2>> fluxes(result.mesh.triangles.size());
+    for (std::size_t cell = 0; cell < result.mesh.triangles.size(); ++cell) {
+        const auto& triangle = result.mesh.triangles[cell];
+        const auto& sample = result.samples[cell];
+        fluxes[cell][0] = {triangle.relativePermittivity * sample.electric.x,
+                           triangle.relativePermittivity * sample.electric.y};
+        const auto first = result.mesh.nodes[triangle.nodes[0]];
+        const auto second = result.mesh.nodes[triangle.nodes[1]];
+        const auto third = result.mesh.nodes[triangle.nodes[2]];
+        const auto gradients = basisGradients(first, second, third, twiceSignedArea(first, second, third));
+        for (int local = 0; local < 3; ++local) {
+            fluxes[cell][1].x -= result.vacuumPotential[triangle.nodes[local]] * gradients[local].x;
+            fluxes[cell][1].y -= result.vacuumPotential[triangle.nodes[local]] * gradients[local].y;
+        }
+        for (int field = 0; field < 2; ++field) {
+            const auto& flux = fluxes[cell][field];
+            scale[field] += sample.area * (std::norm(flux.x) + std::norm(flux.y));
+        }
+        for (int local = 0; local < 3; ++local) {
+            const int a = triangle.nodes[local];
+            const int b = triangle.nodes[(local + 1) % 3];
+            const auto key = (static_cast<std::uint64_t>(std::min(a, b)) << 32U)
+                           | static_cast<std::uint32_t>(std::max(a, b));
+            const auto [found, inserted] = edges.emplace(key, EdgeCell{cell, a, b});
+            if (inserted) { continue; }
+            const auto other = found->second.cell;
+            const auto pa = result.mesh.nodes[a];
+            const auto pb = result.mesh.nodes[b];
+            // Unnormalized normal contributes h_edge * ds = length^2.
+            const double nx = pb.y - pa.y;
+            const double ny = pa.x - pb.x;
+            for (int field = 0; field < 2; ++field) {
+                residual[field] += std::norm(nx * (fluxes[cell][field].x - fluxes[other][field].x)
+                                           + ny * (fluxes[cell][field].y - fluxes[other][field].y));
+            }
+        }
+    }
+    return std::sqrt(std::max(residual[0] / std::max(scale[0], std::numeric_limits<double>::min()),
+                              residual[1] / std::max(scale[1], std::numeric_limits<double>::min())));
+}
+
+Result solve(const Parameters& parameters) {
+    validate(parameters);
+    Parameters current = parameters;
+    std::vector<std::array<double, 2>> history;
+    double totalMesh = 0.0, totalSolve = 0.0, totalAssembly = 0.0, totalFactorization = 0.0;
+    for (int pass = 0; ; ++pass) {
+        Result result = solveOnce(current);
+        const double residual = adaptiveResidual(result);
+        if (!std::isfinite(residual)) {
+            throw std::runtime_error("adaptive flux residual is non-finite");
+        }
+        history.push_back({static_cast<double>(result.mesh.triangles.size()), residual});
+        totalMesh += result.meshMilliseconds;
+        totalSolve += result.solveMilliseconds;
+        totalAssembly += result.assemblyMilliseconds;
+        totalFactorization += result.factorizationMilliseconds;
+        if (residual <= parameters.adaptiveTolerance || pass == parameters.maxRefinements) {
+            result.parameters = parameters;
+            result.adaptiveHistory = std::move(history);
+            result.adaptiveConverged = residual <= parameters.adaptiveTolerance;
+            result.meshMilliseconds = totalMesh;
+            result.solveMilliseconds = totalSolve;
+            result.assemblyMilliseconds = totalAssembly;
+            result.factorizationMilliseconds = totalFactorization;
+            return result;
+        }
+        current.refinementFactor *= 1.5;
+    }
 }
 
 }  // namespace tl

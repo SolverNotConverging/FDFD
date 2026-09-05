@@ -14,6 +14,7 @@ import wavefem as wf
 def main() -> None:
     frequencies_hz = np.linspace(191.0e12, 195.0e12, 3)
     simulation = wf.Scattering2D(
+        solver_options=wf.SolverOptions(max_refinements=0),
         frequency=float(frequencies_hz[0]),
         angle=0.0,
         x_span=(0.0, 1.0e-6),
@@ -33,7 +34,7 @@ def main() -> None:
         frequencies_hz,
         h5_path="frequency_sweep.h5",
         mesh_options={"wavelength_elements": 8},
-        mode_options={"num_modes": 1, "neff_guess": 1.0},
+        mode_options={"max_refinements": 0, "num_modes": 1, "neff_guess": 1.0},
     )
 
     print("frequency (Hz) =", sweep.frequencies_hz)

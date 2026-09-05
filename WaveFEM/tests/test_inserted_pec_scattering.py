@@ -56,12 +56,13 @@ def test_oblique_ground_slot_with_finite_top_plates_uses_both_pec_perturbations(
         wavelength_elements=7,
     )
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=1.8,
         num_elements=192,
     )
     simulation.set_incident_mode(modes[0])
-    result = simulation.solve()
+    result = simulation.solve(max_refinements=0)
 
     assert mesh.released_pec_facets.size > 0
     assert mesh.inserted_pec_facets.size > 0

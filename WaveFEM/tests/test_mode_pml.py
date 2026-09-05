@@ -94,7 +94,7 @@ def test_bound_slab_mode_is_stable_under_pml_mesh_refinement() -> None:
             ky=0.15 * k0,
             num_elements=elements,
             dense_linearization_limit=500,
-        ).solve(num_modes=1, neff_guess=3.2)[0]
+        ).solve(max_refinements=0, num_modes=1, neff_guess=3.2)[0]
         neff.append(mode.neff)
         assert mode.direction == "forward"
         assert mode.power == pytest.approx(1.0, rel=2e-10)
@@ -124,7 +124,7 @@ def test_outgoing_transverse_pml_has_passive_minus_iwt_stretch_sign() -> None:
         wavelength=wavelength,
         num_elements=80,
         dense_linearization_limit=420,
-    ).solve(num_modes=2, neff_guess=1.44)
+    ).solve(max_refinements=0, num_modes=2, neff_guess=1.44)
 
     k0 = 2.0 * np.pi / wavelength
     integrated_imaginary_stretch = (

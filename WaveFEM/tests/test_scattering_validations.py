@@ -51,12 +51,13 @@ def _solve_pec_guide(
     simulation.set_monitors(left=-_MONITOR, right=_MONITOR)
     simulation.mesh(max_element_size=maximum_edge, wavelength_elements=7)
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=num_modes,
         neff_guess=np.sqrt(1.0 - (ky / _K0) ** 2),
         num_elements=48,
     )
     simulation.set_incident_mode(modes[0])
-    return simulation.solve()
+    return simulation.solve(max_refinements=0)
 
 
 @pytest.mark.gmsh

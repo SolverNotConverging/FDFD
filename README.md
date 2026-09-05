@@ -2,7 +2,7 @@
 
 Finite-element and finite-difference frequency-domain solvers for computational electromagnetics.
 
-The repository is organised by problem type. Each solver folder contains the solver implementation, example scripts, and a solver-specific ``README.rst`` with API and workflow notes.
+The repository is organised by problem type. Each FEM solver package has a `README.rst` introduction with tutorials and an `API_REFERENCE.rst` covering public APIs with required/optional, type, default, and explanation tables. All FEM examples explicitly disable adaptive refinement; application defaults remain adaptive.
 
 ## Solver Map
 
@@ -10,13 +10,13 @@ The repository is organised by problem type. Each solver folder contains the sol
 
 | Folder | Solver | Use case | Documentation |
 |---|---|---|---|
-| `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [`README.rst`](FEM_Mode_Solver/README.rst) |
-| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [`README.rst`](TransmissionLineCalculator/README.rst) |
-| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [`README.rst`](WaveFEM/README.rst) |
+| `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [Tutorials](FEM_Mode_Solver/README.rst), [API](FEM_Mode_Solver/API_REFERENCE.rst) |
+| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [Tutorials](TransmissionLineCalculator/README.rst), [API](TransmissionLineCalculator/API_REFERENCE.rst) |
+| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [Tutorials](WaveFEM/README.rst), [API](WaveFEM/API_REFERENCE.rst) |
 | `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.rst`](WaveFEMViewer/README.rst) |
-| `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [`README.rst`](FEM_Periodic_Solver/README.rst) |
+| `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [Tutorials](FEM_Periodic_Solver/README.rst), [API](FEM_Periodic_Solver/API_REFERENCE.rst) |
 | `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.rst`](FEMPeriodicViewer/README.rst) |
-| `Electrostatic_Solver/` | `ElectrostaticSolver` | Geometry-first Gmsh/scikit-fem 1D/2D Poisson and Laplace problems | [`README.rst`](Electrostatic_Solver/README.rst) |
+| `Electrostatic_Solver/` | `ElectrostaticSolver` | Geometry-first Gmsh/scikit-fem 1D/2D Poisson and Laplace problems | [Tutorials](Electrostatic_Solver/README.rst), [API](Electrostatic_Solver/API_REFERENCE.rst) |
 
 ### FDFD solvers
 
@@ -131,6 +131,43 @@ python example_square_lattice.py
 - Material values are relative tensors unless stated otherwise.
 - Large grids produce large sparse systems. Start with coarse examples before increasing resolution.
 - Several solvers use shift-invert eigensolves. If convergence is poor, adjust the mode count, grid size, or eigenvalue guess.
+
+## FEM validation
+
+From the repository root, with the solver dependencies installed:
+
+```bash
+python -m pytest tests FEM_Mode_Solver/tests FEM_Periodic_Solver/tests Electrostatic_Solver/tests WaveFEM/tests periodic_eigensolver/tests
+```
+
+The root pytest configuration resolves the WaveFEM source and example paths and
+isolates duplicate test-module names. Native transmission-line regression tests
+can be run with `ctest --test-dir build -R tl-solver-tests --output-on-failure`.
+
+Every FEM solver now starts with a coarse mesh when none is supplied and adapts
+by default. Python solvers accept `solve(max_refinements=2, adaptive_tolerance=0.05)`:
+one initial solve followed by at most two refinements, stopping early when the
+normalized discretization residual meets the threshold. `max_refinements=0`
+keeps the initial mesh. This residual measures field/flux continuity and is
+independent of the linear/eigenvalue solver tolerance; it is not a certified
+solution-error bound. Exhausting the budget returns the last valid solution
+with convergence reported as false.
+
+Electrostatics and 1D modes bisect marked cells locally. The 2D Maxwell,
+periodic 2D/3D, WaveFEM scattering, and native transmission-line solvers
+regenerate their geometry-conforming meshes at increasing density. Periodic
+constraints, material interfaces, PEC boundaries, and monitors are rebuilt.
+Python modal results expose `metadata["adaptive_history"]`; WaveFEM uses
+`solve_info["adaptive_history"]`, and electrostatics `adaptive_history`.
+The native API exposes `maxRefinements`, `adaptiveTolerance`, and
+`adaptiveHistory`; its GUI and TUI expose the controls and stopping reason.
+
+Install the shared policy package from this checkout before installing the
+Maxwell packages: `python -m pip install -e ./fem_adaptivity`.
+
+The 2D standalone Maxwell solver supports `discretize(element_order=2)`, and WaveFEM scattering
+supports `SolverOptions(element_order=2)` for compatible N2/P2 elements. These
+are uniform order selections; per-cell hp mixing is not implemented.
 
 ## Reference
 

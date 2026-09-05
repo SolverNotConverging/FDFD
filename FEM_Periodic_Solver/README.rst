@@ -15,6 +15,38 @@ The three-dimensional backend uses first-kind ``ElementTetN1`` Nedelec edge
 fields, signed periodic edge constraints, and a weak transformed Gauss-law
 filter.  Its magnetic field is reconstructed from the shifted curl.
 
+The `API reference <API_REFERENCE.rst>`_ covers both solvers, geometry,
+meshing, periodic constraints, results, persistence, and visualization. Every
+API has an argument table with required/optional status, expected type,
+defaults, and an explanation.
+
+All example solves use ``max_refinements=0``. Explicitly supply a sufficiently
+resolved initial mesh when adaptive retries are disabled, particularly in 3D
+where accepted modes must pass the Gauss-law filter.
+
+Simple uniform-cell tutorial
+----------------------------
+
+.. code-block:: python
+
+   from FEM_Periodic_Solver import PeriodicModeSolver2D
+
+   solver = PeriodicModeSolver2D(
+       10e9, x_range=0.02, z_range=0.005, polarization="TM",
+       background_epsilon=2.25, num_modes=1, neff_guess=1.5,
+   )
+   solver.discretize(max_element_size=0.003, wavelength_elements=8)
+   modes = solver.solve(max_refinements=0)
+   print(modes[0].neff)  # Homogeneous TEM: approximately 1.5
+   solver.visualize_with_gui()
+
+Run ``python -m FEM_Periodic_Solver.examples.uniform_cells`` for this TEM
+case and a 3D TE10 analytic comparison. The other examples are
+``examples.leaky_wave_antenna_2d`` and
+``examples.iris_loaded_waveguide_filter_3d``; use the package prefix with
+``python -m``. Every example opens the native interactive viewer;
+``uniform_cells`` opens separate windows for its 2D and 3D results.
+
 Installation
 ------------
 
@@ -25,7 +57,7 @@ include the Cython extension.
 
 .. code-block:: bash
 
-   python -m pip install -e ./periodic_eigensolver
+   python -m pip install -e ./fem_adaptivity -e ./periodic_eigensolver
    python -m pip install -e ./FEM_Periodic_Solver
 
 Quick start
@@ -57,7 +89,7 @@ Quick start
    )
    solver.add_pml(2.5e-3, direction="x+")
    solver.discretize(max_element_size=0.65e-3)
-   modes = solver.solve(direction="all", max_pml_fraction=None)
+   modes = solver.solve(max_refinements=0, direction="all", max_pml_fraction=None)
    print(modes.neff)
    solver.visualize(1, component="Hy", quantity="real")
    solver.visualize_with_gui()  # open every solved mode in the native viewer
@@ -109,7 +141,7 @@ Three-dimensional workflow
        name="right_iris",
    )
    solver.discretize(max_element_size=4e-3)
-   modes = solver.solve(direction="all")
+   modes = solver.solve(max_refinements=0, direction="all")
    solver.visualize(1, component="E", quantity="abs")
    solver.visualize_with_gui()
 
@@ -196,6 +228,29 @@ viewer and ``fem-periodic-inspect``.
 
 Supported scope
 ---------------
+
+Both periodic solvers preserve the last valid discretization if remeshing or
+assembly fails.  A failed 3D refinement also restores its density setting;
+geometry edits and successful remeshing clear all modal arrays.  Three-dimensional
+solve controls validate integer budgets before dispatch and limit requested
+Arnoldi candidates to the available companion-space dimension.
+
+Both solvers now create a coarse mesh automatically when needed and adapt on
+every solve. ``solve(max_refinements=2, adaptive_tolerance=0.05)`` performs one
+initial solve and up to two refinements, stopping when the normalized normal-D
+and tangential-H jump residual is at or below the threshold. Periodic seam
+traces are included. ``max_refinements=0`` keeps the initial mesh. The default
+mesh uses four elements per material wavelength with geometry constraints.
+Each refinement regenerates the mesh at 1.5 times its previous density and
+rebuilds paired seam nodes and oriented edge constraints. Per-cell polynomial
+order mixing is not implemented.
+
+Inspect ``modes.metadata["adaptive_history"]``, ``["adaptive_residual"]``, and
+``["adaptive_converged"]``. Exhausting the budget returns the last valid modes
+without claiming convergence. A failed coarse eigensolve may retry on the next
+mesh; failure on the final allowed mesh raises a solver error. This interface
+residual is a discretization estimator, not the QEP/Gauss algebraic tolerance
+and not a certified solution-error bound.
 
 Materials may be complex isotropic values or diagonal anisotropic triples.
 Transverse PML supports ``x-``/``x+`` in 2D and ``x-``/``x+``/``y-``/``y+``

@@ -25,6 +25,15 @@ _EPS_R = 2.0
 _KAPPA = _K0**2 * _EPS_R
 
 
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf, complex(0, np.nan)])
+def test_nonfinite_load_is_rejected_before_solving(bad_value) -> None:
+    system = assemble_mixed_system(_mesh(2), MaxwellParameters(k0=_K0))
+    load = np.zeros(system.ndofs, dtype=complex)
+    load[0] = bad_value
+    with pytest.raises(ValueError, match="load contains a non-finite"):
+        solve_homogeneous_pec(system, load)
+
+
 def _mesh(cells_per_axis: int) -> MeshTri:
     coordinates = np.linspace(0.0, 1.0, cells_per_axis + 1)
     return MeshTri.init_tensor(coordinates, coordinates)
@@ -244,6 +253,21 @@ def test_prescribed_pec_values_are_imposed_and_residual_uses_effective_load() ->
             np.zeros(system.ndofs, dtype=np.complex128),
             boundary_values=invalid,
         )
+
+
+def test_second_order_mixed_pair_improves_manufactured_field_and_curl() -> None:
+    parameters = MaxwellParameters(k0=_K0, ky=_KY, eps_r=_EPS_R)
+    errors = []
+    for order in (1, 2):
+        system = assemble_mixed_system(_mesh(4), parameters, element_order=order, intorder=8)
+        load = assemble_load_vector(system.basis, _manufactured_source)
+        solution = solve_homogeneous_pec(system, load)
+        errors.append([
+            np.sqrt(asm(form, system.basis, uh=solution.coefficients))
+            for form in (_combined_l2_error, _modified_curl_error)
+        ])
+        assert relative_hermiticity_error(system.matrix) < 1e-12
+    assert np.all(np.asarray(errors[1]) < 0.3 * np.asarray(errors[0]))
 
 
 def test_manufactured_solution_converges_in_mixed_space() -> None:

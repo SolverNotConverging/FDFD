@@ -30,7 +30,7 @@ def test_top_level_api_and_results_are_read_only() -> None:
     assert solver.mesh is mesh
     assert solver.mesh_data is mesh
     assert solver.native_mesh is mesh.mesh
-    modes = solver.solve()
+    modes = solver.solve(max_refinements=0)
 
     assert solver.solution is modes
     assert modes.mode(1) is modes[0]
@@ -53,7 +53,7 @@ def test_top_level_api_and_results_are_read_only() -> None:
 def test_1d_static_and_gui_visualizers_render_with_shared_api(monkeypatch) -> None:
     solver = fem.ModeSolver1D(20e9, 20e-3, num_modes=1)
     solver.discretize(resolution=20)
-    solver.solve()
+    solver.solve(max_refinements=0)
 
     figure, axes = solver.visualize(
         mode=1,
@@ -125,7 +125,7 @@ def test_2d_static_and_gui_visualizers_accept_fem_quadrature_samples(
     assert solver.mesh is mesh
     assert solver.mesh_data is mesh
     assert solver.native_mesh is mesh.mesh
-    solver.solve()
+    solver.solve(max_refinements=0)
 
     figure, axes = solver.visualize(
         mode=1,

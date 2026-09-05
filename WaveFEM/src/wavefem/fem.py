@@ -4,7 +4,7 @@ This module implements the Stage-A discretization
 
 ``(E_x, E_z) in H(curl; Omega)`` and ``E_y in H1(Omega)``
 
-using the lowest-order triangular Nedelec and continuous P1 elements.  The
+using compatible triangular Nedelec/scalar pairs (N1/P1 or N2/P2).  The
 phasor convention is ``exp(-i omega t)`` and the prescribed invariant-direction
 dependence is ``exp(i k_y y)``.
 """
@@ -29,7 +29,7 @@ from skfem import (
     condense,
     solve,
 )
-from skfem.element import ElementComposite, ElementTriN1, ElementTriP1
+from skfem.element import ElementComposite, ElementTriN1, ElementTriN2, ElementTriP1, ElementTriP2
 
 from .operators import electric_field_vector, modified_curl
 from .exceptions import SolverError
@@ -224,12 +224,19 @@ def create_mixed_basis(
     mesh: MeshTri,
     *,
     intorder: int = 4,
+    element_order: int = 1,
 ) -> Basis:
-    """Create the conforming ``ElementTriN1 * ElementTriP1`` basis."""
+    """Create a compatible N1/P1 or N2/P2 H(curl)-H1 basis."""
 
     if intorder < 1:
         raise ValueError("intorder must be at least one.")
-    return Basis(mesh, ElementTriN1() * ElementTriP1(), intorder=intorder)
+    if isinstance(element_order, (bool, np.bool_)) or element_order not in (1, 2):
+        raise ValueError("element_order must be 1 or 2.")
+    element = (
+        ElementTriN1() * ElementTriP1() if element_order == 1
+        else ElementTriN2() * ElementTriP2()
+    )
+    return Basis(mesh, element, intorder=max(intorder, 2 * int(element_order)))
 
 
 def evaluate_diagonal_coefficient(
@@ -318,10 +325,9 @@ def _validate_mixed_basis(basis: Basis) -> None:
     element = basis.elem
     if not isinstance(element, ElementComposite) or len(element.elems) != 2:
         raise TypeError("Expected an ElementTriN1 * ElementTriP1 composite basis.")
-    if not isinstance(element.elems[0], ElementTriN1) or not isinstance(
-        element.elems[1], ElementTriP1
-    ):
-        raise TypeError("Expected element order ElementTriN1 * ElementTriP1.")
+    pair = tuple(type(item) for item in element.elems)
+    if pair not in ((ElementTriN1, ElementTriP1), (ElementTriN2, ElementTriP2)):
+        raise TypeError("Expected a compatible ElementTriN1/P1 or ElementTriN2/P2 pair.")
 
 
 @BilinearForm(dtype=np.complex128)
@@ -387,6 +393,7 @@ def assemble_mixed_system(
     parameters: MaxwellParameters,
     *,
     intorder: int = 4,
+    element_order: int = 1,
     length_scale: float = 1.0,
     internal_pec_facets: ArrayLike = (),
 ) -> MixedFEMSystem:
@@ -429,7 +436,7 @@ def assemble_mixed_system(
         eps_r=scaled_coefficient(parameters.eps_r),
         mu_r=scaled_coefficient(parameters.mu_r),
     )
-    basis = create_mixed_basis(computational_mesh, intorder=intorder)
+    basis = create_mixed_basis(computational_mesh, intorder=intorder, element_order=element_order)
     return MixedFEMSystem(
         basis=basis,
         matrix=assemble_maxwell_matrix(basis, assembly_parameters),
@@ -437,7 +444,7 @@ def assemble_mixed_system(
         physical_mesh=mesh,
         length_scale=length_scale,
         internal_pec_facets=np.asarray(internal_pec_facets),
-        quadrature_order=int(intorder),
+        quadrature_order=max(int(intorder), 2 * int(element_order)),
     )
 
 
@@ -482,6 +489,8 @@ def solve_prescribed_pec(
         raise ValueError(
             f"load must have shape ({system.ndofs},), received {rhs.shape}."
         )
+    if not np.isfinite(rhs).all():
+        raise ValueError("load contains a non-finite value.")
     prescribed = np.asarray(boundary_values, dtype=np.complex128)
     if prescribed.shape != (system.ndofs,):
         raise ValueError(

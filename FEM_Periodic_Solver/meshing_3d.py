@@ -186,7 +186,7 @@ def discretize_3d(
     zmin, zmax = geometry.z_span
     widths = (xmax - xmin, ymax - ymin, zmax - zmin)
     reference = max(widths)
-    maximum = min(widths) / 8.0 if max_element_size is None else float(max_element_size)
+    maximum = max(widths) / 4.0 if max_element_size is None else float(max_element_size)
     if not np.isfinite(maximum) or maximum <= 0.0:
         raise MeshError("max_element_size must be finite and positive.")
     refinement_scale = float(_refinement_scale)

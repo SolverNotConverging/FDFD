@@ -38,6 +38,7 @@ def homogeneous_solver(ky: float) -> ModeSolver:
 
 def test_homogeneous_pec_tem_mode_is_full_vector_and_unit_power() -> None:
     modes = homogeneous_solver(KY).solve(
+        max_refinements=0,
         num_modes=1,
         neff_guess=EXPECTED_NEFF,
         residual_tolerance=1e-9,
@@ -96,12 +97,14 @@ def test_ky_sign_symmetry_holds_for_pencil_and_mode_fields() -> None:
     assert symmetry_error < 2e-14
 
     positive = positive_solver.solve(
+        max_refinements=0,
         num_modes=1,
         neff_guess=EXPECTED_NEFF,
         residual_tolerance=1e-9,
         divergence_tolerance=1e-9,
     )[0]
     negative = negative_solver.solve(
+        max_refinements=0,
         num_modes=1,
         neff_guess=EXPECTED_NEFF,
         residual_tolerance=1e-9,
@@ -140,6 +143,7 @@ def test_nontrivial_parallel_plate_modes_converge_quadratically() -> None:
             num_elements=elements,
             dense_linearization_limit=400,
         ).solve(
+            max_refinements=0,
             num_modes=2,
             neff_guess=expected,
             residual_tolerance=1e-9,
@@ -172,7 +176,7 @@ def test_passive_loss_uses_positive_imaginary_beta_for_minus_iwt() -> None:
         ky=KY,
         num_elements=10,
         dense_linearization_limit=256,
-    ).solve(num_modes=1, neff_guess=expected)[0]
+    ).solve(max_refinements=0, num_modes=1, neff_guess=expected)[0]
 
     assert mode.neff == pytest.approx(expected, rel=2e-9, abs=2e-9)
     assert mode.neff.imag > 0.0

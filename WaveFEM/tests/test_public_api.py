@@ -39,6 +39,7 @@ def test_scattering_angle_sets_ky_and_is_preserved_across_frequency() -> None:
     normal = wf.Scattering2D(wavelength=1.0, angle=0.0, **common)
     oblique = wf.Scattering2D(wavelength=1.0, angle=30.0, **common)
     catalog = oblique.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=np.sqrt(0.75),
         num_elements=32,
@@ -131,7 +132,7 @@ def test_integrated_solver_rejects_lossy_uniform_leads() -> None:
         transverse_boundary="pec",
     )
     with pytest.raises(wf.ConfigurationError, match="lossless uniform lead"):
-        simulation.solve_modes(num_modes=1, neff_guess=1.0)
+        simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0)
 
 
 def test_integrated_solver_rejects_evanescent_incident_mode() -> None:
@@ -144,6 +145,7 @@ def test_integrated_solver_rejects_evanescent_incident_mode() -> None:
         transverse_boundary="pec",
     )
     mode = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=3.7j,
         num_elements=32,
@@ -163,7 +165,7 @@ def test_open_integrated_modes_reject_unbound_pml_box_modes() -> None:
     )
     simulation.add_pml(x=0.25, z=0.25, target_reflection=0.1)
     with pytest.raises(wf.ModeSolverError, match="No bound guided mode"):
-        simulation.solve_modes(num_modes=1, neff_guess=1.44, num_elements=40)
+        simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.44, num_elements=40)
 
 
 def test_high_level_solver_rejects_active_material_but_material_object_allows_it() -> None:
@@ -202,6 +204,7 @@ def test_resolving_modes_clears_incident_and_rejects_stale_mode_object() -> None
         transverse_boundary="pec",
     )
     first = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=1.0,
         num_elements=24,
@@ -209,7 +212,7 @@ def test_resolving_modes_clears_incident_and_rejects_stale_mode_object() -> None
     simulation.set_incident_mode(first)
     assert simulation.incident is not None
 
-    simulation.solve_modes(num_modes=1, neff_guess=1.0, num_elements=24)
+    simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0, num_elements=24)
 
     assert simulation.incident is None
     with pytest.raises(wf.ConfigurationError, match="external or stale"):
@@ -235,7 +238,7 @@ def test_callback_device_accepts_explicit_compatible_mode_set() -> None:
         wavelength=1.0,
         ky=0.0,
         num_elements=24,
-    ).solve(num_modes=1, neff_guess=np.sqrt(0.75))
+    ).solve(max_refinements=0, num_modes=1, neff_guess=np.sqrt(0.75))
 
     bound = simulation.set_modes(modes)
     incident = simulation.set_incident_mode(bound[0])

@@ -136,6 +136,7 @@ def test_solved_unit_power_mode_launches_from_either_side_with_correct_sign() ->
         num_elements=10,
         dense_linearization_limit=256,
     ).solve(
+        max_refinements=0,
         num_modes=1,
         neff_guess=expected_neff,
         residual_tolerance=1e-9,

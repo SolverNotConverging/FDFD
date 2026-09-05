@@ -24,6 +24,7 @@ def _assemble(
     boundary: str = "pmc",
     pec_facets: np.ndarray | None = None,
     impedance_boundaries: object = None,
+    element_order: int = 1,
 ):
     return assemble_mode_system_2d(
         mesh,
@@ -32,6 +33,7 @@ def _assemble(
         material_at=_vacuum,
         boundary=boundary,
         quadrature_order=4,
+        element_order=element_order,
         pec_facets=pec_facets,
         impedance_boundaries=impedance_boundaries,  # type: ignore[arg-type]
     )
@@ -52,12 +54,13 @@ def _unit_tangential_trace(
     return trial_tangent * np.conj(test_tangent) + ez * np.conj(vz)
 
 
-def test_sibc_adds_exact_positive_j_eta0_over_zs_trace_term_to_a0() -> None:
+@pytest.mark.parametrize("element_order", [1, 2])
+def test_sibc_adds_exact_positive_j_eta0_over_zs_trace_term_to_a0(element_order) -> None:
     mesh = MeshTri.init_sqsymmetric()
     facets = np.asarray(mesh.boundary_facets()[:3], dtype=np.int64)
     impedance = 50.0
-    baseline = _assemble(mesh)
-    system = _assemble(mesh, impedance_boundaries=[(facets, impedance)])
+    baseline = _assemble(mesh, element_order=element_order)
+    system = _assemble(mesh, impedance_boundaries=[(facets, impedance)], element_order=element_order)
 
     facet_basis = FacetBasis(
         system.computational_mesh,

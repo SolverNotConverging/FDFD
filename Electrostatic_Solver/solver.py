@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import TypeAlias
 
 import numpy as np
@@ -186,9 +187,9 @@ class ElectrostaticSolver:
             hy = (self.geometry.y_span[1] - self.geometry.y_span[0]) / self.mesh_size[1]
             return min(hx, hy)
         if self.dim == 1:
-            return (self.geometry.x_span[1] - self.geometry.x_span[0]) / 80.0
+            return (self.geometry.x_span[1] - self.geometry.x_span[0]) / 16.0
         assert self.geometry.y_span is not None
-        return min(self.geometry.x_span[1] - self.geometry.x_span[0], self.geometry.y_span[1] - self.geometry.y_span[0]) / 24.0
+        return min(self.geometry.x_span[1] - self.geometry.x_span[0], self.geometry.y_span[1] - self.geometry.y_span[0]) / 6.0
 
     def discretize(
         self,
@@ -325,7 +326,10 @@ class ElectrostaticSolver:
                 rhs += np.asarray(asm(source, basis.with_elements(indices), rho=float(density)), dtype=float)
         return matrix.tocsr(), rhs
 
-    def _fields(self, potential: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+    def _fields(self, potential: NDArray[np.float64]) -> tuple[
+        NDArray[np.float64], NDArray[np.float64], float,
+        NDArray[np.float64], NDArray[np.float64],
+    ]:
         assert self.mesh is not None
         points, elements = self.mesh.nodes, self.mesh.elements
         if self.dim == 1:
@@ -356,9 +360,98 @@ class ElectrostaticSolver:
             np.add.at(weights, nodes, measures)
         nodal_e /= weights[:, None]
         nodal_d /= weights[:, None]
-        return nodal_e, nodal_d, energy
+        # P1 gradients are constant per element and can jump at dielectric
+        # interfaces.  Preserve these physical fields before nodal averaging.
+        return nodal_e, nodal_d, energy, element_e, element_d
 
-    def solve(self, tol: float = 1e-10, max_iter: int | None = None) -> ElectrostaticResult:
+    def solve(
+        self, tol: float = 1e-10, max_iter: int | None = None, *,
+        adaptive: bool = True, max_refinements: int = 2,
+        adaptive_tolerance: float = 0.05, marking_fraction: float = 0.5,
+        max_elements: int = 200_000,
+    ) -> ElectrostaticResult:
+        """Solve with bounded, solution-driven local refinement by default.
+
+        Normal displacement jumps and the Poisson volume residual select
+        cells by bulk marking.  ``adaptive_tolerance`` controls that relative
+        indicator; ``tol`` independently controls the algebraic solve.  Inspect
+        ``result.adaptive_history`` for the stopping reason.  Use
+        ``adaptive=False`` to keep the supplied mesh exactly.
+        """
+        from .adaptive import flux_indicators, refine_marked
+
+        if not isinstance(adaptive, (bool, np.bool_)):
+            raise SolverError("adaptive must be a boolean.")
+        for value, name, minimum in (
+            (max_refinements, "max_refinements", 0), (max_elements, "max_elements", 1),
+        ):
+            try:
+                valid = (not isinstance(value, (bool, np.bool_)) and np.isscalar(value)
+                         and int(value) == value and int(value) >= minimum)
+            except (TypeError, ValueError, OverflowError):
+                valid = False
+            if not valid:
+                raise SolverError(f"{name} must be an integer of at least {minimum}.")
+        for value, name in ((adaptive_tolerance, "adaptive_tolerance"),
+                            (marking_fraction, "marking_fraction")):
+            try:
+                valid = (not isinstance(value, (bool, np.bool_)) and np.isscalar(value)
+                         and np.isfinite(value) and value > 0.0)
+            except (TypeError, ValueError):
+                valid = False
+            if not valid:
+                raise SolverError(f"{name} must be finite and positive.")
+        if marking_fraction > 1.0:
+            raise SolverError("marking_fraction must be in (0, 1].")
+        result = self._solve_once(tol, max_iter)
+        history = []
+        for step in range(int(max_refinements) + 1):
+            centers = result.coordinates[result.elements].mean(axis=1)
+            indicators, error = flux_indicators(
+                result.mesh, result.element_displacement_field,
+                self.geometry.charge_at(centers), self.fixed_mask,
+            )
+            if not np.isfinite(error):
+                raise SolverError("The adaptive flux indicator is non-finite.")
+            record = {"elements": len(result.elements), "relative_indicator": error, "residual": error,
+                      "marked_elements": 0, "status": "refined"}
+            history.append(record)
+            if not adaptive:
+                record["status"] = "disabled"
+                break
+            if error <= adaptive_tolerance:
+                record["status"] = "tolerance"
+                break
+            if step == max_refinements:
+                record["status"] = "refinement_limit"
+                break
+            if len(result.elements) >= max_elements:
+                record["status"] = "element_limit"
+                break
+            ranked = np.argsort(-indicators, kind="stable")
+            count = int(np.searchsorted(np.cumsum(indicators[ranked]),
+                                       marking_fraction * indicators.sum())) + 1
+            marked = ranked[:count]
+            candidate = refine_marked(result.mesh, marked)
+            if len(candidate.elements) > max_elements:
+                record["status"] = "element_limit"
+                break
+            record["marked_elements"] = len(marked)
+            previous_mask = self.fixed_mask
+            self.mesh = candidate
+            try:
+                result = self._solve_once(tol, max_iter)
+            except Exception:
+                self.mesh = result.mesh
+                self.solution = result
+                self.potential = result.potential
+                self.fixed_mask = previous_mask
+                raise
+        result = replace(result, adaptive_history=tuple(history))
+        self.solution = result
+        return result
+
+    def _solve_once(self, tol: float, max_iter: int | None) -> ElectrostaticResult:
         """Assemble and solve; legacy iteration arguments remain accepted."""
         tolerance = float(tol)
         if not np.isfinite(tolerance) or tolerance <= 0.0:
@@ -394,9 +487,9 @@ class ElectrostaticSolver:
             np.finfo(float).tiny,
         )
         residual_norm = float(np.linalg.norm(reaction[free]) / denominator)
-        if residual_norm > max(100.0 * tolerance, 1e-9):
+        if not np.isfinite(residual_norm) or residual_norm > max(100.0 * tolerance, 1e-9):
             raise SolverError(f"FEM solve residual {residual_norm:.3e} exceeds tolerance.")
-        electric, displacement, energy = self._fields(potential)
+        electric, displacement, energy, element_e, element_d = self._fields(potential)
         result = ElectrostaticResult(
             mesh=self.mesh,
             potential=potential,
@@ -406,6 +499,8 @@ class ElectrostaticSolver:
             conductor_charges={name: float(np.sum(reaction[mask])) for name, mask in named_masks.items()},
             energy=energy,
             residual_norm=residual_norm,
+            element_electric_field=element_e,
+            element_displacement_field=element_d,
         )
         self.solution = result
         self.potential = result.potential

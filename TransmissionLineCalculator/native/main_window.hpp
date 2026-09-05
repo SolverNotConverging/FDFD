@@ -50,6 +50,8 @@ private:
         DomainPaddingFactor,
         MetalConductivity,
         MaxElementSize,
+        MaxRefinements,
+        AdaptiveTolerance,
     };
 
     struct EntryDefinition {

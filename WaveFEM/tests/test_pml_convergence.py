@@ -51,9 +51,9 @@ def _solve(pml_thickness: float, maximum_edge: float) -> complex:
             simulation.mesh(max_element_size=maximum_edge, wavelength_elements=5)
     else:
         simulation.mesh(max_element_size=maximum_edge, wavelength_elements=5)
-    modes = simulation.solve_modes(num_modes=1, neff_guess=1.0, num_elements=64)
+    modes = simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0, num_elements=64)
     simulation.set_incident_mode(modes[0])
-    return simulation.solve().S11
+    return simulation.solve(max_refinements=0).S11
 
 
 @pytest.mark.gmsh

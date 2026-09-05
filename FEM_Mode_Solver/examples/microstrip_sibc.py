@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from FEM_Mode_Solver import ModeSolver2D
 
-
 FREQUENCY = 10.0e9
 DOMAIN_X = (-6.0e-3, 6.0e-3)
 DOMAIN_Y = (-35.0e-6, 6.0e-3)
@@ -71,10 +70,7 @@ def main() -> None:
         f"h=[{mesh.info.minimum_edge:.3g}, {mesh.info.maximum_edge:.3g}] m"
     )
 
-    modes = solver.solve(
-        residual_tolerance=1e-7,
-        divergence_tolerance=2e-5,
-    )
+    modes = solver.solve(max_refinements=0)
     mode = modes[0]
     print(
         f"microstrip mode: neff={mode.neff:.9g}, "

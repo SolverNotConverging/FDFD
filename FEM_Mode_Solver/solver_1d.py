@@ -20,7 +20,7 @@ from typing import Literal, Sequence
 import numpy as np
 from numpy.typing import NDArray
 from scipy import linalg
-from scipy.sparse import csc_matrix, csr_matrix, lil_matrix
+from scipy.sparse import coo_matrix, csc_matrix, csr_matrix
 from scipy.sparse.linalg import ArpackNoConvergence, LinearOperator, eigs, splu
 
 from .constants import C_0, EPSILON_0, MU_0
@@ -391,7 +391,7 @@ class ModeSolver1D:
         max_element_size: float | None = None,
         *,
         resolution: int | None = None,
-        wavelength_elements: int = 10,
+        wavelength_elements: int = 4,
         material_aware: bool = True,
         element_order: int = 1,
         quadrature_order: int = 4,
@@ -456,7 +456,7 @@ class ModeSolver1D:
         resolution = settings["resolution"]
         maximum = settings["max_element_size"]
         if resolution is None and maximum is None:
-            resolution = int(np.ceil(160 * density_factor))
+            resolution = int(np.ceil(24 * density_factor))
         elif resolution is not None:
             resolution = int(np.ceil(int(resolution) * density_factor))
         if maximum is not None:
@@ -529,9 +529,16 @@ class ModeSolver1D:
     def _assemble_systems(self) -> tuple[_PolarizationSystem, _PolarizationSystem]:
         mesh = self._require_mesh()
         nodes = np.asarray(mesh.nodes, dtype=float)
-        centres = 0.5 * (nodes[:-1] + nodes[1:])
         widths_xi = self.k0 * np.diff(nodes)
-        eps, mu = self._transformed_material_at(centres)
+        # Gauss points integrate the varying transformation-optics coefficients
+        # inside PML elements.  Midpoint material sampling is insufficient even
+        # for the P1 mass form, whose shape-function products are quadratic.
+        points, weights = np.polynomial.legendre.leggauss(
+            (self._quadrature_order + 2) // 2
+        )
+        shapes = np.stack(((1.0 - points) / 2.0, (1.0 + points) / 2.0))
+        coordinates = nodes[:-1, None] + np.diff(nodes)[:, None] * shapes[1]
+        eps, mu = self._transformed_material_at(coordinates)
         if np.any(np.abs(eps) <= np.finfo(float).tiny) or np.any(
             np.abs(mu) <= np.finfo(float).tiny
         ):
@@ -544,10 +551,15 @@ class ModeSolver1D:
         active_nodes[active_indices] = True
         active_nodes[active_indices + 1] = True
 
+        dofs = np.column_stack((active_indices, active_indices + 1))
+        rows = np.repeat(dofs, 2, axis=1).ravel()
+        columns = np.tile(dofs, (1, 2)).ravel()
+        h = widths_xi[active_indices]
+        mass_weights = np.einsum("q,iq,jq->qij", weights / 2.0, shapes, shapes)
+        gradient_product = np.asarray(((1.0, -1.0), (-1.0, 1.0)))
+
         systems: list[_PolarizationSystem] = []
         for polarization in ("TE", "TM"):
-            matrix_a = lil_matrix((nodes.size, nodes.size), dtype=np.complex128)
-            matrix_b = lil_matrix((nodes.size, nodes.size), dtype=np.complex128)
             if polarization == "TE":
                 mass_a = eps[1]
                 stiffness = 1.0 / mu[2]
@@ -563,29 +575,24 @@ class ModeSolver1D:
                 if self.geometry.outer_boundary == "pmc":
                     constrained[[0, -1]] = True
 
-            for element in active_indices:
-                h = widths_xi[element]
-                local_mass = (h / 6.0) * np.asarray(
-                    ((2.0, 1.0), (1.0, 2.0)), dtype=np.complex128
-                )
-                local_stiffness = (1.0 / h) * np.asarray(
-                    ((1.0, -1.0), (-1.0, 1.0)), dtype=np.complex128
-                )
-                dofs = (int(element), int(element + 1))
-                local_a = mass_a[element] * local_mass - stiffness[element] * local_stiffness
-                local_b = mass_b[element] * local_mass
-                for row_local, row in enumerate(dofs):
-                    for column_local, column in enumerate(dofs):
-                        matrix_a[row, column] += local_a[row_local, column_local]
-                        matrix_b[row, column] += local_b[row_local, column_local]
+            local_a = h[:, None, None] * np.einsum(
+                "eq,qij->eij", mass_a[active_indices], mass_weights
+            )
+            local_a -= (
+                (stiffness[active_indices] @ (weights / 2.0)) / h
+            )[:, None, None] * gradient_product
+            local_b = h[:, None, None] * np.einsum(
+                "eq,qij->eij", mass_b[active_indices], mass_weights
+            )
 
             free = np.flatnonzero(active_nodes & ~constrained).astype(np.int64)
             if free.size < 2:
                 raise SolverError(
                     f"The {polarization} problem has fewer than two unconstrained nodal DOFs."
                 )
-            full_a = matrix_a.tocsr()
-            full_b = matrix_b.tocsr()
+            shape = (nodes.size, nodes.size)
+            full_a = coo_matrix((local_a.ravel(), (rows, columns)), shape=shape).tocsr()
+            full_b = coo_matrix((local_b.ravel(), (rows, columns)), shape=shape).tocsr()
             systems.append(
                 _PolarizationSystem(
                     polarization=polarization,
@@ -826,6 +833,7 @@ class ModeSolver1D:
             residual=candidate.residual,
             divergence_residual=0.0 if candidate.polarization == "TE" else None,
             metadata={
+                "nodal_primary": np.asarray(nodal * factor),
                 "attenuation": float(-np.imag(beta)),
                 "complex_power_before_normalization": complex(complex_power),
             },
@@ -841,7 +849,17 @@ class ModeSolver1D:
                 result &= centres <= xmax - pml.thickness
         return result
 
-    def solve(
+    def solve(self, *args, max_refinements: int = 2,
+              adaptive_tolerance: float = 0.05, **options) -> ModeSet:
+        """Solve from a coarse mesh and refine until the discretization residual
+        meets adaptive_tolerance or max_refinements mesh updates are used.
+        Pass max_refinements=0 for one solve on the initial mesh.
+        Remaining options are passed to the algebraic mode solve.
+        """
+        from .adaptive import solve_1d
+        return solve_1d(self, args, options, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         neff_guess: complex | None = None,
         num_modes: int | None = None,

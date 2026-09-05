@@ -9,6 +9,6 @@ solver.set_potential("left", 0.0, name="ground")
 solver.set_potential("right", 10.0, name="drive")
 
 solver.discretize(max_element_size=0.4e-3)
-result = solver.solve()
+result = solver.solve(max_refinements=0)
 print(f"nodes={result.mesh.info.nodes}, energy={result.energy:.6e} J/m2")
 solver.visualize()

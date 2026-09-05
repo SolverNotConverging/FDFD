@@ -25,6 +25,8 @@ struct Parameters {
     double frequencyHz{10.0e9};
     double maxElementSize{1.0e-3};
     double refinementFactor{1.0};
+    int maxRefinements{2};
+    double adaptiveTolerance{0.05};
 
     double innerRadius{0.50e-3};
     double outerRadius{1.67e-3};
@@ -100,6 +102,9 @@ struct Result {
     double conductorGeometryFactorPerLength{};
     double materialResidual{};
     double vacuumResidual{};
+    // Each entry is {element count, normalized flux-jump residual}.
+    std::vector<std::array<double, 2>> adaptiveHistory;
+    bool adaptiveConverged{};
 };
 
 }  // namespace tl

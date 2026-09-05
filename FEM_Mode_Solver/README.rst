@@ -3,10 +3,36 @@ FEM Mode Solver
 
 ``FEM_Mode_Solver`` is a standalone finite-element package for fixed-frequency
 waveguide modes.  Geometry and boundary objects are placed in physical metres
-first; a conforming line or triangular mesh is created only when
-``discretize()`` is called.  The original Yee-grid solvers remain separate and
+first; ``solve()`` creates a coarse conforming mesh automatically, or uses a
+mesh supplied by ``discretize()``. The original Yee-grid solvers remain separate and
 can therefore be used as regression references while the FEM implementation
 develops independently.
+
+The `API reference <API_REFERENCE.rst>`_ lists every public constructor,
+method, property, and research helper. Each API has a table of argument
+requirements, types, defaults, and explanations.
+
+All examples and tutorial solves explicitly set ``max_refinements=0``.
+The solver itself retains its adaptive default for application code.
+
+Simple closed-guide tutorial
+----------------------------
+
+.. code-block:: python
+
+   from FEM_Mode_Solver import ModeSolver1D
+
+   solver = ModeSolver1D(299_792_458.0, x_range=1.0, num_modes=1)
+   solver.discretize(resolution=32)
+   modes = solver.solve(max_refinements=0)
+   print(modes[0].neff)  # TEM mode: approximately 1
+   solver.visualize_with_gui()
+
+To try second-order vector elements and an independent analytic cutoff check,
+run ``python -m FEM_Mode_Solver.examples.homogeneous_guides``. It solves both
+1D and 2D guides and opens an interactive viewer for each. Other runnable modules are
+``examples.slab_1d``, ``examples.ridge_2d``, and ``examples.microstrip_sibc``;
+prefix each with ``FEM_Mode_Solver.`` when using ``python -m``.
 
 The package contains:
 
@@ -24,7 +50,7 @@ From the repository root:
 
 .. code-block:: bash
 
-   python -m pip install -e ./FEM_Mode_Solver
+   python -m pip install -e ./fem_adaptivity -e ./FEM_Mode_Solver
 
 The 2D mesher uses Gmsh.  On Windows, use an environment in which the Gmsh
 Python package can locate its native libraries.  The 1D line mesher does not
@@ -59,10 +85,11 @@ Every solver follows the same state transition:
 
 ``add_*`` calls store exact physical objects; they do not rasterize them.
 Changing geometry after ``discretize()`` invalidates both the mesh and the last
-solution.  Call ``discretize()`` again before the next solve.  Calling
-``discretize()`` also clears a previous solution.  Solvers intentionally raise
-``NotDiscretizedError`` or ``StaleDiscretizationError`` rather than silently
-solving on an obsolete mesh.
+solution. Call ``discretize()`` again to choose the new initial mesh, or let
+``solve()`` generate a coarse mesh automatically. Calling ``discretize()``
+also clears a previous solution. Low-level system access requires a current
+mesh and raises ``NotDiscretizedError`` or ``StaleDiscretizationError`` when
+that precondition is not met.
 
 One-dimensional example
 -----------------------
@@ -87,7 +114,7 @@ One-dimensional example
 
    # Interfaces, including both core faces, become exact mesh nodes.
    mesh = solver.discretize(max_element_size=60e-9)
-   modes = solver.solve(neff_guess=3.2)
+   modes = solver.solve(max_refinements=0, neff_guess=3.2)
 
    for number, mode in enumerate(modes, start=1):
        print(number, mode.polarization, mode.neff, mode.alpha)
@@ -142,6 +169,7 @@ Two-dimensional example
        quadrature_order=4,
    )
    modes = solver.solve(
+       max_refinements=0,
        neff_guess=3.2,
        residual_tolerance=1e-8,
        divergence_tolerance=1e-6,
@@ -161,16 +189,46 @@ Two-dimensional example
 1D solver.  ``guess=`` remains accepted as a keyword-only transition alias, but
 the two names cannot be supplied together.
 
-The 2D transverse field uses first-order Nedelec ``H(curl)`` elements and the
-longitudinal field uses continuous P1 elements.  The fixed-frequency
+The 2D transverse field uses Nedelec ``H(curl)`` elements and the
+longitudinal field uses continuous scalar elements.  ``discretize(element_order=1)``
+selects the default N1/P1 pair; ``element_order=2`` selects N2/P2 on the same
+affine triangular geometry.  Both fields are upgraded together to preserve
+the compatible gradient space.  Integration order is raised to at least four
+for N2/P2.  This is a uniform polynomial-order choice, not per-cell hp mixing.
+The fixed-frequency
 propagation problem is assembled as the analytic quadratic pencil
 
 .. math::
 
    \left(A_0+n_\mathrm{eff}A_1+n_\mathrm{eff}^2A_2\right)u=0.
 
+Sparse shift-invert applies companion-block elimination and factors only the
+original quadratic polynomial, halving the matrix dimension being factored.
+The 1D solver uses vectorized sparse assembly and Gauss integration controlled
+by ``quadrature_order``, including spatially varying PML coefficients.
+
+Material-interface refinement now defaults to ``interface_refinement=0.7``
+in the 2D solver, alongside material-wavelength and boundary sizing.  Pass
+``None`` to disable that distance field.  Failed 2D remeshing or assembly
+preserves the last valid mesh and solution.
+
 Material and geometry API
 -------------------------
+
+Both solvers adapt by default: ``solve(max_refinements=2,
+adaptive_tolerance=0.05)`` performs one initial solve and up to two refinements,
+stopping when the normalized field residual is at or below the threshold.
+``max_refinements=0`` preserves the initial mesh. A missing mesh starts with
+24 intervals in 1D, or four elements per material wavelength in 2D; geometry
+and wavelength constraints can require additional cells. The 1D solver locally
+bisects cells selected by volume and flux-jump residuals. The 2D solver measures
+normal-D and tangential-H jumps, then regenerates the conforming mesh at 1.5
+times the previous density. Element order and sizing controls are retained.
+The estimator is separate from ``residual_tolerance`` and is not a certified
+error bound. Inspect ``modes.metadata["adaptive_history"]``,
+``["adaptive_residual"]``, and ``["adaptive_converged"]``; reaching the budget
+does not imply convergence. Failed coarse eigensolves can consume a refinement
+and retry. A final failed eigensolve raises the original solver error.
 
 The common convenience methods retain the familiar solver names but now take
 physical coordinates:
@@ -209,8 +267,8 @@ For 1D:
 
    mesh = solver.discretize(
        max_element_size=None,
-       resolution=160,
-       wavelength_elements=10,
+       resolution=24,
+       wavelength_elements=4,
        material_aware=True,
        element_order=1,
        quadrature_order=4,
@@ -222,9 +280,9 @@ For 2D:
 
    mesh = solver.discretize(
        max_element_size=None,
-       wavelength_elements=10,
+       wavelength_elements=4,
        material_aware=True,
-       interface_refinement=None,
+       interface_refinement=0.7,
        boundary_refinement=0.5,
        quadrature_order=4,
    )
@@ -408,8 +466,9 @@ are preferred.  A packed array is also accepted when its final axis follows
 Current limits
 --------------
 
-* First-order line and Nedelec/P1 triangular elements are the validated
-  element families.
+* The 1D solver uses first-order line elements.  The 2D solver supports
+  compatible N1/P1 and N2/P2 pairs on affine triangles.  Per-cell hp mixing
+  and curved high-order geometry are not implemented.
 * Component-selective PEC/PMC volume masks from the Yee solver do not have a
   direct conforming FEM equivalent and are rejected rather than approximated.
 * The 2D backend supports isotropic surface-impedance facets.  The scalar 1D

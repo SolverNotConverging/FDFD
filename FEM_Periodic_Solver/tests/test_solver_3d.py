@@ -34,6 +34,36 @@ PERIOD = 5.0e-3
 EPSILON = 2.25
 
 
+def test_refinement_failure_rolls_back_density(monkeypatch):
+    solver = PeriodicModeSolver3D(FREQUENCY, WIDTH, HEIGHT, PERIOD)
+    solver._discretize_options = {"max_element_size": 0.006}
+
+    def fail(**kwargs):
+        raise RuntimeError("simulated mesh failure")
+
+    monkeypatch.setattr(solver, "discretize", fail)
+    with pytest.raises(RuntimeError, match="simulated mesh"):
+        solver.refine()
+    assert solver._refinement_scale == 1.0
+
+
+def test_geometry_changes_clear_all_modal_arrays():
+    solver = PeriodicModeSolver3D(FREQUENCY, WIDTH, HEIGHT, PERIOD)
+    for name in ("neff", "beta", "gamma"):
+        assert getattr(solver, name) is None
+        setattr(solver, name, np.ones(1))
+    solver.set_outer_boundary("pmc")
+    for name in ("result", "modes", "neff", "beta", "gamma"):
+        assert getattr(solver, name) is None
+
+
+@pytest.mark.parametrize("invalid", [True, np.nan, np.inf, 1.5, [], "3"])
+def test_invalid_3d_integer_controls_raise_configuration_error(invalid):
+    from FEM_Periodic_Solver import ConfigurationError
+    with pytest.raises(ConfigurationError, match="num_modes"):
+        PeriodicModeSolver3D(FREQUENCY, WIDTH, HEIGHT, PERIOD, num_modes=invalid)
+
+
 @pytest.fixture(scope="module")
 def guide() -> PeriodicModeSolver3D:
     solver = PeriodicModeSolver3D(
@@ -45,13 +75,13 @@ def guide() -> PeriodicModeSolver3D:
         neff_guess=1.3,
         background_epsilon=EPSILON,
     )
-    solver.discretize(max_element_size=6.0e-3)
+    solver.discretize(max_element_size=6.0e-3, wavelength_elements=8)
     return solver
 
 
 @pytest.fixture(scope="module")
 def guide_modes(guide: PeriodicModeSolver3D):
-    return guide.solve(direction="all", eigensolver="dense")
+    return guide.solve(max_refinements=0, direction="all", eigensolver="dense")
 
 
 def test_nedelec_algebra_periodicity_and_orientation(guide: PeriodicModeSolver3D) -> None:
@@ -174,7 +204,7 @@ def test_3d_refine_and_geometry_invalidation() -> None:
     assert fine.info.elements > coarse.info.elements
     solver.add_box(2.0, 1.0, (1e-3, 2e-3), (1e-3, 2e-3), (0.5e-3, 1.5e-3))
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
 
 
 @pytest.mark.slow
@@ -201,7 +231,7 @@ def test_rectangular_guide_te10_and_extruded_2d_agreement(
         background_epsilon=EPSILON,
     )
     solver_2d.discretize(max_element_size=1.5e-3)
-    result_2d = solver_2d.solve(direction="all", eigensolver="dense")
+    result_2d = solver_2d.solve(max_refinements=0, direction="all", eigensolver="dense")
     assert result_2d[0].neff.real == pytest.approx(mode.neff.real, rel=2.0e-2)
 
 
@@ -231,8 +261,8 @@ def test_3d_pml_fraction_filter_can_reject_or_be_disabled(
     monkeypatch.setattr(solver_3d_module, "_dense_candidates", candidates)
     monkeypatch.setattr(guide, "_make_mode", pml_dominated)
     with pytest.raises(SolverError, match=r"PML=1"):
-        guide.solve(direction="all", eigensolver="dense", max_pml_fraction=0.5)
-    mode = guide.solve(direction="all", eigensolver="dense", max_pml_fraction=None)[0]
+        guide.solve(max_refinements=0, direction="all", eigensolver="dense", max_pml_fraction=0.5)
+    mode = guide.solve(max_refinements=0, direction="all", eigensolver="dense", max_pml_fraction=None)[0]
     assert mode.pml_fraction == pytest.approx(0.9)
 
 

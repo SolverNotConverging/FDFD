@@ -22,7 +22,7 @@ mesh = solver.discretize(
     interface_refinement=0.65,
     boundary_refinement=0.4,
 )
-result = solver.solve()
+result = solver.solve(max_refinements=0)
 print(f"nodes={mesh.info.nodes}, triangles={mesh.info.elements}")
 print(f"electrode charge={result.conductor_charge('electrode'):.6e} C/m")
 solver.visualize()

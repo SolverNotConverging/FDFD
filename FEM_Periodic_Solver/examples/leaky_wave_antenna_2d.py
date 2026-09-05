@@ -40,6 +40,7 @@ def main() -> None:
     solver.discretize(max_element_size=0.35 * MM)
 
     modes = solver.solve(
+        max_refinements=0,
         direction="all",
         eigensolver="auto",
         max_pml_fraction=None,

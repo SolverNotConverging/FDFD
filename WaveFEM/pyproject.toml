@@ -13,6 +13,7 @@ authors = [
     { name = "WaveFEM contributors" },
 ]
 dependencies = [
+    "fem-adaptivity>=0.1.0",
     "numpy>=1.26,<3",
     "scipy>=1.12,<2",
     "scikit-fem>=12,<13",

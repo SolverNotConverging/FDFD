@@ -750,7 +750,7 @@ class ModeSolver:
         omega: float | None = None,
         wavelength: float | None = None,
         ky: float = 0.0,
-        num_elements: int = 160,
+        num_elements: int = 24,
         quadrature_order: int = 4,
         dense_linearization_limit: int = 420,
     ) -> None:
@@ -789,7 +789,10 @@ class ModeSolver:
                 "field before the boundary but does not replace its outer "
                 "termination."
             )
-        x_nodes = _mesh_nodes(self.cross_section, self.num_elements)
+        if getattr(self, "_adaptive_interfaces", None) == self.cross_section.interfaces:
+            x_nodes = self._adaptive_nodes
+        else:
+            x_nodes = _mesh_nodes(self.cross_section, self.num_elements)
         xi_nodes = self.frequency.k0 * x_nodes
         mesh = MeshLine(xi_nodes)
         basis_x = Basis(
@@ -1035,21 +1038,19 @@ class ModeSolver:
         tolerance: float,
     ) -> tuple[ComplexArray, ComplexArray, str]:
         n = system.ndofs
-        identity = eye(n, format="csr", dtype=np.complex128)
-        zero = _zero(n, n)
-        pencil_a = bmat(
-            ((zero, identity), (-system.A0, -system.A1)),
-            format="csc",
-            dtype=np.complex128,
-        )
-        pencil_b = bmat(
-            ((identity, zero), (zero, system.A2)),
-            format="csc",
-            dtype=np.complex128,
-        )
-        size = pencil_a.shape[0]
+        size = 2 * n
 
-        if size <= self.dense_linearization_limit:
+        if size <= self.dense_linearization_limit or size <= 3:
+            identity = eye(n, format="csr", dtype=np.complex128)
+            zero = _zero(n, n)
+            pencil_a = bmat(
+                ((zero, identity), (-system.A0, -system.A1)),
+                format="csc", dtype=np.complex128,
+            )
+            pencil_b = bmat(
+                ((identity, zero), (zero, system.A2)),
+                format="csc", dtype=np.complex128,
+            )
             homogeneous, eigenvectors = linalg.eig(
                 pencil_a.toarray(),
                 pencil_b.toarray(),
@@ -1074,16 +1075,22 @@ class ModeSolver:
 
         requested = min(max(count, 2), size - 2)
         shift = complex(sigma)
-        perturbation = 1e-9j * max(1.0, abs(shift))
+        perturbation = 1e-6j * max(1.0, abs(shift))
+        shifted = shift + perturbation
         try:
-            factor = splu(csc_matrix(pencil_a - (shift + perturbation) * pencil_b))
+            factor = splu(csc_matrix(system.polynomial(shifted)))
         except RuntimeError as exc:
             raise ModeSolverError(
                 f"Shifted mode pencil could not be factorized near neff={sigma!r}."
             ) from exc
 
+        # Eliminate the companion block analytically: only the original
+        # n-by-n quadratic polynomial needs a sparse LU factorization.
+        coupling = system.A1 + shifted * system.A2
+
         def apply_shift_invert(vector: ComplexArray) -> ComplexArray:
-            return np.asarray(factor.solve(pencil_b @ vector), dtype=np.complex128)
+            first = factor.solve(-(coupling @ vector[:n] + system.A2 @ vector[n:]))
+            return np.concatenate((first, vector[:n] + shifted * first))
 
         operator = LinearOperator(
             (size, size), matvec=apply_shift_invert, dtype=np.complex128
@@ -1305,7 +1312,13 @@ class ModeSolver:
             return mode.direction in ("forward", "right-decaying")
         return mode.direction in ("backward", "left-decaying")
 
-    def solve(
+    def solve(self, *, max_refinements: int = 2,
+              adaptive_tolerance: float = 0.05, **options) -> ModeSet:
+        """Adapt the mixed line mesh using normal-D/tangential-H residuals."""
+        from .adaptive import solve_modes
+        return solve_modes(self, options, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         *,
         num_modes: int = 4,

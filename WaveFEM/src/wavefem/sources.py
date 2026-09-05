@@ -158,7 +158,7 @@ def assemble_inserted_pec_boundary_values(
 
     The returned full mixed-space vector is zero away from the inserted PEC
     facets.  On those facets it supplies the scattered-field essential data
-    required by ``E_total,t = E_inc,t + E_sc,t = 0``.  The Nedelec and P1
+    required by ``E_total,t = E_inc,t + E_sc,t = 0``.  The Nedelec and scalar
     traces are projected separately on the facet set, so values away from the
     plate and the Nedelec normal component cannot affect the prescribed data.
     Composite-space DOF ordering is handled by scikit-fem rather than assumed

@@ -21,9 +21,9 @@ def _solve(delta_eps: float):
     )
     simulation.add_pml(z=0.8e-6, order=3, target_reflection=1e-8)
     simulation.mesh(max_element_size=0.20e-6, wavelength_elements=8)
-    modes = simulation.solve_modes(num_modes=1, neff_guess=1.0, num_elements=56)
+    modes = simulation.solve_modes(max_refinements=0, num_modes=1, neff_guess=1.0, num_elements=56)
     simulation.set_incident_mode(modes[0])
-    return simulation.solve()
+    return simulation.solve(max_refinements=0)
 
 
 @pytest.mark.gmsh

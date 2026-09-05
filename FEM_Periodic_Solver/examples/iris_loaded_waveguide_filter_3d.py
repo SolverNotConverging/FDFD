@@ -37,7 +37,10 @@ def main() -> None:
     )
     solver.discretize(max_element_size=4.0 * MM)
 
-    modes = solver.solve(direction="all", eigensolver="auto")
+    # The fixed-mesh Arnoldi solve can plateau around 2e-10; use a practical
+    # eigensolver tolerance while retaining the independent QEP/Gauss filters.
+    modes = solver.solve(direction="all", eigensolver="auto", max_refinements=0,
+                         eigensolver_tolerance=1e-8)
     print("neff:", modes.neff)
     solver.visualize_with_gui()
 

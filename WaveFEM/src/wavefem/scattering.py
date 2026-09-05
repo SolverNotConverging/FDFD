@@ -92,8 +92,15 @@ class SolverOptions:
     tolerance: float = 1e-10
     quadrature_order: int = 4
     projection_condition_limit: float = 1e12
+    element_order: int = 1
+    max_refinements: int = 2
+    adaptive_tolerance: float = 0.05
 
     def __post_init__(self) -> None:
+        from fem_adaptivity import validate_controls
+        validate_controls(self.max_refinements, self.adaptive_tolerance, ConfigurationError)
+        if isinstance(self.element_order, (bool, np.bool_)) or self.element_order not in (1, 2):
+            raise ConfigurationError("element_order must be 1 or 2.")
         if self.linear_solver != "direct":
             raise ConfigurationError("The initial solver supports linear_solver='direct' only.")
         if not np.isfinite(self.tolerance) or self.tolerance <= 0.0:
@@ -108,6 +115,7 @@ class SolverOptions:
             valid_quadrature = False
         if not valid_quadrature:
             raise ConfigurationError("quadrature_order must be an integer of at least two.")
+        object.__setattr__(self, "quadrature_order", max(int(self.quadrature_order), 2 * int(self.element_order)))
         if not np.isfinite(self.projection_condition_limit) or self.projection_condition_limit <= 1.0:
             raise ConfigurationError("projection_condition_limit must exceed one.")
 
@@ -174,7 +182,7 @@ class Scattering2D:
         self.modes: ModeSet | None = None
         self.incident: IncidentMode | None = None
         self._incident_mode_index: int | None = None
-        self._angle_mode_request: tuple[int, int] | None = None
+        self._angle_mode_request: tuple[int, int, int, float] | None = None
         self._angle_modes_resolved = self.angle is None or self.angle == 0.0
         self.left_monitor: float | None = None
         self.right_monitor: float | None = None
@@ -652,7 +660,7 @@ class Scattering2D:
         self,
         *,
         max_element_size: float | None = None,
-        wavelength_elements: int = 10,
+        wavelength_elements: int = 4,
         refine_interfaces: bool = True,
         dielectric_refinement_factor: float = 0.5,
         pec_refinement_factor: float = 0.5,
@@ -794,6 +802,11 @@ class Scattering2D:
         self._angle_modes_resolved = self.angle is None or self.angle == 0.0
         if self.angle is not None:
             self.ky = 0.0
+        self._mesh_settings = dict(max_element_size=selected, wavelength_elements=wavelength_elements,
+                                   refine_interfaces=refine_interfaces,
+                                   dielectric_refinement_factor=dielectric_factor,
+                                   pec_refinement_factor=pec_factor,
+                                   pec_refinement_distance=pec_distance)
         return self.mesh_data
 
     def _cross_section(self) -> CrossSection:
@@ -954,7 +967,7 @@ class Scattering2D:
                 "The incident family used to resolve angle must be a forward "
                 "propagating mode with positive effective index."
             )
-        num_modes, num_elements = self._angle_mode_request
+        num_modes, num_elements, max_refinements, adaptive_tolerance = self._angle_mode_request
         total_neff = float(seed.neff.real)
         angle_radians = radians(self.angle)
         self.ky = float(
@@ -971,9 +984,11 @@ class Scattering2D:
             num_modes=num_modes,
             neff_guess=expected_z_neff,
             direction="forward",
+            max_refinements=max_refinements,
+            adaptive_tolerance=adaptive_tolerance,
         )
         resolved = self.set_modes(candidates)
-        self._angle_mode_request = (num_modes, num_elements)
+        self._angle_mode_request = (num_modes, num_elements, max_refinements, adaptive_tolerance)
         propagating = [
             index for index, candidate in enumerate(resolved)
             if candidate.classification == "propagating" and candidate.neff.real > 0.0
@@ -1016,12 +1031,14 @@ class Scattering2D:
         num_modes: int = 4,
         neff_guess: complex | None = None,
         num_elements: int | None = None,
+        max_refinements: int | None = None,
+        adaptive_tolerance: float | None = None,
     ) -> ModeSet:
         if side not in ("left", "right"):
             raise ConfigurationError("side must be 'left' or 'right'.")
         if num_elements is None:
             h = self._mesh_size or self.frequency.wavelength / (10 * max(self._maximum_index(), 1.0))
-            num_elements = max(40, int(ceil((self.x_span[1] - self.x_span[0]) / h)))
+            num_elements = max(16, int(ceil((self.x_span[1] - self.x_span[0]) / h)))
         if self.angle is not None:
             self.ky = 0.0
         solver = ModeSolver(
@@ -1034,10 +1051,16 @@ class Scattering2D:
             num_modes=num_modes,
             neff_guess=neff_guess,
             direction="forward",
+            max_refinements=self.solver_options.max_refinements if max_refinements is None else max_refinements,
+            adaptive_tolerance=self.solver_options.adaptive_tolerance if adaptive_tolerance is None else adaptive_tolerance,
         )
         selected = self.set_modes(candidates)
         if self.angle is not None and self.angle != 0.0:
-            self._angle_mode_request = (int(num_modes), int(num_elements))
+            self._angle_mode_request = (
+                int(num_modes), int(num_elements),
+                self.solver_options.max_refinements if max_refinements is None else max_refinements,
+                self.solver_options.adaptive_tolerance if adaptive_tolerance is None else adaptive_tolerance,
+            )
             self._angle_modes_resolved = False
         return selected
 
@@ -1232,7 +1255,14 @@ class Scattering2D:
     def _poynting_x(E: NDArray[np.complex128], H: NDArray[np.complex128], weights: NDArray[np.float64]) -> float:
         return float(0.5 * np.real(np.sum(weights * (E[1] * np.conj(H[2]) - E[2] * np.conj(H[1])))))
 
-    def solve(
+    def solve(self, *, h5_path: str | PathLike[str] | None = None,
+              max_refinements: int | None = None,
+              adaptive_tolerance: float | None = None) -> ScatteringResult:
+        """Solve with adaptive remeshing and persist only the final result."""
+        from .adaptive import solve_scattering
+        return solve_scattering(self, h5_path, max_refinements, adaptive_tolerance)
+
+    def _solve_once(
         self,
         *,
         h5_path: str | PathLike[str] | None = None,
@@ -1268,6 +1298,7 @@ class Scattering2D:
             intorder=self.solver_options.quadrature_order,
             length_scale=length_scale,
             internal_pec_facets=self.mesh_data.actual_pec_facets,
+            element_order=self.solver_options.element_order,
         )
         scattered = solve_scattered_pec(
             system,
@@ -1280,6 +1311,8 @@ class Scattering2D:
             residual_tolerance=self.solver_options.tolerance,
         )
         coefficients = scattered.field.coefficients
+        self._adaptive_system = system
+        self._adaptive_coefficients = coefficients
 
         left_sc = sample_vertical_monitor(
             system.basis,
@@ -1500,6 +1533,8 @@ class Scattering2D:
                 "angle_degrees": self.angle,
                 "ky": self.ky,
                 "length_scale": length_scale,
+                "element_order": self.solver_options.element_order,
+                "quadrature_order": system.quadrature_order,
                 "source_active_fraction": scattered.source.active_quadrature_fraction,
                 "released_pec_facet_count": scattered.source.released_pec_facet_count,
                 "inserted_pec_facet_count": scattered.source.inserted_pec_facet_count,
@@ -1547,6 +1582,8 @@ class Scattering2D:
         self,
         *,
         h5_path: str | PathLike[str] = "wavefem_result.h5",
+        max_refinements: int | None = None,
+        adaptive_tolerance: float | None = None,
     ) -> ScatteringResult:
         """Solve and always persist a complete single-run HDF5 result."""
 
@@ -1555,7 +1592,8 @@ class Scattering2D:
                 "run() requires an HDF5 destination; use solve() for an "
                 "explicitly in-memory result."
             )
-        return self.solve(h5_path=h5_path)
+        return self.solve(h5_path=h5_path, max_refinements=max_refinements,
+                          adaptive_tolerance=adaptive_tolerance)
 
 
 __all__ = ["Scattering2D", "SolverOptions"]

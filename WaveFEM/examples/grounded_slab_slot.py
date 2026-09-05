@@ -22,6 +22,7 @@ def build_simulation(frequency_hz: float = DESIGN_FREQUENCY_HZ) -> wf.Scattering
     """Return the grounded-slab slot configuration at one frequency."""
 
     simulation = wf.Scattering2D(
+        solver_options=wf.SolverOptions(max_refinements=0),
         frequency=frequency_hz,
         angle=0.0,
         x_span=(-20.0 * MM, 20.0 * MM),
@@ -57,12 +58,13 @@ def solve_single(output: Path) -> wf.ScatteringResult:
     simulation = build_simulation()
     mesh = simulation.mesh(max_element_size=2.0 * MM, wavelength_elements=10)
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=1.8,
         num_elements=96,
     )
     simulation.set_incident_mode(modes[0])
-    result = simulation.run(h5_path=output)
+    result = simulation.run(h5_path=output, max_refinements=0)
 
     print("selected maximum edge (mm) =", mesh.info.requested_maximum_edge / MM)
     print("surface-mode effective index =", modes[0].neff)

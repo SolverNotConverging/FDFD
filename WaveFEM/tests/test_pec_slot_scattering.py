@@ -53,6 +53,7 @@ def test_grounded_slab_slot_has_boundary_only_scattering_and_h5_scene(
     assert mesh.released_pec_facets.size > 0
     assert np.intersect1d(mesh.actual_pec_facets, mesh.released_pec_facets).size == 0
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=1.8,
         num_elements=96,
@@ -60,7 +61,7 @@ def test_grounded_slab_slot_has_boundary_only_scattering_and_h5_scene(
     assert modes[0].neff.real == pytest.approx(1.798, abs=0.01)
     simulation.set_incident_mode(modes[0])
     destination = tmp_path / "grounded_slab_slot.h5"
-    result = simulation.run(h5_path=destination)
+    result = simulation.run(h5_path=destination, max_refinements=0)
     stored = wf.load_h5(destination).results[0]
 
     assert result.solve_info["source_active_fraction"] == 0.0

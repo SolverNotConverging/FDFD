@@ -215,7 +215,7 @@ def test_2d_solver_records_element_ownership_for_every_sample() -> None:
         guess=np.sqrt(0.75),
     )
     solver.discretize(resolution=(5, 3))
-    fields = solver.solve()[0].fields
+    fields = solver.solve(max_refinements=0)[0].fields
 
     owners = np.asarray(fields.metadata["sample_element_indices"], dtype=np.int64)
     assert owners.shape == fields.component("Ey").shape

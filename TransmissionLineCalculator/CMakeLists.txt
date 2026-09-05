@@ -88,6 +88,17 @@ target_link_libraries(tl-core PUBLIC Eigen3::Eigen "${TL_GMSH_TARGET}")
 target_compile_features(tl-core PUBLIC cxx_std_20)
 tl_enable_warnings(tl-core)
 
+option(TL_BUILD_EXAMPLES "Build the fixed-mesh native FEM examples" OFF)
+if(TL_BUILD_EXAMPLES)
+    add_executable(tl-line-comparison
+        examples/line_comparison.cpp
+        native/field_plot.cpp
+        native/field_view.cpp
+    )
+    target_link_libraries(tl-line-comparison PRIVATE tl::core Qt6::Widgets)
+    tl_enable_warnings(tl-line-comparison)
+endif()
+
 add_executable(transmission-line-calculator WIN32 MACOSX_BUNDLE
     native/main.cpp
     native/main_window.cpp
@@ -125,6 +136,13 @@ tl_enable_warnings(transmission-line-calculator-cli)
 
 include(CTest)
 if(BUILD_TESTING)
+    if(TL_BUILD_EXAMPLES)
+        add_test(NAME tl-line-comparison-gui COMMAND tl-line-comparison --smoke-test)
+        set_tests_properties(tl-line-comparison-gui PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            TIMEOUT 120
+        )
+    endif()
     add_executable(tl-solver-tests
         tests/test_solver.cpp
     )

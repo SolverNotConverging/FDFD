@@ -35,12 +35,13 @@ def _solve_open_slab(*, perturbed: bool):
     )
     simulation.mesh(wavelength_elements=9, refine_interfaces=False)
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=3.2,
         num_elements=54,
     )
     simulation.set_incident_mode(modes[0])
-    return simulation.solve()
+    return simulation.solve(max_refinements=0)
 
 
 @pytest.mark.gmsh

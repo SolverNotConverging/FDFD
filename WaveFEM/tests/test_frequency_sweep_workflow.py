@@ -25,6 +25,7 @@ def test_run_persists_complete_result_and_records_absolute_path(tmp_path) -> Non
     simulation = _uniform_simulation(frequency_hz)
     simulation.mesh(max_element_size=0.25e-6, wavelength_elements=6)
     modes = simulation.solve_modes(
+        max_refinements=0,
         num_modes=1,
         neff_guess=1.0,
         num_elements=40,

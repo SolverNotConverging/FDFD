@@ -123,13 +123,15 @@ def test_released_and_actual_pec_facets_must_be_disjoint() -> None:
         )
 
 
-def test_inserted_pec_prescribes_negative_incident_tangential_trace() -> None:
+@pytest.mark.parametrize("element_order", [1, 2])
+def test_inserted_pec_prescribes_negative_incident_tangential_trace(element_order) -> None:
     mesh = MeshTri.init_tensor(np.linspace(0.0, 1.0, 5), np.linspace(0.0, 1.0, 5))
     facets = mesh.facets_satisfying(lambda x: np.isclose(x[0], 0.5))
     system = assemble_mixed_system(
         mesh,
         MaxwellParameters(k0=1.7, ky=0.3, eps_r=2.0),
         internal_pec_facets=facets,
+        element_order=element_order,
     )
 
     def affine_incident(x: np.ndarray, z: np.ndarray) -> np.ndarray:

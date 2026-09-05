@@ -17,12 +17,38 @@ from FEM_Mode_Solver.materials import Material
 from FEM_Mode_Solver.solver_1d import ModeSolver1D
 
 
+def test_pml_quadrature_converges_to_integrated_weak_form() -> None:
+    from scipy.integrate import quad_vec
+
+    solver = ModeSolver1D(c, (0.0, 1.0), 1)
+    solver.add_pml(0.4, n=3, sigma_max=5.0, direction="x+")
+    solver.discretize(resolution=8, wavelength_elements=4, material_aware=False)
+
+    def integrand(x):
+        eps, mu = solver.geometry.transformed_material_at(np.asarray(x))
+        return np.array([
+            solver.k0 * mu[1] * x**2 - 1.0 / (solver.k0 * eps[2]),
+            solver.k0 * x**2 / eps[0],
+        ])
+
+    expected, _ = quad_vec(integrand, 0.0, 1.0, points=[0.6], epsabs=1e-12)
+    errors = []
+    for order in (2, 12):
+        solver._quadrature_order = order
+        _, system = solver._assemble_systems()
+        vector = solver.mesh.nodes[system.free_nodes]
+        actual = np.array([vector @ (system.A @ vector), vector @ (system.B @ vector)])
+        errors.append(np.linalg.norm(actual - expected))
+    assert errors[0] > 1e-6
+    assert errors[1] < errors[0] * 1e-5
+
+
 def test_discretization_is_explicit_and_conforms_to_layer_interfaces() -> None:
     solver = ModeSolver1D(30e9, 15e-3, 2)
     solver.add_layer(4.0, 1.0, (3.7e-3, 11.3e-3), name="core")
 
     with pytest.raises(NotDiscretizedError, match="discretize"):
-        solver.solve()
+        solver._solve_once()
 
     mesh = solver.discretize(resolution=31)
     assert np.any(np.isclose(mesh.nodes, 3.7e-3, rtol=0.0, atol=1e-15))
@@ -112,7 +138,7 @@ def test_refine_remeshes_and_invalidates_previous_modes() -> None:
     solver = ModeSolver1D(20e9, 20e-3, 1)
     solver.add_layer(4.0, 1.0, (7e-3, 13e-3))
     coarse = solver.discretize(resolution=24, wavelength_elements=6)
-    solver.solve()
+    solver.solve(max_refinements=0)
     assert solver.solution is not None
 
     fine = solver.refine(factor=2.0)
@@ -159,13 +185,13 @@ def test_geometry_placement_after_meshing_invalidates_the_mesh() -> None:
 
     assert solver.mesh is None
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
 
 
 def test_direct_geometry_edit_invalidates_mesh_and_solved_result() -> None:
     solver = ModeSolver1D(25e9, 12e-3, 1)
     solver.discretize(resolution=24)
-    solver.solve()
+    solver.solve(max_refinements=0)
     assert solver.solution is not None
 
     solver.geometry.add_region(
@@ -176,7 +202,7 @@ def test_direct_geometry_edit_invalidates_mesh_and_solved_result() -> None:
     assert solver.solution is None
     assert solver.modes is None
     with pytest.raises(NotDiscretizedError):
-        solver.solve()
+        solver._solve_once()
 
 
 def test_homogeneous_pec_parallel_plate_spectrum_matches_analytic_modes() -> None:
@@ -184,7 +210,7 @@ def test_homogeneous_pec_parallel_plate_spectrum_matches_analytic_modes() -> Non
     width = 20e-3
     solver = ModeSolver1D(frequency, width, 3)
     solver.discretize(resolution=100)
-    modes = solver.solve(residual_tolerance=1e-9)
+    modes = solver.solve(max_refinements=0, residual_tolerance=1e-9)
 
     k0 = 2.0 * np.pi * frequency / c
     first_order = np.sqrt(1.0 - (np.pi / (k0 * width)) ** 2)
@@ -205,7 +231,7 @@ def test_sparse_shift_invert_retains_degenerate_te_tm_pair() -> None:
     width = 20e-3
     solver = ModeSolver1D(frequency, width, 3, neff_guess=1.0)
     solver.discretize(resolution=220)
-    modes = solver.solve(dense_limit=50, residual_tolerance=1e-8)
+    modes = solver.solve(max_refinements=0, dense_limit=50, residual_tolerance=1e-8)
 
     k0 = 2.0 * np.pi * frequency / c
     first_order = np.sqrt(1.0 - (np.pi / (k0 * width)) ** 2)
@@ -236,7 +262,7 @@ def test_uniform_diagonal_tm_tem_mode_uses_correct_tensor_components() -> None:
         background_mu=mu,
     )
     solver.discretize(resolution=40)
-    mode = solver.solve()[0]
+    mode = solver.solve(max_refinements=0)[0]
 
     assert mode.polarization == "TM"
     assert mode.neff == pytest.approx(expected, abs=5e-10)
@@ -259,7 +285,7 @@ def test_pmc_outer_walls_produce_the_dual_te_tem_mode() -> None:
     )
     solver.add_pmc()
     solver.discretize(resolution=32)
-    mode = solver.solve()[0]
+    mode = solver.solve(max_refinements=0)[0]
 
     assert mode.polarization == "TE"
     assert mode.neff == pytest.approx(expected, abs=5e-10)
@@ -279,7 +305,7 @@ def test_passive_loss_has_negative_neff_imaginary_part_for_public_convention() -
         background_epsilon=epsilon,
     )
     solver.discretize(resolution=36)
-    mode = solver.solve()[0]
+    mode = solver.solve(max_refinements=0)[0]
 
     assert mode.polarization == "TM"
     assert mode.neff == pytest.approx(expected, rel=2e-10, abs=2e-10)
@@ -298,7 +324,7 @@ def test_pml_mode_solve_falls_back_cleanly_if_dense_ggev_is_unstable() -> None:
     solver.add_layer(4.0, 1.0, (-0.25, 0.25))
     solver.add_pml(0.6, sigma_max=4.0)
     solver.discretize(resolution=80)
-    modes = solver.solve(residual_tolerance=1e-7)
+    modes = solver.solve(max_refinements=0, residual_tolerance=1e-7)
 
     assert len(modes) == 2
     assert all(np.isfinite((mode.neff.real, mode.neff.imag)).all() for mode in modes)
@@ -321,4 +347,4 @@ def test_impedance_geometry_is_explicitly_rejected_until_robin_form_exists() -> 
     solver.discretize(resolution=40)
 
     with pytest.raises(BackendCapabilityError, match="impedance-surface"):
-        solver.solve()
+        solver.solve(max_refinements=0)
