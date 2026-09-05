@@ -93,6 +93,17 @@ class ScatteringSceneMixin(SceneMixin):
         self._invalidate()
         return result
 
+    def remove(self, *, geometry):
+        """Remove an owned geometry object or the slot returned by add_slot()."""
+        if isinstance(geometry, native.PECSlot):
+            for index, slot in enumerate(self.geometry.pec_slots):
+                if slot is geometry:
+                    del self.geometry.pec_slots[index]
+                    self._invalidate()
+                    return
+            raise GeometryError('Slot does not belong to this solver or was removed.')
+        super().remove(geometry=geometry)
+
     def set_material_field(self, *, material, background_material):
         """Use named actual/background SpatialMaterial fields instead of objects."""
         if self._objects:

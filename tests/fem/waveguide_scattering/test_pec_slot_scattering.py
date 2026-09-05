@@ -24,6 +24,33 @@ def test_grounded_pec_slot_is_preserved_in_modes_and_frequency_clones() -> None:
     assert clone.geometry.pec_slots is not simulation.geometry.pec_slots
 
 
+def test_public_slot_removal_invalidates_state_and_allows_sheet_removal() -> None:
+    solver = wf.WaveguideScatteringSolver2D(
+        frequency=10e9, x_range=(-0.01, 0.01), z_range=(-0.02, 0.02),
+        boundary=materials.PEC,
+    )
+    sheet = solver.add_geometry(
+        shape=shapes.Segment(start=(0., -0.02), end=(0., 0.02)),
+        material=materials.PEC, background=True,
+    )
+    slot = solver.add_slot(geometry=sheet, z_range=(-0.001, 0.001))
+    with pytest.raises(wf.GeometryError, match='dependent slots'):
+        solver.remove(geometry=sheet)
+    # Even an equal but foreign record must not remove the owned slot.
+    from dataclasses import replace
+    with pytest.raises(wf.GeometryError, match='does not belong'):
+        solver.remove(geometry=replace(slot))
+    solver.mesh_data = object()
+    solver._result = object()
+    solver.remove(geometry=slot)
+    assert solver.mesh_data is None and solver.result is None
+    assert not solver.geometry.pec_slots
+    with pytest.raises(wf.GeometryError, match='was removed'):
+        solver.remove(geometry=slot)
+    solver.remove(geometry=sheet)
+    assert not solver.objects and not solver.geometry.pec_sheets
+
+
 def test_high_level_pec_api_accepts_only_compact_actual_only_sheet() -> None:
     simulation = wf.WaveguideScatteringSolver2D(frequency=10000000000.0, x_range=(-10.0 * MM, 10.0 * MM), z_range=(-20.0 * MM, 20.0 * MM), boundary=materials.PEC)
     plate = simulation.add_geometry(background=False, name='finite_plate', shape=shapes.Segment(start=(1.0 * MM, (-2.0 * MM, 3.0 * MM)[0]), end=(1.0 * MM, (-2.0 * MM, 3.0 * MM)[1])), material=materials.PEC)

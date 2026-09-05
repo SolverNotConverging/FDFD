@@ -736,14 +736,16 @@ class ModeViewer:
         self._colorbar: Any | None = None
         self._updating_options = False
 
-        self.figure = plt.figure(figsize=(10.5, 6.5))
+        self.figure = plt.figure(figsize=(12.0, 7.0))
+        self.figure.canvas.manager.set_window_title('FEM Waveguide Mode Solver — Results')
         # Keep the field and colorbar in independent, fixed axes.  Passing the
         # field axes to ``Figure.colorbar`` would make Matplotlib take space
         # from it on every redraw; removing that colorbar does not restore a
         # manually positioned axes, so repeated widget changes progressively
         # shrink the field panel.
-        self.axes = self.figure.add_axes((0.08, 0.12, 0.60, 0.80))
-        self._colorbar_axes = self.figure.add_axes((0.705, 0.17, 0.022, 0.70))
+        self.axes = self.figure.add_axes((0.08, 0.12, 0.53, 0.80))
+        # Reserve room for tick labels and the colorbar label before controls.
+        self._colorbar_axes = self.figure.add_axes((0.64, 0.17, 0.022, 0.70))
         self._colorbar_axes.set_visible(False)
         mode_axes = self.figure.add_axes((0.77, 0.67, 0.21, 0.25))
         component_axes = self.figure.add_axes((0.77, 0.39, 0.10, 0.24))

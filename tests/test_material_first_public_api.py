@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import inspect
 
-import inspect
-
 import numpy as np
 import pytest
 

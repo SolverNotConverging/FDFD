@@ -1,6 +1,14 @@
 # Computational Electromagnetics
 
-Version 1.0.0 organizes independently installable Python solver families and separately built native applications.
+Computational Electromagnetics intentionally uses simplified Python syntax to make
+electromagnetic calculations easier to set up and explore. Define a solver, define
+reusable materials, add geometry, mesh, solve, and inspect the results in a GUI.
+You can change field components, modes, and display options without writing a new
+plotting script for each view.
+
+Version 1.0.0 provides independently installable FDFD and FEM solver families and
+separately built native applications. See the [release history](doc/development/release_history.md)
+for changes since the earlier FDFD releases.
 
 | Method | Problem | Package | Usage guide | API reference |
 |---|---|---|---|---|
@@ -55,15 +63,67 @@ let pip provision isolated build dependencies.
 
 ## Quick start
 
-From the repository root, run:
+The general workflow is:
 
-```sh
-python examples/fem/electrostatics/parallel_plate_capacitor_1d.py
+```text
+Define solver → Define materials → Add geometry → Mesh → Solve → Show results
 ```
 
-The example prints capacitor energy and opens an interactive potential and field
-viewer. The [solver guides](doc/README.rst) explain how to configure geometry,
-materials, meshing, and solving for each family.
+A small 10 GHz copper microstrip example follows. All lengths are in metres;
+`epsilon` is relative permittivity. This model uses a finite PEC enclosure, an
+air background, a lossy substrate, and copper surface-impedance boundaries.
+
+```python
+from cem_common import Material, materials
+from fem_waveguide_modes import ModeSolver2D
+
+# 1. Define the solver and its physical domain.
+x_range = (-6e-3, 6e-3)
+solver = ModeSolver2D(
+    frequency=10e9, x_range=x_range, y_range=(-35e-6, 6e-3),
+    background_material=materials.air, boundary=materials.PEC,
+)
+
+# 2. Define materials; copper is a built-in good-conductor SIBC preset.
+substrate = Material(name="microwave laminate", epsilon=3.55 * (1 - 0.0027j))
+copper = materials.copper
+
+# 3. Assign materials to the substrate, ground plane, and strip.
+solver.add_rectangle(x_range=x_range, y_range=(0, 1.524e-3), material=substrate)
+solver.add_rectangle(x_range=x_range, y_range=(-35e-6, 0), material=copper)
+solver.add_rectangle(
+    x_range=(-1.5e-3, 1.5e-3), y_range=(1.524e-3, 1.559e-3), material=copper,
+)
+
+# 4. Mesh, solve for one mode, and open the interactive results viewer.
+solver.mesh(max_element_size=0.6e-3, wavelength_elements=10, material_aware=True)
+result = solver.solve(num_modes=1, neff_guess=1.65, max_refinements=0)
+solver.show()
+```
+
+In the GUI, select **E**, **magnitude**, **mesh**, and **normalize** to obtain
+the view below. The field is strongest near the strip edges, where the mesh is
+also finer. The example gives approximately `neff = 1.7001 - 0.00276j`;
+the negative imaginary part represents passive forward attenuation.
+
+![Microstrip electric-field magnitude in the interactive FEM viewer, with mesh overlay and normalized color scale](doc/assets/microstrip_mode_e_mesh_gui.png)
+
+*Actual viewer screenshot from the [copper microstrip example](examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py).
+Copper interiors are excluded from the mesh. Field amplitudes are normalized
+for display; this is an eigenmode calculation, not an applied-voltage simulation.*
+
+Run the complete example after installation:
+
+```sh
+python examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py
+```
+
+`solver.show()` and `result.show()` open interactive GUIs. Waveguide modes and
+electrostatics use Matplotlib; FEM periodic modes and waveguide scattering use
+the separately built native viewers. For a static figure, use
+`figure = result.plot(component="E", quantity="magnitude", mode=0)` and
+`figure.savefig("microstrip.png")`. The [solver guides](doc/README.rst) explain
+the available controls and physics-specific operations.
 
 The `src/` packages must be installed before running examples. Once installed in
 the same Python environment, examples work from their own directories too:
@@ -76,7 +136,12 @@ python embedded_electrode_2d_anisotropic.py
 If an example reports `ModuleNotFoundError`, check `python -m pip list --editable`
 and rerun the installation command with that same interpreter.
 
-The FEM workflow is `solver.mesh(...)`, `result = solver.solve(...)`, and `solver.show()`. Meshing can be automatic; geometry changes invalidate the current mesh and result. Solves do not open windows or save files. Use `result.plot(...)`, `result.save(path)`, and the family’s `load_result(path)` for completed results. See the [example index](examples/README.rst) for runnable tutorials and their recommended order.
+Meshing can be automatic; geometry changes invalidate the current mesh and result.
+Solves do not open windows or save files. Use `result.save(path)` and the family’s
+`load_result(path)` to inspect a completed result later without solving again.
+The example selects a fixed mesh with `max_refinements=0`; FEM solves otherwise
+default to up to two adaptive refinements. See the [example index](examples/README.rst)
+for runnable tutorials and their recommended order.
 
 Example names follow `<physical_problem>_<dimension>[_<feature>].py`. Scripts that
 save results write under `outputs/examples/<method>/<family>/<example>/`, regardless
@@ -117,7 +182,7 @@ python scripts/qualify_examples.py
 python scripts/qualify_native.py
 ```
 
-Wheel qualification installs every package outside the checkout and checks the compiled eigensolver. Example qualification runs every solver example with viewer launches suppressed. Native qualification checks Python-written archives in the inspectors and offscreen viewers. Publishing is a separate operation. Release qualification is tracked in [the implementation record](doc/development/overhaul_status.md).
+Wheel qualification installs every package outside the checkout and checks the compiled eigensolver. Example qualification runs every solver example with viewer launches suppressed. Native qualification checks Python-written archives in the inspectors and offscreen viewers. Published changes are recorded in the [release history](doc/development/release_history.md).
 
 The [documentation index](doc/README.rst) contains all Python solver and library
 guides and API references. Package READMEs are short navigation pages retained

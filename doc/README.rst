@@ -26,7 +26,7 @@ Shared libraries
 Contributors
 ------------
 
-* `Implementation and qualification record <development/overhaul_status.md>`_
+* `Release history <development/release_history.md>`_
 * `Curated FEM public API inventory <public_api.json>`_
 * `Curated FDFD public API inventory <fdfd_public_api.json>`_
 

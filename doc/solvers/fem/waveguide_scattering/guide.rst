@@ -73,6 +73,10 @@ The example uses a fixed mesh for reproducibility. Geometry edits invalidate
 ``show()`` uses the separately built native viewer. Launch failures report
 the executable discovery setting; saving and loading work without the viewer.
 
+``slot = solver.add_slot(geometry=sheet, z_range=(z0, z1))`` cuts an opening
+in a background PEC sheet. Use ``solver.remove(geometry=slot)`` to close it.
+Remove dependent slots before removing their parent sheet.
+
 Electromagnetic fields use ``exp(+i*omega*t)`` and guided propagation
 ``exp(-i*beta*z)``. Passive constitutive values have nonpositive imaginary
 parts; forward attenuation is ``-Im(beta)``.

@@ -510,7 +510,7 @@ Returns: the configured geometry/excitation handle, or None for in-place configu
 
     WaveguideScatteringSolver2D.remove(*, geometry)
 
-Remove an object and invalidate its mesh/result.
+Remove an owned geometry object or the slot returned by add_slot().
 
 .. list-table:: Arguments
    :header-rows: 1
