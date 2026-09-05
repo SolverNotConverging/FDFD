@@ -1,6 +1,6 @@
-# Computational Electromagnetics
+# FDFD v1.0.0
 
-Computational Electromagnetics intentionally uses simplified Python syntax to make
+FDFD v1.0.0 intentionally uses simplified Python syntax to make
 electromagnetic calculations easier to set up and explore. Define a solver, define
 reusable materials, add geometry, mesh, solve, and inspect the results in a GUI.
 You can change field components, modes, and display options without writing a new
