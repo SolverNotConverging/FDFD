@@ -1,30 +1,30 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FDFDNativeApplications LANGUAGES C CXX)
+project(ComputationalElectromagnetics VERSION 1.0.0 LANGUAGES C CXX)
 
 include(CTest)
 
-option(FDFD_BUILD_TRANSMISSION_LINE_CALCULATOR
+option(CEM_BUILD_TRANSMISSION_LINE_CALCULATOR
     "Build the native transmission-line calculator" ON)
-option(FDFD_BUILD_WAVEFEM_VIEWER
-    "Build the native WaveFEM HDF5 viewer" ON)
-option(FDFD_BUILD_FEM_PERIODIC_VIEWER
+option(CEM_BUILD_FEM_WAVEGUIDE_SCATTERING_VIEWER
+    "Build the FEM waveguide scattering viewer" ON)
+option(CEM_BUILD_FEM_PERIODIC_MODE_VIEWER
     "Build the standalone periodic-FEM HDF5 viewer and inspector" ON)
 
-if(FDFD_BUILD_TRANSMISSION_LINE_CALCULATOR)
-    add_subdirectory(TransmissionLineCalculator)
+if(CEM_BUILD_TRANSMISSION_LINE_CALCULATOR)
+    add_subdirectory(apps/transmission_line_calculator)
 endif()
 
-if(FDFD_BUILD_WAVEFEM_VIEWER)
-    add_subdirectory(WaveFEMViewer)
+if(CEM_BUILD_FEM_WAVEGUIDE_SCATTERING_VIEWER)
+    add_subdirectory(apps/fem_waveguide_scattering_viewer)
 endif()
 
-if(FDFD_BUILD_FEM_PERIODIC_VIEWER)
-    add_subdirectory(FEMPeriodicViewer)
+if(CEM_BUILD_FEM_PERIODIC_MODE_VIEWER)
+    add_subdirectory(apps/fem_periodic_mode_viewer)
 endif()
 
-if(NOT FDFD_BUILD_TRANSMISSION_LINE_CALCULATOR
-   AND NOT FDFD_BUILD_WAVEFEM_VIEWER
-   AND NOT FDFD_BUILD_FEM_PERIODIC_VIEWER)
+if(NOT CEM_BUILD_TRANSMISSION_LINE_CALCULATOR
+   AND NOT CEM_BUILD_FEM_WAVEGUIDE_SCATTERING_VIEWER
+   AND NOT CEM_BUILD_FEM_PERIODIC_MODE_VIEWER)
     message(WARNING "All native applications are disabled; there is nothing to build.")
 endif()

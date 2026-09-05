@@ -1,0 +1,21 @@
+from fdfd_waveguide_modes import ModeSolver2D
+
+# Ridge waveguide cross-section
+x_range = 24e-3
+y_range = 16e-3
+Nx = 240
+Ny = 160
+frequency = 50e9
+num_modes = 5
+
+solver = ModeSolver2D(frequency, x_range, y_range, Nx, Ny, num_modes)
+
+# Slab
+solver.add_rectangle((3.0, 4.0, 5.0), 1, (0, Nx), (60, 80))
+
+# Ridge
+solver.add_rectangle(6.0, 1, (100, 140), (80, 100))
+
+solver.add_UPML(pml_width=30, n=3, sigma_max=1, direction="x")
+solver.solve()
+solver.visualize_with_gui()

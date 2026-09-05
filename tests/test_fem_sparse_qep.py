@@ -7,8 +7,8 @@ import pytest
 from scipy import linalg
 from scipy.sparse import bmat, csr_matrix, eye
 
-import FEM_Mode_Solver.assembly as standalone
-import wavefem.modes as wave_modes
+import fem_waveguide_modes.assembly as standalone
+import fem_waveguide_scattering.modes as wave_modes
 
 
 @pytest.mark.parametrize("backend", [standalone, wave_modes])

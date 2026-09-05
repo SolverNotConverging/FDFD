@@ -213,14 +213,15 @@ __marimo__/
 # Personal use scripts/data
 personal_use/
 
+# Generated simulations and release qualification artifacts
+/outputs/
+
 mode_data.*
 
-# Local validation/build outputs used by the periodic solvers and viewer
+# Local validation/build outputs
 /.pytest_tmp_*/
 /.viewer_install_test/
 /.native_wheel_test/
 /build*/
-/FEMPeriodicViewer/build*/
-/FEM_Periodic_Solver/examples/*.h5
 
 

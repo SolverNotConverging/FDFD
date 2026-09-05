@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fdfd-band-structure"
+version = "1.0.0"
+description = "fdfd band structure for computational electromagnetics"
+readme = "README.rst"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

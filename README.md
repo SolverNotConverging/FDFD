@@ -1,174 +1,67 @@
-# Computational Electromagnetics Solvers
+# Computational Electromagnetics
 
-Finite-element and finite-difference frequency-domain solvers for computational electromagnetics.
+Version 1.0.0 organizes independently installable Python solver families and separately built native applications.
 
-The repository is organised by problem type. Each FEM solver package has a `README.rst` introduction with tutorials and an `API_REFERENCE.rst` covering public APIs with required/optional, type, default, and explanation tables. All FEM examples explicitly disable adaptive refinement; application defaults remain adaptive.
-
-## Solver Map
-
-### FEM solvers and viewers
-
-| Folder | Solver | Use case | Documentation |
+| Method | Problem | Package | User reference |
 |---|---|---|---|
-| `FEM_Mode_Solver/` | `ModeSolver1D`, `ModeSolver2D` | Standalone conforming-FEM modes with adaptive meshing and 2D SIBC conductors | [Tutorials](FEM_Mode_Solver/README.rst), [API](FEM_Mode_Solver/API_REFERENCE.rst) |
-| `TransmissionLineCalculator/` | Native Qt/FTXUI quasi-TEM calculator | Fast Gmsh/P1-FEM coaxial, microstrip, stripline, and CPW extraction | [Tutorials](TransmissionLineCalculator/README.rst), [API](TransmissionLineCalculator/API_REFERENCE.rst) |
-| `WaveFEM/` | Full-wave finite-element solver | 2D electromagnetic scattering, ports, modes, sweeps, and HDF5 results | [Tutorials](WaveFEM/README.rst), [API](WaveFEM/API_REFERENCE.rst) |
-| `WaveFEMViewer/` | Native Qt HDF5 viewer | Interactive inspection of WaveFEM schema-v1 fields, modes, and S-parameters | [`README.rst`](WaveFEMViewer/README.rst) |
-| `FEM_Periodic_Solver/` | `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Self-contained P1/Nedelec fixed-frequency periodic FEM | [Tutorials](FEM_Periodic_Solver/README.rst), [API](FEM_Periodic_Solver/API_REFERENCE.rst) |
-| `FEMPeriodicViewer/` | Native Qt/HDF5 viewer and inspector | Lazy 2D/optional-VTK 3D FEM periodic result viewing | [`README.rst`](FEMPeriodicViewer/README.rst) |
-| `Electrostatic_Solver/` | `ElectrostaticSolver` | Geometry-first Gmsh/scikit-fem 1D/2D Poisson and Laplace problems | [Tutorials](Electrostatic_Solver/README.rst), [API](Electrostatic_Solver/API_REFERENCE.rst) |
+| FDFD | waveguide modes | `fdfd_waveguide_modes` | [API](solvers/fdfd/waveguide_modes/API_REFERENCE.rst) |
+| FDFD | periodic modes | `fdfd_periodic_modes` | [API](solvers/fdfd/periodic_modes/API_REFERENCE.rst) |
+| FDFD | band structure | `fdfd_band_structure` | [API](solvers/fdfd/band_structure/API_REFERENCE.rst) |
+| FDFD | scattering | `fdfd_scattering` | [API](solvers/fdfd/scattering/API_REFERENCE.rst) |
+| FEM | waveguide modes | `fem_waveguide_modes` | [API](solvers/fem/waveguide_modes/API_REFERENCE.rst) |
+| FEM | periodic modes | `fem_periodic_modes` | [API](solvers/fem/periodic_modes/API_REFERENCE.rst) |
+| FEM | waveguide scattering | `fem_waveguide_scattering` | [API](solvers/fem/waveguide_scattering/API_REFERENCE.rst) |
+| FEM | electrostatics | `fem_electrostatics` | [API](solvers/fem/electrostatics/API_REFERENCE.rst) |
 
-### FDFD solvers
+Waveguide scattering is **2.5D full-vector** physics on a 2D mesh. Electromagnetic solvers use `exp(+i*omega*t)`; passive material loss has a nonpositive imaginary part.
 
-| Folder | Solver | Use case | Documentation |
-|---|---|---|---|
-| `Mode_Solver_1D/` | `ModeSolver1D` | TE/TM modes of 1D slab waveguides | [`README.rst`](Mode_Solver_1D/README.rst) |
-| `Mode_Solver_2D/` | `ModeSolver2D` | Full-vector modes of 2D waveguide cross-sections | [`README.rst`](Mode_Solver_2D/README.rst) |
-| `Periodic_Solver_2D/` | `PeriodicModeSolver2D` | 2D Bloch-periodic TE/TM unit-cell modes | [`README.rst`](Periodic_Solver_2D/README.rst) |
-| `Periodic_Solver_3D/` | `PeriodicModeSolver3D` | 3D Bloch-periodic full-vector modes | [`README.rst`](Periodic_Solver_3D/README.rst) |
-| `Band_Diagram_Solver/` | `BandDiagramSolver2D` | 2D photonic-crystal band diagrams | [`README.rst`](Band_Diagram_Solver/README.rst) |
-| `Scattering/` | `FDFD2DScatteringSolver` | 2D TEz/TMz scattering problems | [`README.rst`](Scattering/README.rst) |
-
-The shared [`periodic_eigensolver/`](periodic_eigensolver/README.rst) package
-provides the Cython/BLAS refined shift-and-invert Arnoldi backend used by both
-the periodic FDFD and FEM solvers.
-
-Utility scripts at the repository root include `Mesh_points_calculation.py` and `PML_sigma_calculation.py`.
-
-## Requirements
-
-The solvers are plain Python modules. A typical environment needs:
-
-```bash
-pip install numpy scipy matplotlib
+```text
+solvers/      Python FDFD and FEM families, each with src/, examples/, and tests/
+apps/         Native viewers and transmission-line calculator
+libraries/    Shared FEM contracts, adaptivity, and periodic eigensolver
+docs/         User and contributor documentation
+tests/        Cross-package regression and integration checks
+benchmarks/   Numerical performance and convergence studies
+tools/        User grid and PML calculators
+scripts/      Development, build, and release tooling
+outputs/      Ignored generated files
 ```
 
-Some visualizers use Tk through Matplotlib. If GUI windows do not open, install the Tk package for your Python distribution.
+Create the project environment from the repository root:
 
-The standalone FEM packages, including the electrostatic solver, additionally need scikit-fem and Gmsh; their
-installation and environments are documented in
-[`FEM_Mode_Solver/README.rst`](FEM_Mode_Solver/README.rst) and
-[`FEM_Periodic_Solver/README.rst`](FEM_Periodic_Solver/README.rst).
-
-The native C++20 applications support MinGW-w64 or MSVC on Windows, AppleClang on
-macOS, and GCC or Clang on Linux. The native viewers use Qt 6.2 or newer.
-The transmission line calculator additionally needs FTXUI, Eigen 3.4 or newer, and Gmsh; the
-WaveFEM and FEM periodic viewers need HDF5 1.10 or newer. The FEM periodic
-viewer can optionally use VTK 9.2 or newer. Platform-specific dependency and
-build commands are documented in the
-[`TransmissionLineCalculator`](TransmissionLineCalculator/README.rst) and
-[`WaveFEMViewer`](WaveFEMViewer/README.rst), and
-[`FEMPeriodicViewer`](FEMPeriodicViewer/README.rst) READMEs.
-
-### Build native applications
-
-When the dependencies are in CMake's normal search path, configure all applications from
-the repository root with any single-configuration generator:
-
-```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+```sh
+conda env create -f environment.yml
+conda activate cem
+python scripts/install_python.py --editable
+python -m pytest
 ```
 
-For Visual Studio and other multi-configuration generators, select the
-configuration at build and test time:
+Installation and run scripts use the active Python interpreter. An existing environment with the required dependencies also works.
 
-```powershell
-cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 `
-  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build-msvc --config Release --parallel
-ctest --test-dir build-msvc -C Release --output-on-failure
+The FEM workflow is `solver.mesh(...)`, `result = solver.solve(...)`, and `solver.show()`. Meshing can be automatic; geometry changes invalidate the current mesh and result. Solves do not open windows or save files. Use `result.plot(...)`, `result.save(path)`, and the family’s `load_result(path)` for completed results. See each package README for runnable examples.
+
+All FEM archives use `cem-fem-results` schema `1.0`, with physical units, field representation, and convention metadata. Loaded results support inspection rather than solver restart. Old imports, scattering phasors, and archive formats have no compatibility layer.
+
+Build the native applications after installing Qt 6, HDF5, Eigen, Gmsh, and FTXUI; the periodic viewer also supports VTK:
+
+```sh
+cmake -S . -B outputs/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build outputs/build --parallel
+ctest --test-dir outputs/build --output-on-failure
 ```
 
-The root build can be limited to one application with
-`-DFDFD_BUILD_TRANSMISSION_LINE_CALCULATOR=OFF` or
-`-DFDFD_BUILD_WAVEFEM_VIEWER=OFF`, and
-`-DFDFD_BUILD_FEM_PERIODIC_VIEWER=OFF`. The periodic viewer's optional VTK
-mode is selected with `-DFEM_PERIODIC_VIEWER_WITH_VTK=AUTO|ON|OFF`.
-`CMAKE_PREFIX_PATH` may be supplied when
-Qt or the other libraries are installed outside the platform's standard
-locations.
+- [FEM Waveguide Scattering Viewer](apps/fem_waveguide_scattering_viewer/README.rst)
+- [FEM Periodic Mode Viewer](apps/fem_periodic_mode_viewer/README.rst)
+- [Transmission Line Calculator](apps/transmission_line_calculator/README.rst)
 
-## Basic Workflow
+Build and qualify Python release artifacts with:
 
-1. Pick the solver folder that matches the physics.
-2. Read that folder's `README.rst` for the API and expected outputs.
-3. Run or modify the example script in the same folder.
-4. Keep generated data in the folder's `example_outputs/` directory.
-
-## Examples
-
-```bash
-cd Mode_Solver_1D
-python example_grounded_isotropic_slab.py
+```sh
+python scripts/build_wheels.py
+python scripts/qualify_wheels.py
+python scripts/check_documentation.py
+python scripts/qualify_examples.py
+python scripts/qualify_native.py
 ```
 
-```bash
-cd Mode_Solver_2D
-python example_ridge_dielectric_waveguide.py
-```
-
-```bash
-python -m FEM_Mode_Solver.examples.slab_1d
-python -m FEM_Mode_Solver.examples.ridge_2d
-python -m FEM_Mode_Solver.examples.microstrip_sibc
-```
-
-```bash
-python -m FEM_Periodic_Solver.examples.leaky_wave_antenna_2d
-python -m FEM_Periodic_Solver.examples.iris_loaded_waveguide_filter_3d
-```
-
-```bash
-cd Band_Diagram_Solver
-python example_square_lattice.py
-```
-
-## Notes
-
-- Length units are SI metres unless an example explicitly normalises geometry.
-- Material values are relative tensors unless stated otherwise.
-- Large grids produce large sparse systems. Start with coarse examples before increasing resolution.
-- Several solvers use shift-invert eigensolves. If convergence is poor, adjust the mode count, grid size, or eigenvalue guess.
-
-## FEM validation
-
-From the repository root, with the solver dependencies installed:
-
-```bash
-python -m pytest tests FEM_Mode_Solver/tests FEM_Periodic_Solver/tests Electrostatic_Solver/tests WaveFEM/tests periodic_eigensolver/tests
-```
-
-The root pytest configuration resolves the WaveFEM source and example paths and
-isolates duplicate test-module names. Native transmission-line regression tests
-can be run with `ctest --test-dir build -R tl-solver-tests --output-on-failure`.
-
-Every FEM solver now starts with a coarse mesh when none is supplied and adapts
-by default. Python solvers accept `solve(max_refinements=2, adaptive_tolerance=0.05)`:
-one initial solve followed by at most two refinements, stopping early when the
-normalized discretization residual meets the threshold. `max_refinements=0`
-keeps the initial mesh. This residual measures field/flux continuity and is
-independent of the linear/eigenvalue solver tolerance; it is not a certified
-solution-error bound. Exhausting the budget returns the last valid solution
-with convergence reported as false.
-
-Electrostatics and 1D modes bisect marked cells locally. The 2D Maxwell,
-periodic 2D/3D, WaveFEM scattering, and native transmission-line solvers
-regenerate their geometry-conforming meshes at increasing density. Periodic
-constraints, material interfaces, PEC boundaries, and monitors are rebuilt.
-Python modal results expose `metadata["adaptive_history"]`; WaveFEM uses
-`solve_info["adaptive_history"]`, and electrostatics `adaptive_history`.
-The native API exposes `maxRefinements`, `adaptiveTolerance`, and
-`adaptiveHistory`; its GUI and TUI expose the controls and stopping reason.
-
-Install the shared policy package from this checkout before installing the
-Maxwell packages: `python -m pip install -e ./fem_adaptivity`.
-
-The 2D standalone Maxwell solver supports `discretize(element_order=2)`, and WaveFEM scattering
-supports `SolverOptions(element_order=2)` for compatible N2/P2 elements. These
-are uniform order selections; per-cell hp mixing is not implemented.
-
-## Reference
-
-R. Rumpf, *Electromagnetic and Photonic Simulation for the Beginner: Finite-Difference Frequency-Domain in MATLAB*. Artech House, 2022.
+Wheel qualification installs every package outside the checkout and checks the compiled eigensolver. Example qualification runs the FEM examples with viewer launches suppressed. Native qualification checks Python-written archives in the inspectors and offscreen viewers. Publishing is a separate operation. Release qualification is tracked in [the implementation record](docs/development/overhaul_status.md).

@@ -10,44 +10,14 @@ from scipy.special import hankel2
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_solver_module(module_name, relative_path):
-    """Load a direct-folder solver without leaking its generic helper import."""
-
-    path = REPOSITORY_ROOT / relative_path
-    support_directory = str(path.parent)
-    previous_helper = sys.modules.pop("yee_derivative", None)
-    previous_module = sys.modules.get(module_name)
-    sys.path.insert(0, support_directory)
-    try:
-        spec = importlib.util.spec_from_file_location(module_name, path)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        return module
-    finally:
-        sys.path.remove(support_directory)
-        sys.modules.pop("yee_derivative", None)
-        if previous_module is None:
-            sys.modules.pop(module_name, None)
-        else:
-            sys.modules[module_name] = previous_module
-        if previous_helper is not None:
-            sys.modules["yee_derivative"] = previous_helper
-
-
-SCATTERING_MODULE = load_solver_module(
-    "_test_scattering_solver",
-    "Scattering/Scattering_Solver_2D.py",
-)
-BAND_MODULE = load_solver_module(
-    "_test_band_diagram_solver",
-    "Band_Diagram_Solver/Band_Diagram_Solver.py",
-)
+from importlib import import_module
+SCATTERING_MODULE = import_module("fdfd_scattering.solver_2d")
+BAND_MODULE = import_module("fdfd_band_structure.solver_2d")
 
 
 class ScatteringTimeConventionTests(unittest.TestCase):
     def make_solver(self):
-        return SCATTERING_MODULE.FDFD2DScatteringSolver(
+        return SCATTERING_MODULE.ScatteringSolver2D(
             frequency=2.0e9,
             x_range=0.12,
             y_range=0.08,
@@ -128,7 +98,7 @@ class BandDiagramTimeConventionTests(unittest.TestCase):
         self.assertAlmostEqual(derivative_x[-1, 0], expected_wrap)
 
     def test_normalised_frequency_preserves_complex_decay_sign(self):
-        solver = BAND_MODULE.BandDiagramSolver2D(a=2 * np.pi, Nx=2)
+        solver = BAND_MODULE.BandStructureSolver2D(a=2 * np.pi, Nx=2)
         eigenvalues = np.array([4.0 + 0.4j, 4.0 - 0.4j, 4.0 + 0.0j])
 
         frequencies = solver._normalise_eigenvalues(eigenvalues)
@@ -140,7 +110,7 @@ class BandDiagramTimeConventionTests(unittest.TestCase):
         self.assertEqual(frequencies[2].imag, 0.0)
 
     def test_uniform_passive_medium_has_positive_imaginary_frequency(self):
-        solver = BAND_MODULE.BandDiagramSolver2D(
+        solver = BAND_MODULE.BandStructureSolver2D(
             a=1.0,
             Nx=6,
             background_er=2.25 - 0.09j,

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fem-periodic-modes"
+version = "1.0.0"
+description = "fem periodic modes for computational electromagnetics"
+readme = "README.rst"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["fem-common>=1.0.0,<2", "fem-adaptivity>=1.0.0,<2", "numpy>=1.26,<3", "scipy>=1.12,<2", "scikit-fem>=12,<13", "gmsh>=4.13,<5", "h5py>=3.10,<4", "matplotlib>=3.8,<4", "periodic-eigensolver>=1.0.0,<2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+fem-periodic-modes-inspect = "fem_periodic_modes.inspect_h5:main"
