@@ -9,7 +9,7 @@ from scipy.sparse import diags, linalg as spla
 from .yee_derivative import yeeder2d  # ← your own helper remains untouched
 
 
-class ScatteringSolver2D:
+class _ScatteringSolver2D:
     """
     2-D frequency–domain FDFD solver (TEz / TMz) on a Yee grid.
     Geometry is defined on the cell centres,   E/H - derivatives on staggered edges

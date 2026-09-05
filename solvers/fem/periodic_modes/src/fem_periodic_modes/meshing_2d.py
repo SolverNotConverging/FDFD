@@ -60,6 +60,10 @@ def _material_scale(material: object) -> float:
 
 
 def _add_occ_shape(gmsh: object, shape: object, origin: tuple[float, float], scale: float) -> tuple[int, int]:
+    from cem_common.shapes import Shape
+    from cem_common._occ import add_shape
+    if isinstance(shape, Shape):
+        return add_shape(gmsh, shape, origin, scale)
     occ = gmsh.model.occ
     x0, z0 = origin
     if isinstance(shape, Rectangle):

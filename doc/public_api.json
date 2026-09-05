@@ -1,0 +1,40 @@
+{
+  "fem_waveguide_modes": {
+    "path": "solvers/fem/waveguide_modes",
+    "exports": ["ModeSolver1D", "ModeSolver2D", "Mode", "ModeSet", "SampledFields", "BackendCapabilityError", "ConfigurationError", "FEMModeSolverError", "GeometryError", "MeshError", "SolverError", "NoResultError", "PersistenceError", "load_result"],
+    "solvers": {
+      "ModeSolver1D": ["__init__", "add_geometry", "add_layer", "set_material", "set_shape", "set_boundary", "add_pml", "remove", "refine", "mesh", "solve", "show"],
+      "ModeSolver2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "set_material", "set_shape", "set_boundary", "add_mesh_refinement", "add_pml", "remove", "refine", "mesh", "solve", "show"]
+    },
+    "results": {"ModeSet": ["plot", "show", "save", "mode", "by_polarization"]},
+    "documentation": "doc/solvers/fem/waveguide_modes"
+  },
+  "fem_periodic_modes": {
+    "path": "solvers/fem/periodic_modes",
+    "exports": ["PeriodicModeSolver2D", "PeriodicModeSolver3D", "PeriodicMode", "PeriodicModeSet", "PeriodicSampledFields", "PeriodicSweepResult", "BackendCapabilityError", "ConfigurationError", "FEMPeriodicSolverError", "GeometryError", "MeshError", "PersistenceError", "SolverError", "NoResultError", "load_result"],
+    "solvers": {
+      "PeriodicModeSolver2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "set_material", "set_shape", "set_boundary", "add_mesh_refinement", "add_pml", "remove", "refine", "mesh", "solve", "show"],
+      "PeriodicModeSolver3D": ["__init__", "add_geometry", "add_box", "add_sphere", "add_cylinder", "set_material", "set_shape", "set_boundary", "add_mesh_refinement", "add_pml", "remove", "refine", "mesh", "solve", "show"]
+    },
+    "results": {"PeriodicModeSet": ["plot", "show", "save", "mode", "by_polarization"], "PeriodicSweepResult": ["from_results", "plot", "show", "save"]},
+    "documentation": "doc/solvers/fem/periodic_modes"
+  },
+  "fem_waveguide_scattering": {
+    "path": "solvers/fem/waveguide_scattering",
+    "exports": ["WaveguideScatteringSolver2D", "ScatteringResult", "FrequencySweepResult", "IncidentMode", "Mode", "ModeSet", "Diagnostic", "DiagnosticReport", "BackendCapabilityError", "ConfigurationError", "GeometryError", "MaterialError", "MeshError", "ModeProjectionError", "ModeSolverError", "SolverError", "ViewerError", "NoResultError", "PersistenceError", "load_result"],
+    "solvers": {
+      "WaveguideScatteringSolver2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "add_slot", "set_material", "set_shape", "set_material_field", "set_boundary", "add_pml", "set_monitors", "remove", "mesh", "solve_modes", "set_incident_mode", "solve", "sweep", "show"]
+    },
+    "results": {"ScatteringResult": ["plot", "show", "save", "S", "check", "deembed"], "FrequencySweepResult": ["plot", "show", "save", "S"]},
+    "documentation": "doc/solvers/fem/waveguide_scattering"
+  },
+  "fem_electrostatics": {
+    "path": "solvers/fem/electrostatics",
+    "exports": ["ElectrostaticSolver", "ElectrostaticResult", "ElectrostaticSolverError", "GeometryError", "MeshError", "SolverError", "NoResultError", "PersistenceError", "load_result"],
+    "solvers": {
+      "ElectrostaticSolver": ["__init__", "add_geometry", "add_layer", "add_rectangle", "add_circle", "add_polygon", "set_material", "set_shape", "set_potential", "add_charge_density", "remove", "mesh", "solve", "show"]
+    },
+    "results": {"ElectrostaticResult": ["plot", "show", "save", "conductor_charge"]},
+    "documentation": "doc/solvers/fem/electrostatics"
+  }
+}

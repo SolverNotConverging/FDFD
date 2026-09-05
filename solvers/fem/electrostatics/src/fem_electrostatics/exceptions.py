@@ -1,9 +1,9 @@
 """Exceptions raised by the finite-element electrostatic solver."""
-from fem_common import errors as _common
+from cem_common import errors as _common
 
 
 
-class ElectrostaticSolverError(_common.FEMError, RuntimeError):
+class ElectrostaticSolverError(_common.CEMError, RuntimeError):
     """Base exception for this package."""
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fem_common import ResultMixin
+from cem_common.contracts import ResultMixin
 
 from dataclasses import dataclass
 from os import PathLike

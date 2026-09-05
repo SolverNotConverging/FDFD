@@ -9,7 +9,7 @@ description = "fdfd waveguide modes for computational electromagnetics"
 readme = "README.rst"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4"]
+dependencies = ["cem-common>=1.0.0,<2", "numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4"]
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]

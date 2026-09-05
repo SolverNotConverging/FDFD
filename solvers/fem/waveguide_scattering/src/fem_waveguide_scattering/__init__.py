@@ -7,16 +7,16 @@ from .modes import Mode
 from .modes import ModeSet
 from .results import Diagnostic
 from .results import DiagnosticReport
-from .exceptions import ConfigurationError
+from cem_common.errors import BackendCapabilityError, ConfigurationError, GeometryError
 from .exceptions import MaterialError
-from .exceptions import MeshError
+from cem_common.errors import MeshError
 from .exceptions import ModeProjectionError
 from .exceptions import ModeSolverError
-from .exceptions import SolverError
-from .exceptions import ViewerError
+from cem_common.errors import SolverError
+from cem_common.errors import ViewerError
 from .result_api import load_result
-from fem_common import NoResultError
-from fem_common import PersistenceError
+from cem_common import NoResultError
+from cem_common import PersistenceError
 
 __version__ = "1.0.0"
-__all__ = ['WaveguideScatteringSolver2D', 'ScatteringResult', 'FrequencySweepResult', 'IncidentMode', 'Mode', 'ModeSet', 'Diagnostic', 'DiagnosticReport', 'ConfigurationError', 'MaterialError', 'MeshError', 'ModeProjectionError', 'ModeSolverError', 'SolverError', 'ViewerError', 'load_result', 'NoResultError', 'PersistenceError']
+__all__ = ['WaveguideScatteringSolver2D', 'ScatteringResult', 'FrequencySweepResult', 'IncidentMode', 'Mode', 'ModeSet', 'Diagnostic', 'DiagnosticReport', 'BackendCapabilityError', 'ConfigurationError', 'GeometryError', 'MaterialError', 'MeshError', 'ModeProjectionError', 'ModeSolverError', 'SolverError', 'ViewerError', 'load_result', 'NoResultError', 'PersistenceError']

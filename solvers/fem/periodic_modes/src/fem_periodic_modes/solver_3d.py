@@ -1,8 +1,10 @@
 """Geometry-first full-vector periodic FEM solver in three dimensions."""
 
 from __future__ import annotations
+from cem_common import materials
+from .scene import PeriodicScene3D
 
-from fem_common.contracts import ElectromagneticSolverMixin
+from cem_common.contracts import ElectromagneticSolverMixin
 
 from dataclasses import asdict
 from typing import Any, Literal
@@ -147,10 +149,15 @@ def _refined_candidates(
     return values, full_vectors[: system.ndofs], residuals, f"refined-{backend_name}"
 
 
-class PeriodicModeSolver3D(ElectromagneticSolverMixin):
+class PeriodicModeSolver3D(PeriodicScene3D, ElectromagneticSolverMixin):
     """Solve complex fixed-frequency Bloch propagation in a tetrahedral cell."""
 
-    def __init__(self, *, frequency: float, x_range: float | tuple[float, float], y_range: float | tuple[float, float], z_range: float | tuple[float, float], background_epsilon: MaterialInput=1.0, background_mu: MaterialInput=1.0, boundary: str='pec') -> None:
+    def __init__(self, *, frequency: float, x_range: float | tuple[float, float], y_range: float | tuple[float, float], z_range: float | tuple[float, float], background_material: materials.Material=materials.vacuum, boundary: materials.IdealBoundary=materials.PEC) -> None:
+        self._init_scene(background_material=background_material)
+        background_epsilon, background_mu = materials.bulk_values(background_material)
+        if not isinstance(boundary, materials.IdealBoundary):
+            raise ConfigurationError('boundary must be materials.PEC or materials.PMC.')
+        boundary = boundary.kind
         self.frequency = _positive_real(frequency, "frequency")
         self.omega = 2.0 * np.pi * self.frequency
         self.k0 = self.omega / C_0
@@ -191,25 +198,25 @@ class PeriodicModeSolver3D(ElectromagneticSolverMixin):
         self._invalidate_solution()
         self._discretized_revision = None
 
-    def add_box(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: tuple[float, float], y_range: tuple[float, float], z_range: tuple[float, float], name: str | None=None) -> object:
+    def _add_box_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: tuple[float, float], y_range: tuple[float, float], z_range: tuple[float, float], name: str | None=None) -> object:
         return self.geometry.add_region(
             Box(x_range, y_range, z_range), Material(epsilon, mu), name=name
         )
 
-    def add_cylinder(self, *, epsilon: MaterialInput, mu: MaterialInput, center: tuple[float, float], radius: float, z_range: tuple[float, float], name: str | None=None) -> object:
+    def _add_cylinder_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, center: tuple[float, float], radius: float, z_range: tuple[float, float], name: str | None=None) -> object:
         return self.geometry.add_region(
             Cylinder(center, radius, z_range), Material(epsilon, mu), name=name
         )
 
-    def add_sphere(self, *, epsilon: MaterialInput, mu: MaterialInput, center: tuple[float, float, float], radius: float, name: str | None=None) -> object:
+    def _add_sphere_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, center: tuple[float, float, float], radius: float, name: str | None=None) -> object:
         return self.geometry.add_region(
             Sphere(center, radius), Material(epsilon, mu), name=name
         )
 
-    def add_pec(self, *, shape: Shape3D, name: str | None=None) -> object:
+    def _add_pec_impl(self, *, shape: Shape3D, name: str | None=None) -> object:
         return self.geometry.add_boundary(shape, "pec", name=name)
 
-    def add_pmc(self, *, shape: Shape3D, name: str | None=None) -> object:
+    def _add_pmc_impl(self, *, shape: Shape3D, name: str | None=None) -> object:
         return self.geometry.add_boundary(shape, "pmc", name=name)
 
     def add_pml(self, *, thickness: float, order: int=3, sigma_max: float=5.0, direction: str='all') -> object:
@@ -223,10 +230,10 @@ class PeriodicModeSolver3D(ElectromagneticSolverMixin):
             shape, max_element_size, name=name
         )
 
-    def remove(self, handle: object) -> None:
+    def _remove_impl(self, handle: object) -> None:
         self.geometry.remove(handle)  # type: ignore[arg-type]
 
-    def set_outer_boundary(self, *, kind: str) -> None:
+    def _set_outer_boundary_impl(self, *, kind: str) -> None:
         self.geometry.set_outer_boundary(kind)
 
     def _mesh_impl(

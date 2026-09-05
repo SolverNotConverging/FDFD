@@ -13,8 +13,10 @@ number per polarization.
 """
 
 from __future__ import annotations
+from cem_common import materials
+from .scene import WaveguideScene1D
 
-from fem_common.contracts import ElectromagneticSolverMixin
+from cem_common.contracts import ElectromagneticSolverMixin
 
 from dataclasses import dataclass
 from typing import Literal, Sequence
@@ -115,7 +117,7 @@ def _passive_material(material: Material, context: str) -> None:
         raise ConfigurationError("epsilon entries must be nonzero in the 1D FEM backend.")
 
 
-class ModeSolver1D(ElectromagneticSolverMixin):
+class ModeSolver1D(WaveguideScene1D, ElectromagneticSolverMixin):
     """FEM-native mode solver for an x-stratified cross-section.
 
     Geometry is recorded continuously by the ``add_*`` methods.  Call
@@ -130,7 +132,9 @@ class ModeSolver1D(ElectromagneticSolverMixin):
         ``(minimum, maximum)`` pair in metres.
     """
 
-    def __init__(self, *, frequency: float, x_range: float | Sequence[float], background_epsilon: MaterialInput=1.0, background_mu: MaterialInput=1.0) -> None:
+    def __init__(self, *, frequency: float, x_range: float | Sequence[float], background_material: materials.Material=materials.vacuum) -> None:
+        self._init_scene(background_material=background_material)
+        background_epsilon, background_mu = materials.bulk_values(background_material)
         self.frequency = _finite_positive(frequency, "frequency")
         self.omega = 2.0 * np.pi * self.frequency
         self.k0 = self.omega / C_0
@@ -171,7 +175,7 @@ class ModeSolver1D(ElectromagneticSolverMixin):
         self.mesh_data = None
         self._clear_result_views()
 
-    def add_layer(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], name: str | None=None) -> Region:
+    def _add_layer_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], name: str | None=None) -> Region:
         """Place a material interval and return its geometry handle.
 
         Later regions take precedence in overlap areas.  Material interfaces
@@ -220,17 +224,17 @@ class ModeSolver1D(ElectromagneticSolverMixin):
         self._geometry_changed()
         return handle
 
-    def add_pec(self, *, x_range: Sequence[float] | None=None, components: object | None=None, name: str | None=None) -> BoundaryRegion | None:
+    def _add_pec_impl(self, *, x_range: Sequence[float] | None=None, components: object | None=None, name: str | None=None) -> BoundaryRegion | None:
         """Add an opaque PEC interval, or set both outer walls to PEC."""
 
         return self._add_boundary("pec", x_range, components=components, name=name)
 
-    def add_pmc(self, *, x_range: Sequence[float] | None=None, components: object | None=None, name: str | None=None) -> BoundaryRegion | None:
+    def _add_pmc_impl(self, *, x_range: Sequence[float] | None=None, components: object | None=None, name: str | None=None) -> BoundaryRegion | None:
         """Add an opaque PMC interval, or set both outer walls to PMC."""
 
         return self._add_boundary("pmc", x_range, components=components, name=name)
 
-    def add_impedance_surface(self, *, Zs: complex | None=None, preset: str | None=None, x_range: Sequence[float], name: str | None=None) -> BoundaryRegion:
+    def _add_impedance_surface_impl(self, *, Zs: complex | None=None, preset: str | None=None, x_range: Sequence[float], name: str | None=None) -> BoundaryRegion:
         """Record a scalar impedance object.
 
         Geometry and meshing support the object now; assembly intentionally
@@ -279,13 +283,13 @@ class ModeSolver1D(ElectromagneticSolverMixin):
 
 
 
-    def set_outer_boundary(self, *, kind: str) -> None:
+    def _set_outer_boundary_impl(self, *, kind: str) -> None:
         """Set both transverse truncation walls to ``'pec'`` or ``'pmc'``."""
 
         self.geometry.set_outer_boundary(kind)
         self._geometry_changed()
 
-    def remove(self, handle: Region | BoundaryRegion | PMLSpec) -> None:
+    def _remove_impl(self, handle: Region | BoundaryRegion | PMLSpec) -> None:
         """Remove a previously returned geometry handle."""
 
         if isinstance(handle, PMLSpec):

@@ -1,4 +1,5 @@
 """Adaptive API contracts and coarse-start integration for every FEM backend."""
+from cem_common import Material, SurfaceImpedance, materials, shapes
 
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -13,7 +14,7 @@ from fem_periodic_modes import PeriodicModeSolver2D, PeriodicModeSolver3D
 from fem_waveguide_scattering.materials import Material
 from fem_waveguide_scattering.modes import CrossSection, ModeSolver
 from fem_waveguide_scattering.scattering import WaveguideScatteringSolver2D
-from fem_waveguide_scattering.exceptions import ConfigurationError as WaveConfigurationError
+from cem_common.errors import ConfigurationError as WaveConfigurationError
 
 
 def modal_case(kind):
@@ -58,7 +59,7 @@ def test_default_budget_refines_coarse_modes_and_reduces_residual(kind):
 
 @pytest.mark.gmsh
 def test_3d_periodic_coarse_start_regenerates_valid_constraints():
-    solver = PeriodicModeSolver3D(frequency=10000000000.0, x_range=0.02, y_range=0.01, z_range=0.005, background_epsilon=2.25)
+    solver = PeriodicModeSolver3D(frequency=10000000000.0, x_range=0.02, y_range=0.01, z_range=0.005, background_material=materials.Material(epsilon=2.25, mu=1.0))
     result = solver.solve(adaptive_tolerance=1e-05, num_modes=1, neff_guess=1.3)
     history = result.metadata["adaptive_history"]
     assert len(history) == 3
@@ -72,9 +73,9 @@ def test_3d_periodic_coarse_start_regenerates_valid_constraints():
 
 
 def scattering_case(contrast=0.):
-    simulation = WaveguideScatteringSolver2D(frequency=299792458.0 / 1.0, x_range=(0.0, 0.5), z_range=(-2.0, 2.0), transverse_boundary='pec')
+    simulation = WaveguideScatteringSolver2D(frequency=299792458.0 / 1.0, x_range=(0.0, 0.5), z_range=(-2.0, 2.0), boundary=materials.PEC)
     if contrast:
-        simulation.add_rectangle(x_range=(0.0, 0.5), z_range=(-0.3, 0.3), epsilon=1.0 + contrast)
+        simulation.add_rectangle(x_range=(0.0, 0.5), z_range=(-0.3, 0.3), material=materials.Material(epsilon=1.0 + contrast, mu=1.0))
     simulation.add_pml(thickness=0.5, direction='z')
     return simulation
 

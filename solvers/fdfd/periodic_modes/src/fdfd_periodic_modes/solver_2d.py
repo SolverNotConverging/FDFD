@@ -14,7 +14,7 @@ from periodic_eigensolver.refined import (
 )
 
 
-class PeriodicModeSolver2D:
+class _PeriodicModeSolver2D:
     """2D Bloch-periodic TE/TM mode solver on a periodic Yee grid.
 
     The raw eigenvalue is ``gamma`` in ``exp(-gamma*z)``. Phasors use

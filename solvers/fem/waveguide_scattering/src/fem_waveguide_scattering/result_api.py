@@ -9,9 +9,9 @@ import threading
 import h5py
 import numpy as np
 
-from fem_common import MeshSnapshot
-from fem_common.errors import PersistenceError
-from fem_common.persistence import validate_envelope, read_value
+from cem_common import MeshSnapshot
+from cem_common.errors import PersistenceError
+from cem_common.persistence import validate_envelope, read_value
 from .hdf5 import _load_result, save_result_h5, save_sweep_h5
 from .results import ScatteringResult
 from .modes import Mode

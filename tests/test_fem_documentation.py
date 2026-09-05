@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-INVENTORY = json.loads((ROOT / 'docs/public_api.json').read_text())
+INVENTORY = json.loads((ROOT / 'doc/public_api.json').read_text())
 
 
 @pytest.mark.parametrize('package', INVENTORY)
@@ -15,7 +15,7 @@ def test_curated_public_api_and_signatures(package):
     spec = INVENTORY[package]
     module = importlib.import_module(package)
     assert set(module.__all__) == set(spec['exports'])
-    reference = (ROOT / spec['path'] / 'API_REFERENCE.rst').read_text(encoding='utf-8')
+    reference = (ROOT / spec['documentation'] / 'API_REFERENCE.rst').read_text(encoding='utf-8')
     for name in spec['exports']:
         assert hasattr(module, name)
         assert f'``{name}``' in reference
@@ -36,8 +36,8 @@ def test_curated_public_api_and_signatures(package):
 @pytest.mark.parametrize('package', INVENTORY)
 def test_rst_is_valid(package):
     from docutils.core import publish_doctree
-    for filename in ('README.rst', 'API_REFERENCE.rst'):
-        path = ROOT / INVENTORY[package]['path'] / filename
+    for filename in ('guide.rst', 'API_REFERENCE.rst'):
+        path = ROOT / INVENTORY[package]['documentation'] / filename
         messages = io.StringIO()
         publish_doctree(path.read_text(encoding='utf-8'), source_path=str(path),
                         settings_overrides={'warning_stream': messages, 'halt_level': 6,
@@ -47,7 +47,7 @@ def test_rst_is_valid(package):
 
 def test_release_environment_is_project_named():
     assert (ROOT / 'environment.yml').read_text().startswith('name: cem\n')
-    for directory in ('scripts', 'docs', 'solvers', 'apps'):
+    for directory in ('scripts', 'doc', 'solvers', 'libraries', 'examples', 'apps'):
         for path in (ROOT / directory).rglob('*'):
             if path.is_file() and path.suffix in ('.rst', '.ps1', '.yml', '.yaml'):
                 assert 'RF_Engineering_env' not in path.read_text(encoding='utf-8'), path

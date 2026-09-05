@@ -1,9 +1,9 @@
 """Public exception hierarchy for :mod:`fem_periodic_modes`."""
-from fem_common import errors as _common
+from cem_common import errors as _common
 
 
 
-class FEMPeriodicSolverError(_common.FEMError):
+class FEMPeriodicSolverError(_common.CEMError):
     """Base class for errors raised by the periodic FEM package."""
 
 
@@ -31,11 +31,11 @@ class SolverError(FEMPeriodicSolverError, _common.SolverError):
     """The polynomial eigenproblem did not produce the requested modes."""
 
 
-class BackendCapabilityError(FEMPeriodicSolverError, NotImplementedError):
+class BackendCapabilityError(FEMPeriodicSolverError, _common.BackendCapabilityError):
     """A requested feature is intentionally unavailable in this backend."""
 
 
-from fem_common.errors import PersistenceError as _PersistenceError
+from cem_common.errors import PersistenceError as _PersistenceError
 
 
 class PersistenceError(FEMPeriodicSolverError, _PersistenceError):

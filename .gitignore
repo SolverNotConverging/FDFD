@@ -73,7 +73,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+doc/_build/
 
 # PyBuilder
 .pybuilder/
@@ -223,5 +223,3 @@ mode_data.*
 /.viewer_install_test/
 /.native_wheel_test/
 /build*/
-
-

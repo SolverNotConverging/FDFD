@@ -1,8 +1,10 @@
 """Public fixed-frequency 2D periodic finite-element mode solver."""
 
 from __future__ import annotations
+from cem_common import materials
+from .scene import PeriodicScene2D
 
-from fem_common.contracts import ElectromagneticSolverMixin
+from cem_common.contracts import ElectromagneticSolverMixin
 
 from collections.abc import Sequence
 from typing import Any, Literal, TypeAlias
@@ -75,10 +77,15 @@ def _finite_complex(value: Any, name: str) -> complex:
     return result
 
 
-class PeriodicModeSolver2D(ElectromagneticSolverMixin):
+class PeriodicModeSolver2D(PeriodicScene2D, ElectromagneticSolverMixin):
     """Solve complex Floquet propagation constants in one ``x-z`` unit cell."""
 
-    def __init__(self, *, frequency: float, x_range: float | Sequence[float], z_range: float | Sequence[float], polarization: str='both', background_epsilon: MaterialInput=1.0, background_mu: MaterialInput=1.0, boundary: str='pec') -> None:
+    def __init__(self, *, frequency: float, x_range: float | Sequence[float], z_range: float | Sequence[float], polarization: str='both', background_material: materials.Material=materials.vacuum, boundary: materials.IdealBoundary=materials.PEC) -> None:
+        self._init_scene(background_material=background_material)
+        background_epsilon, background_mu = materials.bulk_values(background_material)
+        if not isinstance(boundary, materials.IdealBoundary):
+            raise ConfigurationError('boundary must be materials.PEC or materials.PMC.')
+        boundary = boundary.kind
         self.frequency = _positive_real(frequency, "frequency")
         self.omega = 2.0 * np.pi * self.frequency
         self.k0 = self.omega / C_0
@@ -131,26 +138,26 @@ class PeriodicModeSolver2D(ElectromagneticSolverMixin):
     # ------------------------------------------------------------------
     # Continuous geometry
     # ------------------------------------------------------------------
-    def add_rectangle(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], z_range: Sequence[float], name: str | None=None) -> Region:
+    def _add_rectangle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], z_range: Sequence[float], name: str | None=None) -> Region:
         return self.geometry.add_region(
             Rectangle(tuple(x_range), tuple(z_range)),
             Material(epsilon, mu),
             name=name,
         )
 
-    def add_circle(self, *, epsilon: MaterialInput, mu: MaterialInput, center: Sequence[float], radius: float, inner_radius: float | None=None, name: str | None=None) -> Region:
+    def _add_circle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, center: Sequence[float], radius: float, inner_radius: float | None=None, name: str | None=None) -> Region:
         return self.geometry.add_region(
             Circle(tuple(center), radius, inner_radius),  # type: ignore[arg-type]
             Material(epsilon, mu),
             name=name,
         )
 
-    def add_polygon(self, *, epsilon: MaterialInput, mu: MaterialInput, points: Sequence[Sequence[float]], name: str | None=None) -> Region:
+    def _add_polygon_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, points: Sequence[Sequence[float]], name: str | None=None) -> Region:
         vertices = tuple((float(point[0]), float(point[1])) for point in points)
         return self.geometry.add_region(Polygon(vertices), Material(epsilon, mu), name=name)
 
-    def add_triangle(self, *, epsilon: MaterialInput, mu: MaterialInput, p1: Sequence[float], p2: Sequence[float], p3: Sequence[float], name: str | None=None) -> Region:
-        return self.add_polygon(epsilon, mu, (p1, p2, p3), name=name)
+    def _add_triangle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, p1: Sequence[float], p2: Sequence[float], p3: Sequence[float], name: str | None=None) -> Region:
+        return self._add_polygon_impl(epsilon, mu, (p1, p2, p3), name=name)
 
     def add_mesh_refinement(self, *, shape: Shape2D, max_element_size: float, name: str | None=None) -> MeshRefinement:
         return self.geometry.add_mesh_refinement(
@@ -174,21 +181,21 @@ class PeriodicModeSolver2D(ElectromagneticSolverMixin):
             Rectangle(tuple(x_range), tuple(z_range)), kind, name=name
         )
 
-    def add_pec(self, *, x_range: Sequence[float] | None=None, z_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
+    def _add_pec_impl(self, *, x_range: Sequence[float] | None=None, z_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
         if x_range is None and z_range is None:
             if components is not None or name is not None:
                 raise ConfigurationError("components/name apply only to internal PEC objects.")
-            self.set_outer_boundary(kind="pec")
+            self._set_outer_boundary_impl(kind="pec")
             return None
         if x_range is None or z_range is None:
             raise ConfigurationError("Provide both x_range and z_range for an internal PEC.")
         return self._add_wall("pec", x_range, z_range, name=name, components=components)
 
-    def add_pmc(self, *, x_range: Sequence[float] | None=None, z_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
+    def _add_pmc_impl(self, *, x_range: Sequence[float] | None=None, z_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
         if x_range is None and z_range is None:
             if components is not None or name is not None:
                 raise ConfigurationError("components/name apply only to internal PMC objects.")
-            self.set_outer_boundary(kind="pmc")
+            self._set_outer_boundary_impl(kind="pmc")
             return None
         if x_range is None or z_range is None:
             raise ConfigurationError("Provide both x_range and z_range for an internal PMC.")
@@ -210,10 +217,10 @@ class PeriodicModeSolver2D(ElectromagneticSolverMixin):
 
 
 
-    def set_outer_boundary(self, *, kind: str) -> None:
+    def _set_outer_boundary_impl(self, *, kind: str) -> None:
         self.geometry.set_outer_boundary(kind)
 
-    def remove(self, handle: Region | BoundaryRegion | MeshRefinement | PMLSpec) -> None:
+    def _remove_impl(self, handle: Region | BoundaryRegion | MeshRefinement | PMLSpec) -> None:
         self.geometry.remove(handle)
 
     # ------------------------------------------------------------------

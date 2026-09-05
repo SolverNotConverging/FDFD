@@ -3,6 +3,7 @@
 The fixture was captured before the sign migration. Inputs represent the same
 real-time device and excitation, with conjugated loss and source amplitude.
 """
+from cem_common import Material, SurfaceImpedance, materials, shapes
 from pathlib import Path
 
 import numpy as np
@@ -14,12 +15,8 @@ from fem_waveguide_scattering.scattering import WaveguideScatteringSolver2D
 @pytest.mark.gmsh
 @pytest.mark.parametrize("name,angle", [("lossy", 0.0), ("oblique", 17.0)])
 def test_positive_time_fields_and_s_parameters_match_physical_baseline(name, angle, tmp_path):
-    simulation = WaveguideScatteringSolver2D(
-        frequency=193.414489e12, angle=angle,
-        x_range=(0.0, 1e-6), z_range=(-3e-6, 3e-6),
-        background_epsilon=1.0, transverse_boundary="pec",
-    )
-    simulation.add_rectangle(x_range=(0.0, 1e-6), z_range=(-0.35e-6, 0.35e-6), epsilon=1.02-0.01j)
+    simulation = WaveguideScatteringSolver2D(frequency=193414489000000.0, angle=angle, x_range=(0.0, 1e-06), z_range=(-3e-06, 3e-06), background_material=materials.Material(epsilon=1.0, mu=1.0), boundary=materials.PEC)
+    simulation.add_rectangle(x_range=(0.0, 1e-06), z_range=(-3.5e-07, 3.5e-07), material=materials.Material(epsilon=1.02 - 0.01j, mu=1.0))
     simulation.add_pml(thickness=0.9e-6, direction="z")
     simulation.mesh(max_element_size=0.2e-6)
     modes = simulation.solve_modes(num_modes=1, neff_guess=1.0, num_elements=32, max_refinements=0)

@@ -449,18 +449,21 @@ class GeometryModel2D(_GeometryBase):
             raise GeometryError("The y-directed PMLs leave no interior.")
         return super().add_pml(spec)
 
-    def add_boundary(self, shape: Shape2D, kind: str, *, impedance: complex | None = None, name: str | None = None) -> BoundaryRegion:
+    def add_boundary(self, shape: Shape2D, kind: str, *, impedance: complex | None = None, name: str | None = None, clip: bool = False) -> BoundaryRegion:
+        """Exclude a conductor shape; optionally clip it to the model bounds."""
         normalized = str(kind).strip().lower()
         if normalized not in ("pec", "pmc", "impedance"):
             raise GeometryError("boundary kind must be 'pec', 'pmc', or 'impedance'.")
         xmin, xmax, ymin, ymax = shape.bounds
-        if (
+        if not clip and (
             xmin < self.x_span[0]
             or xmax > self.x_span[1]
             or ymin < self.y_span[0]
             or ymax > self.y_span[1]
         ):
             raise GeometryError("Boundary region lies outside the solver domain.")
+        if xmax <= self.x_span[0] or xmin >= self.x_span[1] or ymax <= self.y_span[0] or ymin >= self.y_span[1]:
+            raise GeometryError("Boundary region does not intersect the solver domain.")
         if name in _RESERVED_BOUNDARY_NAMES:
             raise GeometryError(f"Boundary name {name!r} is reserved for mesh tags.")
         if normalized == "impedance":

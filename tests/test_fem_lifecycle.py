@@ -1,8 +1,9 @@
 """Public lifecycle across the modal FEM implementations."""
+from cem_common import Material, SurfaceImpedance, materials, shapes
 import numpy as np
 import pytest
 
-from fem_common import NoResultError
+from cem_common import NoResultError
 from fem_waveguide_modes import ModeSolver1D, ModeSolver2D
 from fem_periodic_modes import PeriodicModeSolver2D, PeriodicModeSolver3D
 
@@ -38,9 +39,9 @@ def test_modal_lifecycle(solver_type, ranges, mesh_settings, solve_settings, tmp
     plt.close(figure)
     loaded.save(tmp_path / 'loaded.h5')
     saved_settings = dict(solver._mesh_settings)
-    solver.set_outer_boundary(kind='pmc')
+    solver.set_boundary(material=materials.PMC)
     assert solver.mesh_data is None and solver.result is None
-    solver.set_outer_boundary(kind='pec')
+    solver.set_boundary(material=materials.PEC)
     solver.solve(num_modes=1, neff_guess=.66, max_refinements=0, **solve_settings)
     assert solver._mesh_settings == saved_settings
 
@@ -50,8 +51,8 @@ def test_electrostatic_lifecycle_and_roundtrip(dimension, tmp_path):
     from fem_electrostatics import ElectrostaticSolver, load_result
     solver = ElectrostaticSolver(dim=dimension, x_range=1., outer_potential=None)
     assert solver.result is None and solver.mesh_data is None
-    solver.set_potential(region='left', potential=0., name='ground')
-    solver.set_potential(region='right', potential=1., name='signal')
+    solver.set_potential(potential=0.0, name='ground', geometry='left')
+    solver.set_potential(potential=1.0, name='signal', geometry='right')
     solver.mesh(max_element_size=.2)
     result = solver.solve(max_refinements=0)
     np.testing.assert_allclose(result.potential, result.coordinates[:, 0], atol=1e-12)

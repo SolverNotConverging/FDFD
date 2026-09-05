@@ -10,8 +10,10 @@ forward passive mode has ``Im(beta) <= 0`` and attenuation ``-Im(beta)``.
 """
 
 from __future__ import annotations
+from cem_common import materials
+from .scene import WaveguideScene2D
 
-from fem_common.contracts import ElectromagneticSolverMixin
+from cem_common.contracts import ElectromagneticSolverMixin
 
 from collections.abc import Sequence
 from dataclasses import asdict
@@ -124,7 +126,7 @@ def _forward_root(value: complex) -> complex:
     return root
 
 
-class ModeSolver2D(ElectromagneticSolverMixin):
+class ModeSolver2D(WaveguideScene2D, ElectromagneticSolverMixin):
     """Full-vector 2D FEM waveguide mode solver.
 
     Parameters are physical SI values.  A scalar ``x_range`` or ``y_range``
@@ -133,7 +135,12 @@ class ModeSolver2D(ElectromagneticSolverMixin):
     :meth:`mesh`.
     """
 
-    def __init__(self, *, frequency: float, x_range: float | Sequence[float], y_range: float | Sequence[float], background_epsilon: MaterialInput=1.0, background_mu: MaterialInput=1.0, boundary: str='pec') -> None:
+    def __init__(self, *, frequency: float, x_range: float | Sequence[float], y_range: float | Sequence[float], background_material: materials.Material=materials.vacuum, boundary: materials.IdealBoundary=materials.PEC) -> None:
+        self._init_scene(background_material=background_material)
+        background_epsilon, background_mu = materials.bulk_values(background_material)
+        if not isinstance(boundary, materials.IdealBoundary):
+            raise ConfigurationError('boundary must be materials.PEC or materials.PMC.')
+        boundary = boundary.kind
         self.frequency = _positive_real(frequency, "frequency")
         self.omega = 2.0 * np.pi * self.frequency
         self.k0 = self.omega / C_0
@@ -189,7 +196,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
             return
         _positive_integer(subpixels, "subpixels")
 
-    def add_rectangle(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], y_range: Sequence[float], name: str | None=None) -> Region:
+    def _add_rectangle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, x_range: Sequence[float], y_range: Sequence[float], name: str | None=None) -> Region:
         """Place a conformingly meshed rectangular material region."""
 
         handle = self.geometry.add_region(
@@ -200,7 +207,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
         self._geometry_changed()
         return handle
 
-    def add_circle(self, *, epsilon: MaterialInput, mu: MaterialInput, center: Sequence[float], r1: float, r2: float | None=None, name: str | None=None) -> Region:
+    def _add_circle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, center: Sequence[float], r1: float, r2: float | None=None, name: str | None=None) -> Region:
         """Place a circular or annular material region."""
 
         handle = self.geometry.add_region(
@@ -211,7 +218,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
         self._geometry_changed()
         return handle
 
-    def add_polygon(self, *, epsilon: MaterialInput, mu: MaterialInput, points: Sequence[Sequence[float]], name: str | None=None) -> Region:
+    def _add_polygon_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, points: Sequence[Sequence[float]], name: str | None=None) -> Region:
         """Place an arbitrary simple polygon material region."""
 
         vertices = tuple((float(point[0]), float(point[1])) for point in points)
@@ -221,10 +228,10 @@ class ModeSolver2D(ElectromagneticSolverMixin):
         self._geometry_changed()
         return handle
 
-    def add_triangle(self, *, epsilon: MaterialInput, mu: MaterialInput, p1: Sequence[float], p2: Sequence[float], p3: Sequence[float], name: str | None=None) -> Region:
+    def _add_triangle_impl(self, *, epsilon: MaterialInput, mu: MaterialInput, p1: Sequence[float], p2: Sequence[float], p3: Sequence[float], name: str | None=None) -> Region:
         """Place a triangular material region."""
 
-        return self.add_polygon(epsilon, mu, (p1, p2, p3), name=name)
+        return self._add_polygon_impl(epsilon, mu, (p1, p2, p3), name=name)
 
     def add_mesh_refinement(self, *, shape: Shape2D, max_element_size: float, transition_width: float=0.0, name: str | None=None) -> MeshRefinement:
         """Place a local mesh-size control without changing the physics.
@@ -271,15 +278,34 @@ class ModeSolver2D(ElectromagneticSolverMixin):
         self._geometry_changed()
         return handle
 
-    def add_pec(self, *, x_range: Sequence[float] | None=None, y_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
-        """Add an internal PEC object, or select PEC for the outer wall."""
+    def _add_pec_impl(self, *, x_range: Sequence[float] | None=None, y_range: Sequence[float] | None=None, shape: Shape2D | None=None, clip: bool=False, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
+        """Add a PEC object, or select PEC for the outer wall.
+
+        Supply either both rectangle ranges (metres), or ``shape`` as a
+        Rectangle, Circle (including an annulus), or Polygon. With ``clip=True``,
+        only the intersection of the object with the model bounds is removed.
+        This permits a circular outer conductor to cover the rectangular model
+        corners. Clipping defaults to False; out-of-bounds objects then raise
+        GeometryError. With no object, select the outer PEC wall.
+        """
+
+        if shape is not None:
+            if x_range is not None or y_range is not None:
+                raise ConfigurationError("Provide shape or rectangle ranges, not both.")
+            if components is not None:
+                raise BackendCapabilityError("PEC shapes apply the complete tangential trace condition.")
+            handle = self.geometry.add_boundary(shape, "pec", name=name, clip=clip)
+            self._geometry_changed()
+            return handle
+        if clip:
+            raise ConfigurationError("clip=True requires a PEC shape.")
 
         if x_range is None and y_range is None:
             if components is not None or name is not None:
                 raise ConfigurationError(
                     "components/name apply only to an internal PEC rectangle."
                 )
-            self.set_outer_boundary(kind="pec")
+            self._set_outer_boundary_impl(kind="pec")
             return None
         if x_range is None or y_range is None:
             raise ConfigurationError(
@@ -290,7 +316,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
             "pec", x_range, y_range, components=components, name=name
         )
 
-    def add_pmc(self, *, x_range: Sequence[float] | None=None, y_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
+    def _add_pmc_impl(self, *, x_range: Sequence[float] | None=None, y_range: Sequence[float] | None=None, components: Sequence[str] | str | None=None, name: str | None=None) -> BoundaryRegion | None:
         """Add an internal PMC object, or select PMC for the outer wall."""
 
         if x_range is None and y_range is None:
@@ -298,7 +324,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
                 raise ConfigurationError(
                     "components/name apply only to an internal PMC rectangle."
                 )
-            self.set_outer_boundary(kind="pmc")
+            self._set_outer_boundary_impl(kind="pmc")
             return None
         if x_range is None or y_range is None:
             raise ConfigurationError(
@@ -309,7 +335,7 @@ class ModeSolver2D(ElectromagneticSolverMixin):
             "pmc", x_range, y_range, components=components, name=name
         )
 
-    def add_impedance_surface(self, *, Zs: complex | None=None, preset: str | None=None, x_range: Sequence[float], y_range: Sequence[float], name: str | None=None) -> BoundaryRegion:
+    def _add_impedance_surface_impl(self, *, Zs: complex | None=None, preset: str | None=None, x_range: Sequence[float], y_range: Sequence[float], name: str | None=None) -> BoundaryRegion:
         """Add an opaque conductor whose exposed facets obey scalar SIBC.
 
         Supply exactly one of ``Zs`` (ohms) or a good-conductor metal
@@ -368,11 +394,11 @@ class ModeSolver2D(ElectromagneticSolverMixin):
 
 
 
-    def set_outer_boundary(self, *, kind: str) -> None:
+    def _set_outer_boundary_impl(self, *, kind: str) -> None:
         self.geometry.set_outer_boundary(kind)
         self._geometry_changed()
 
-    def remove(
+    def _remove_impl(
         self, handle: Region | BoundaryRegion | MeshRefinement | PMLSpec
     ) -> None:
         """Remove a placed object and invalidate any existing mesh."""

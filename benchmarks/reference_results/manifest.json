@@ -1,0 +1,37 @@
+{
+  "generated_utc": "2026-09-05T15:55:40.979897+00:00",
+  "base_git_revision": "ae754ed9c41a5cffce40ef601c2d9be5df8f5aeb",
+  "working_tree_modified": true,
+  "source_sha256": "fffc9a2770d1f539fb0e29f71cec6509d99597a8286601e6f4a6d20006729548",
+  "source_hash_definition": "Sorted benchmark .py and solver/library src .py/.cpp/.h/.hpp; relative POSIX path, NUL, bytes, NUL.",
+  "python": "3.12.11",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "dependencies": {
+    "numpy": "2.3.2",
+    "scipy": "1.16.1",
+    "matplotlib": "3.10.5",
+    "scikit-fem": "12.0.2",
+    "gmsh": "4.15.2",
+    "h5py": "3.15.1"
+  },
+  "commands": [
+    "python benchmarks/analytical/rectangular_waveguide_modes.py --check",
+    "python benchmarks/analytical/parallel_plate_electrostatics.py --check",
+    "python benchmarks/analytical/uniform_periodic_medium.py --check",
+    "python benchmarks/analytical/coaxial_waveguide_adaptivity.py --check"
+  ],
+  "checks": "All four commands exited successfully with --check.",
+  "artifact_sha256": {
+    "rectangular_waveguide_modes/comparison.csv": "78f1992ba487aacb9028fa8e26946071d25ec6d9f6b0c2d80a6f54375fbe71f0",
+    "rectangular_waveguide_modes/convergence.png": "515781fde9be784a829d03d33979b3d8235b310463c9f8acec99c56c221b38d7",
+    "parallel_plate_electrostatics/comparison.csv": "cc7f16fa466faf5052ad6cc6fccee0df96e8e50ea86fa5f70ff5d992f047be9c",
+    "parallel_plate_electrostatics/potential.csv": "865eb8574a092789a35863631366715a8cdbbf909288908de47a2b8dab1165ad",
+    "parallel_plate_electrostatics/comparison.png": "598ad5cbd973e464dc2f6029936b67244bc1e64d24650bc1774bd1670ecf14e0",
+    "uniform_periodic_medium/comparison.csv": "616d4a35434c61334b057be7936ed0d70ee4b3ca60947e86e2d0d8e30e470bbe",
+    "uniform_periodic_medium/comparison.png": "97cdc0b6375cdc005edc5999beec5dec750649758729adbc9a57b4a91fe3a03e",
+    "coaxial_waveguide_adaptivity/comparison.csv": "fadb84d8f4bf110b9bb85125b6abe7cf488312a7647930e14037e373f4959b4e",
+    "coaxial_waveguide_adaptivity/adaptive_history.csv": "ff0efefde5b3c930f02560d270193f3d25f8b7fd16748e8a92208a2a7ef23141",
+    "coaxial_waveguide_adaptivity/convergence.png": "2d810cf8506508e199d039494369482b41603232ae8fede7cb72a53f04053fbf",
+    "coaxial_waveguide_adaptivity/meshes.png": "22be4e2f1366e532627e9ee7d0cdafad8c1ab9deeec0481a1e3385bfc4c7521f"
+  }
+}

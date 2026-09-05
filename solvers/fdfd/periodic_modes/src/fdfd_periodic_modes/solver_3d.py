@@ -11,7 +11,7 @@ from scipy.sparse.linalg import eigs
 from periodic_eigensolver.refined import solve_generalized, resolve_kernel_backend
 
 
-class PeriodicModeSolver3D:
+class _PeriodicModeSolver3D:
     """Full-vector Bloch-periodic solver using ``exp(+j*omega*t)`` phasors.
 
     The raw eigenvalue is ``gamma`` in ``exp(-gamma*z)`` and

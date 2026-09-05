@@ -1,4 +1,4 @@
-"""Render the deliberately selected FDFD API, retaining its numerical workflow."""
+"""Render the deliberately selected material-first FDFD user API."""
 from importlib import import_module
 import json
 from pathlib import Path
@@ -7,73 +7,87 @@ from generate_api_reference import entry, section, DESCRIPTIONS, TYPES
 ROOT=Path(__file__).resolve().parents[1]
 INVENTORY={
  'fdfd_waveguide_modes': {
-  'ModeSolver1D': ['__init__','add_layer','add_pec','add_pmc','add_pml','add_impedance_surface','solve','visualize','visualize_with_gui'],
-  'ModeSolver2D': ['__init__','add_rectangle','add_circle','add_triangle','add_pec','add_pmc','add_pml','add_impedance_surface','solve','visualize','visualize_with_gui']},
+  'ModeSolver1D': ['__init__','add_geometry','add_layer','set_material','set_shape','add_pml','remove','mesh','solve','show'],
+  'ModeSolver2D': ['__init__','add_geometry','add_rectangle','add_circle','add_polygon','set_material','set_shape','add_pml','remove','mesh','solve','show']},
  'fdfd_periodic_modes': {
-  'PeriodicModeSolver2D': ['__init__','add_rectangle','add_pec','add_pmc','add_pml','solve','visualize_with_gui'],
-  'PeriodicModeSolver3D': ['__init__','add_block','add_pec','add_pmc','add_UPML','solve','plot','plot_field_plane','visualize_with_gui','save_results','load_results']},
+  'PeriodicModeSolver2D': ['__init__','add_geometry','add_rectangle','add_circle','add_polygon','set_material','set_shape','add_pml','remove','mesh','solve','show'],
+  'PeriodicModeSolver3D': ['__init__','add_geometry','add_box','add_sphere','add_cylinder','set_material','set_shape','add_pml','remove','mesh','solve','show']},
  'fdfd_band_structure': {
-  'BandStructureSolver2D': ['__init__','add_object','add_circular_inclusion','default_rectangular_lattice_path','generate_bloch_path','compute_band_structure','set_tick_labels','plot_band_diagram']},
+  'BandStructureSolver2D': ['__init__','add_geometry','add_rectangle','add_circle','add_polygon','set_material','set_shape','remove','mesh','make_bloch_path','solve','show']},
  'fdfd_scattering': {
-  'ScatteringSolver2D': ['__init__','add_object','add_source','add_UPML','add_mask','solve_total_field_TE','solve_total_field_TM','TE_Visualization','TM_Visualization']},
+  'ScatteringSolver2D': ['__init__','add_geometry','add_rectangle','add_circle','add_polygon','set_material','set_shape','add_pml','remove','mesh','add_source','set_source_region','solve','show']},
+}
+RESULT_TYPES = {
+    'fdfd_waveguide_modes': 'ModeSet',
+    'fdfd_periodic_modes': 'PeriodicModeSet',
+    'fdfd_scattering': 'ScatteringResult',
+    'fdfd_band_structure': 'BandStructureResult',
 }
 
 
 def main():
     DESCRIPTIONS.update({
-        'Nx':'Number of Yee cells along x; positive integer.', 'Ny':'Number of Yee cells along y; positive integer.',
-        'Nz':'Number of Yee cells along z; positive integer.',
-        'guess':'Spectral shift for the existing FDFD eigenproblem; see the solver example.',
-        'sigma':'Optional spectral shift overriding the stored eigenproblem target.',
-        'tol':'Algebraic eigenproblem tolerance; zero retains the existing backend convention.',
-        'pml_width':'PML thickness in Yee cells.', 'width':'PML thickness in Yee cells.',
-        'n':'Polynomial PML order.', 'max_loss':'Maximum PML stretch loss magnitude.',
+        'background_material':'Predefined bulk Material assigned to unfilled grid cells.',
+        'material':'Predefined Material, PEC/PMC, or supported SIBC assignment.',
+        'shape':'Continuous cem_common shape expressed in metres.',
+        'resolution':'Positive cell count for each physical axis.',
+        'neff_guess':'Dimensionless complex effective-index search target.',
+        'eigensolver_tolerance':'Algebraic eigensolver convergence tolerance.',
+        'thickness':'PML thickness in metres.', 'order':'Polynomial PML order.',
+        'sigma_max':'Maximum PML-strength magnitude.',
         'subpixels':'Number of subcell samples used to average region material values.',
-        'mode':'Visualization mode index; waveguide visualize uses 1-based selection, 3D periodic plot uses 0-based selection.',
-        'mode_index':'Zero-based stored periodic mode index.',
+        'mode':'Zero-based mode or band index.',
         'kernel_backend':'Refined-kernel backend: auto, numpy, or cython.',
         'ncv':'Arnoldi subspace size; None selects the backend default.',
         'max_restarts':'Maximum refined Arnoldi restarts.', 'random_seed':'Deterministic initial-vector seed.',
-        'region_mask':'Boolean array identifying cell centres in the object.',
-        'er_tensor':'Relative diagonal electric constitutive tensor.', 'mr_tensor':'Relative diagonal magnetic constitutive tensor.',
-        'a':'Unit-cell x period in metres.', 'b':'Unit-cell y period in metres; None uses a.',
-        'num_bands':'Positive number of frequency bands to compute.',
         'beta_path':'Bloch vectors with shape (2, samples), in radians per metre.',
-        'polarisations':'Requested TE/TM polarization names.',
-        'eig_sigma':'Frequency eigenproblem shift.',
-        'include_eigenvectors':'Include large raw eigenvector arrays in the NPZ archive.',
-        'compressed':'Compress NPZ datasets.',
+        'polarizations':'Requested TE/TM polarization names.',
+        'eigenvalue_guess':'Frequency-eigenvalue spectral shift.',
+        'inset':'Physical inset of the FDFD total-field source region, in metres.',
+        'kind':'Source kind: plane_wave or point.',
+        'location':'Physical point-source position in metres.',
     })
     TYPES.update({key:'int' for key in ('Nx','Ny','Nz','n','pml_width','width','num_modes','num_bands','subpixels')})
     for package,solvers in INVENTORY.items():
         module=import_module(package)
         family=package.removeprefix('fdfd_')
         out=section(package+' user API','=')
-        out+='Version 1.0.0. These FDFD implementations retain their existing numerical\nworkflow. The uniform mesh/solve/show contract applies to the FEM families.\nPhasors use exp(+i omega t); passive relative materials have nonpositive\nimaginary values.\n\n'
+        out+='Version 1.0.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
-        out+='Constructor extents and frequencies use metres and hertz. Nx/Ny/Nz are\nYee cell counts. Geometry range helpers distinguish integer grid-index bounds\nfrom floating-point physical positions in metres; slices select grid indices.\nBand-structure shapes use physical coordinates. Materials are relative\ndiagonal values. Mode normalization, field locations, and existing selectors\nare preserved by this release.\n\n'
+        out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``cem_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nAll plotting and selection indices are zero-based.\n\n'
         for clsname,methods in solvers.items():
             cls=getattr(module,clsname)
             for method in methods:
                 for axis in ('x','y','z'):
-                    DESCRIPTIONS[axis+'_range'] = f'Physical {axis} extent in metres.' if method=='__init__' else f'Range along {axis}: floating-point positions in metres, integer grid indices, or an index slice.'
-                    TYPES[axis+'_range'] = 'float / m' if method=='__init__' else 'tuple[float, float] | tuple[int, int] | slice'
+                    DESCRIPTIONS[axis+'_range'] = f'Physical {axis} extent or increasing bounds in metres.'
+                    TYPES[axis+'_range'] = 'float | tuple[float, float] / m'
                 label=clsname if method=='__init__' else clsname+'.'+method
                 target=cls if method=='__init__' else getattr(cls,method)
                 returned='a configured solver' if method=='__init__' else 'the documented data or None when storing state on the solver'
-                if method=='compute_band_structure':returned='a BandStructureResult with frequencies and eigenvalues by polarization'
-                if method=='load_results':returned='a stored periodic solver result for inspection'
+                if method=='solve':returned='a typed result stored on solver.result'
+                if method=='mesh':returned='the initial GridData stored on solver.mesh_data'
+                if method=='show':returned='the interactive Matplotlib figure'
                 out+=entry(label,target,returned)
-        if family=='waveguide_modes':
-            out+=entry('good_conductor_surface_impedance',module.good_conductor_surface_impedance,'surface impedance in ohms')
-            out+='``METAL_RESISTIVITIES_OHM_M`` contains the supported metal presets.\n\n'
+        result_name = RESULT_TYPES[package]
+        result_type = getattr(module, result_name)
+        out += section('Returned result')
+        out += ('Result objects come from ``solve()`` or ``load_result()``; users do not\n'
+                'construct them directly. Field results expose ``mesh_data``, ``metadata``,\n'
+                '``solve_info``, and explicit physical field coordinates.\n\n')
+        for method, returned in (
+            ('plot', 'a Matplotlib Figure without opening a window'),
+            ('show', 'the interactive Matplotlib Figure'),
+            ('save', 'the atomically written HDF5 path'),
+        ):
+            out += entry(f'{result_name}.{method}', getattr(result_type, method), returned)
+        out += entry('load_result', module.load_result, f'a typed ``{result_name}`` without solving')
         out+=section('Results and examples')
-        if family=='band_structure':out+='``compute_band_structure`` returns frequency arrays in Hz and eigenvalues,\nindexed by TE/TM polarization. Use ``plot_band_diagram`` to display them.\n\n'
-        elif family=='scattering':out+='TE/TM solves retain sampled fields on the solver. Geometry and sources\nare configured before solving; field arrays follow the Yee-grid locations.\n\n'
-        else:out+='Solves store effective indices and field arrays on the solver. ``neff`` is\ndimensionless; attenuation follows -Im(neff), multiplied by the free-space\nwavenumber for inverse metres. The 1D waveguide implementation separates\nTE and TM arrays. Consult the bundled example for the corresponding viewer.\n\n'
-        out+='Invalid dimensions, materials, and solver controls raise ValueError or\nNotImplementedError. Numerical backend failures remain visible.\n\nRun the examples with the installed package; no repository path changes\nare required. See `README.rst <README.rst>`_ and the ``examples/`` directory.\nAssembly routines, matrix builders, and Arnoldi kernels are implementation\ndetails and are excluded from this reference.\n'
-        (ROOT/'solvers/fdfd'/family/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
-    (ROOT/'docs/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
+        if family=='band_structure':out+='``solve`` returns ``BandStructureResult`` with frequency arrays in hertz and\neigenvalues indexed by TE/TM polarization.\n\n'
+        elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with scalar total fields at their\nphysical Yee-grid locations.\n\n'
+        else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and zero-based mode selection.\n\n'
+        out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``cem_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
+        (ROOT/'doc/solvers/fdfd'/family/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
+    (ROOT/'doc/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
 
 
 if __name__=='__main__':main()

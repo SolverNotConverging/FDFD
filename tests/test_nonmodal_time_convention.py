@@ -17,7 +17,7 @@ BAND_MODULE = import_module("fdfd_band_structure.solver_2d")
 
 class ScatteringTimeConventionTests(unittest.TestCase):
     def make_solver(self):
-        return SCATTERING_MODULE.ScatteringSolver2D(
+        return SCATTERING_MODULE._ScatteringSolver2D(
             frequency=2.0e9,
             x_range=0.12,
             y_range=0.08,
@@ -98,7 +98,7 @@ class BandDiagramTimeConventionTests(unittest.TestCase):
         self.assertAlmostEqual(derivative_x[-1, 0], expected_wrap)
 
     def test_normalised_frequency_preserves_complex_decay_sign(self):
-        solver = BAND_MODULE.BandStructureSolver2D(a=2 * np.pi, Nx=2)
+        solver = BAND_MODULE._BandStructureSolver2D(a=2 * np.pi, Nx=2)
         eigenvalues = np.array([4.0 + 0.4j, 4.0 - 0.4j, 4.0 + 0.0j])
 
         frequencies = solver._normalise_eigenvalues(eigenvalues)
@@ -110,7 +110,7 @@ class BandDiagramTimeConventionTests(unittest.TestCase):
         self.assertEqual(frequencies[2].imag, 0.0)
 
     def test_uniform_passive_medium_has_positive_imaginary_frequency(self):
-        solver = BAND_MODULE.BandStructureSolver2D(
+        solver = BAND_MODULE._BandStructureSolver2D(
             a=1.0,
             Nx=6,
             background_er=2.25 - 0.09j,

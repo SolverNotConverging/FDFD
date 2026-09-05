@@ -1,9 +1,11 @@
 """Geometry-first 1D/2D finite-element electrostatic solver."""
 
 from __future__ import annotations
+from cem_common import materials
+from .scene import ElectrostaticSceneMixin, static_epsilon
 
-from fem_common import FEMSolverMixin
-from fem_common.contracts import bounds
+from cem_common.contracts import SolverMixin
+from cem_common.contracts import bounds
 
 from collections.abc import Sequence
 from dataclasses import replace
@@ -32,7 +34,7 @@ def _dimension(value: int) -> int:
 
 
 
-class ElectrostaticSolver(FEMSolverMixin):
+class ElectrostaticSolver(ElectrostaticSceneMixin, SolverMixin):
     """Solve ``-div(epsilon_0 epsilon_r grad(phi)) = rho`` with P1 FEM.
 
     The constructor records only a physical domain and optional target mesh
@@ -42,9 +44,12 @@ class ElectrostaticSolver(FEMSolverMixin):
 
     def __init__(self, *, dim: int = 2, x_range: float | Sequence[float] = 1.0,
                  y_range: float | Sequence[float] | None = None,
-                 background_epsilon: float | Sequence[float] | Sequence[Sequence[float]] = 1.0,
+                 background_material: materials.Material = materials.vacuum,
                  outer_potential: float | None = 0.0) -> None:
         self.dim = _dimension(dim)
+        self._physical_axes = ("x",) if self.dim == 1 else ("x", "y")
+        self._init_scene(background_material=background_material)
+        background_epsilon = static_epsilon(background_material, self.dim)
         if self.dim == 1 and y_range is not None:
             raise GeometryError("y_range is only valid for dim=2.")
         x_span = bounds(x_range, "x_range")
@@ -104,42 +109,42 @@ class ElectrostaticSolver(FEMSolverMixin):
         raise GeometryError("region must be a geometry primitive or boundary name.")
 
 
-    def set_potential(self, *, region: RegionInput, potential: float, name: str | None = None) -> PotentialRegion:
+    def _set_potential_impl(self, *, region: RegionInput, potential: float, name: str | None = None) -> PotentialRegion:
         return self.geometry.add_potential(self._shape(region), potential, name=name)
 
-    def add_object(self, *, region: RegionInput, epsilon=1.0, name: str | None = None) -> MaterialRegion:
+    def _add_object_impl(self, *, region: RegionInput, epsilon=1.0, name: str | None = None) -> MaterialRegion:
         shape = self._shape(region)
         if isinstance(shape, str):
             raise GeometryError("A material needs a physical region, not a boundary name.")
         return self.geometry.add_material(shape, Permittivity.from_input(epsilon, self.dim), name=name)
 
-    def add_layer(self, *, x_range, epsilon=1.0, name: str | None = None):
+    def _add_layer_impl(self, *, x_range, epsilon=1.0, name: str | None = None):
         shape = Interval(bounds(x_range)) if self.dim == 1 else Rectangle(bounds(x_range), self.y_range)
-        return self.add_object(region=shape, epsilon=epsilon, name=name)
+        return self._add_object_impl(region=shape, epsilon=epsilon, name=name)
 
-    def add_rectangle(self, *, x_range, y_range, epsilon=1.0, name: str | None = None):
+    def _add_rectangle_impl(self, *, x_range, y_range, epsilon=1.0, name: str | None = None):
         if self.dim != 2:
             raise GeometryError("Rectangles require dim=2.")
-        return self.add_object(region=Rectangle(bounds(x_range), bounds(y_range)), epsilon=epsilon, name=name)
+        return self._add_object_impl(region=Rectangle(bounds(x_range), bounds(y_range)), epsilon=epsilon, name=name)
 
-    def add_circle(self, *, center, radius: float, epsilon=1.0, name: str | None = None):
+    def _add_circle_impl(self, *, center, radius: float, epsilon=1.0, name: str | None = None):
         if self.dim != 2:
             raise GeometryError("Circles require dim=2.")
-        return self.add_object(region=Circle(center, radius), epsilon=epsilon, name=name)
+        return self._add_object_impl(region=Circle(center, radius), epsilon=epsilon, name=name)
 
-    def add_polygon(self, *, points, epsilon=1.0, name: str | None = None):
+    def _add_polygon_impl(self, *, points, epsilon=1.0, name: str | None = None):
         if self.dim != 2:
             raise GeometryError("Polygons require dim=2.")
-        return self.add_object(region=Polygon(points), epsilon=epsilon, name=name)
+        return self._add_object_impl(region=Polygon(points), epsilon=epsilon, name=name)
 
 
-    def add_charge_density(self, *, region: RegionInput, density: float, name: str | None = None) -> ChargeRegion:
+    def _add_charge_density_impl(self, *, region: RegionInput, density: float, name: str | None = None) -> ChargeRegion:
         shape = self._shape(region)
         if isinstance(shape, str):
             raise GeometryError("volume charge requires an area/interval, not a boundary name.")
         return self.geometry.add_charge(shape, density, name=name)
 
-    def remove(self, item: MaterialRegion | PotentialRegion | ChargeRegion) -> None:
+    def _remove_impl(self, item: MaterialRegion | PotentialRegion | ChargeRegion) -> None:
         self.geometry.remove(item)
 
     def _default_maximum_size(self) -> float:
@@ -158,6 +163,7 @@ class ElectrostaticSolver(FEMSolverMixin):
         boundary_refinement_width: float | None = None,
     ) -> FEMMesh:
         """Discretize after geometry; high-Dk regions and boundaries refine locally."""
+        self._require_conductor_potentials()
 
         maximum = self._default_maximum_size() if max_element_size is None else max_element_size
         settings = {

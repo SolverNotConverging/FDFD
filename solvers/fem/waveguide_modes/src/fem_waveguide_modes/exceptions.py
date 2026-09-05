@@ -1,9 +1,9 @@
 """Exception hierarchy for the standalone FEM mode solvers."""
-from fem_common import errors as _common
+from cem_common import errors as _common
 
 
 
-class FEMModeSolverError(_common.FEMError):
+class FEMModeSolverError(_common.CEMError):
     """Base class for all public FEM mode-solver errors."""
 
 
@@ -31,7 +31,7 @@ class SolverError(FEMModeSolverError, _common.SolverError):
     """The polynomial eigenproblem could not produce valid modes."""
 
 
-class BackendCapabilityError(FEMModeSolverError, NotImplementedError):
+class BackendCapabilityError(FEMModeSolverError, _common.BackendCapabilityError):
     """A requested physical feature is not supported by this FEM backend."""
 
 

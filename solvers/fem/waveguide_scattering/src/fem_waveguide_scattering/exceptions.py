@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from fem_common import errors as _common
+from cem_common import errors as _common
 
 
 
 
-class FEMWaveguideScatteringError(_common.FEMError):
+class FEMWaveguideScatteringError(_common.CEMError):
     """Base class for actionable FEM Waveguide Scattering errors."""
 
 

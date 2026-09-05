@@ -4,21 +4,15 @@ from .solver_2d import ModeSolver2D
 from .results import Mode
 from .results import ModeSet
 from .results import SampledFields
-from .materials import Material
-from .geometry import Interval
-from .geometry import Rectangle
-from .geometry import Circle
-from .geometry import Polygon
-from .boundaries import good_conductor_surface_impedance
-from .exceptions import BackendCapabilityError
-from .exceptions import ConfigurationError
+from cem_common.errors import BackendCapabilityError
+from cem_common.errors import ConfigurationError
 from .exceptions import FEMModeSolverError
-from .exceptions import GeometryError
-from .exceptions import MeshError
-from .exceptions import SolverError
+from cem_common.errors import GeometryError
+from cem_common.errors import MeshError
+from cem_common.errors import SolverError
 from .result_api import load_result
-from fem_common import NoResultError
-from fem_common import PersistenceError
+from cem_common import NoResultError
+from cem_common import PersistenceError
 
 __version__ = "1.0.0"
-__all__ = ['ModeSolver1D', 'ModeSolver2D', 'Mode', 'ModeSet', 'SampledFields', 'Material', 'Interval', 'Rectangle', 'Circle', 'Polygon', 'good_conductor_surface_impedance', 'BackendCapabilityError', 'ConfigurationError', 'FEMModeSolverError', 'GeometryError', 'MeshError', 'SolverError', 'load_result', 'NoResultError', 'PersistenceError']
+__all__ = ['ModeSolver1D', 'ModeSolver2D', 'Mode', 'ModeSet', 'SampledFields', 'BackendCapabilityError', 'ConfigurationError', 'FEMModeSolverError', 'GeometryError', 'MeshError', 'SolverError', 'load_result', 'NoResultError', 'PersistenceError']

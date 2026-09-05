@@ -86,6 +86,10 @@ def _add_occ_shape(
     origin: tuple[float, float],
     scale: float,
 ) -> int:
+    from cem_common.shapes import Shape
+    from cem_common._occ import add_shape
+    if isinstance(shape, Shape):
+        return add_shape(gmsh, shape, origin, scale)[1]
     occ = gmsh.model.occ
     x0, z0 = origin
     if isinstance(shape, Rectangle):

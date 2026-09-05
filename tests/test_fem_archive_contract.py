@@ -1,9 +1,10 @@
 """Result envelopes and lazy sweep behavior across FEM families."""
+from cem_common import Material, SurfaceImpedance, materials, shapes
 import h5py
 import numpy as np
 import pytest
 
-from fem_common import PersistenceError
+from cem_common import PersistenceError
 
 
 @pytest.mark.parametrize('package', ['fem_waveguide_modes', 'fem_periodic_modes', 'fem_waveguide_scattering', 'fem_electrostatics'])
@@ -48,9 +49,9 @@ def test_periodic_sweep_lazy_roundtrip_and_context(tmp_path, monkeypatch):
 
 def test_electrostatic_archive_preserves_tensor_and_boundaries(tmp_path):
     from fem_electrostatics import ElectrostaticSolver,load_result
-    solver=ElectrostaticSolver(x_range=1.,background_epsilon=((2.,.25),(.25,1.)),outer_potential=None)
-    solver.set_potential(region='left',potential=0.,name='ground')
-    solver.set_potential(region='right',potential=1.,name='drive')
+    solver=ElectrostaticSolver(x_range=1.0, outer_potential=None, background_material=materials.Material(epsilon=((2.0, 0.25), (0.25, 1.0)), mu=1.0))
+    solver.set_potential(potential=0.0, name='ground', geometry='left')
+    solver.set_potential(potential=1.0, name='drive', geometry='right')
     solver.mesh(max_element_size=.2)
     result=solver.solve(max_refinements=0)
     path=tmp_path/'static.h5'

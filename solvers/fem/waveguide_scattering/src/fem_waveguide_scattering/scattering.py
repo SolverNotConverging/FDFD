@@ -1,9 +1,12 @@
 """High-level 2.5D scattered-field waveguide simulation workflow."""
 
 from __future__ import annotations
+from cem_common import materials
+from cem_common.errors import BackendCapabilityError
+from .geometry_api import ScatteringSceneMixin
 
-from fem_common.contracts import ElectromagneticSolverMixin
-from fem_common.contracts import bounds
+from cem_common.contracts import ElectromagneticSolverMixin
+from cem_common.contracts import bounds
 
 from dataclasses import asdict, dataclass, replace
 from math import ceil, cos, radians, sin
@@ -125,6 +128,9 @@ class _SolverOptions:
 
 def _shape_bounds(region: Region) -> tuple[tuple[float, float], tuple[float, float]]:
     shape = region.shape
+    from cem_common.shapes import Shape
+    if isinstance(shape, Shape):
+        return shape.bounds[:2], shape.bounds[2:]
     if isinstance(shape, Rectangle):
         return shape.x, shape.z
     if isinstance(shape, Circle):
@@ -136,7 +142,7 @@ def _shape_bounds(region: Region) -> tuple[tuple[float, float], tuple[float, flo
     raise TypeError(f"Unsupported shape {type(shape).__name__}.")
 
 
-class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
+class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMixin):
     """Full-vector 2.5D FEM scattering simulation in SI units.
 
     The unknown is the outgoing scattered field.  The unperturbed incident
@@ -152,10 +158,14 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
         ky: float | None = None,
         x_range: float | Sequence[float],
         z_range: float | Sequence[float],
-        background_epsilon: complex | float = 1.0,
-        background_mu: complex | float = 1.0,
-        transverse_boundary: Literal["pec", "pmc"] | None = None,
+        background_material: materials.Material = materials.vacuum,
+        boundary: materials.IdealBoundary | None = None,
     ) -> None:
+        self._init_scene(background_material=background_material)
+        background_epsilon, background_mu = materials.bulk_values(background_material, form='scalar')
+        if boundary is not None and not isinstance(boundary, materials.IdealBoundary):
+            raise ConfigurationError('boundary must be a predefined PEC/PMC object or None.')
+        boundary_kind = None if boundary is None else boundary.kind
         self._frequency: Frequency = resolve_frequency(
             frequency=frequency
         )
@@ -168,14 +178,14 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
                 "Integrated WaveguideScatteringSolver2D power accounting supports passive materials only."
             )
         self.geometry = GeometryModel(bounds(x_range, "x_range"), bounds(z_range, "z_range"), exterior)
-        if transverse_boundary not in (None, "pec", "pmc"):
-            raise ConfigurationError("transverse_boundary must be None, 'pec', or 'pmc'.")
-        if transverse_boundary == "pmc":
-            raise NotImplementedError(
-                "WaveguideScatteringSolver2D does not yet implement a PMC transverse outer boundary; "
-                "use transverse_boundary='pec' or an x-directed PML."
+        if boundary_kind not in (None, "pec", "pmc"):
+            raise ConfigurationError("boundary must be materials.PEC, materials.PMC, or None.")
+        if boundary_kind == "pmc":
+            raise BackendCapabilityError(
+                "WaveguideScatteringSolver2D does not implement a PMC outer boundary; "
+                "use boundary=materials.PEC or an x-directed PML."
             )
-        self.transverse_boundary = transverse_boundary
+        self._boundary_kind = boundary_kind
         self._solver_options = _SolverOptions()
         self.pml = PMLLayout()
         self.mesh_data: Mesh2D | None = None
@@ -193,7 +203,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
 
 
     @classmethod
-    def from_material_function(
+    def _from_material_function_impl(
         cls,
         *,
         frequency: float,
@@ -203,7 +213,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
         z_range: float | Sequence[float],
         epsilon: MaterialFunction,
         background_epsilon: MaterialFunction,
-        transverse_boundary: Literal["pec", "pmc"] | None = None,
+        boundary_kind: Literal["pec", "pmc"] | None = None,
     ) -> "WaveguideScatteringSolver2D":
         """Construct from explicit actual and background permittivity callbacks."""
 
@@ -215,8 +225,8 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
             ky=ky,
             x_range=x_range,
             z_range=z_range,
-            background_epsilon=1.0,
-            transverse_boundary=transverse_boundary,
+            background_material=materials.vacuum,
+            boundary=None if boundary_kind is None else (materials.PEC if boundary_kind == 'pec' else materials.PMC),
         )
         simulation._material_actual = epsilon
         simulation._material_background = background_epsilon
@@ -241,13 +251,13 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
                 if self.angle is not None
                 else {"ky": self.ky}
             )
-            clone = type(self).from_material_function(
+            clone = type(self)._from_material_function_impl(
                 frequency=frequency_hz,
                 **oblique,
                 x_range=self.x_span, z_range=self.z_span,
                 epsilon=self._material_actual,
                 background_epsilon=self._material_background,
-                transverse_boundary=self.transverse_boundary,
+                boundary_kind=self._boundary_kind,
             )
         else:
             oblique = (
@@ -260,15 +270,16 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
                 **oblique,
                 x_range=self.x_span,
                 z_range=self.z_span,
-                background_epsilon=self.geometry.exterior.eps_r,
-                background_mu=self.geometry.exterior.mu_r,
-                transverse_boundary=self.transverse_boundary,
+                background_material=self.background_material,
+                boundary=None if self._boundary_kind is None else materials.PEC,
             )
             # Regions and their shape/material records are immutable; copy the
             # list so sweep points cannot mutate the source simulation.
             clone.geometry.regions = list(self.geometry.regions)
             clone.geometry.pec_sheets = list(self.geometry.pec_sheets)
             clone.geometry.pec_slots = list(self.geometry.pec_slots)
+        clone._objects = dict(self._objects)
+        clone._next_object_id = self._next_object_id
         clone._solver_options = self._solver_options
         clone.pml = self.pml
         clone.left_monitor = self.left_monitor
@@ -310,7 +321,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
                     "the non-PML x interior."
                 )
 
-    def add_rectangle(
+    def _add_rectangle_impl(
         self,
         *,
         x_range: Sequence[float],
@@ -338,7 +349,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
 
 
 
-    def add_circle(
+    def _add_circle_impl(
         self,
         *,
         center: Sequence[float],
@@ -363,7 +374,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
         return region
 
 
-    def add_polygon(
+    def _add_polygon_impl(
         self,
         *,
         points: Sequence[Sequence[float]],
@@ -386,7 +397,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
         return region
 
 
-    def add_pec(
+    def _add_pec_impl(
         self,
         *,
         x: float,
@@ -422,7 +433,7 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
         self._invalidate()
         return sheet
 
-    def add_slot(
+    def _add_slot_impl(
         self,
         *,
         pec: PECSheet | str,
@@ -828,13 +839,13 @@ class WaveguideScatteringSolver2D(ElectromagneticSolverMixin):
                 "The integrated WaveguideScatteringSolver2D projector currently requires lossless "
                 "uniform lead materials. Compact lossy perturbations are supported."
             )
-        boundary = self.transverse_boundary
+        boundary = self._boundary_kind
         if self.pml.x is not None:
             boundary = "pec"
         if boundary is None:
             raise ConfigurationError(
-                "An open transverse guide requires add_pml(x=...); otherwise set "
-                "transverse_boundary='pec' or 'pmc' explicitly."
+                "An open transverse guide requires add_pml(direction='x', ...); otherwise "
+                "set boundary=materials.PEC."
             )
         kwargs: dict[str, object] = {}
         if self.pml.x is not None:

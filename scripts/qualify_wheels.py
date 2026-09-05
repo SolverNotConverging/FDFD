@@ -16,8 +16,9 @@ from pathlib import Path
 import sys
 import numpy as np
 import scipy.sparse as sp
+from cem_common import Material, materials, shapes
 
-packages = ('fem_common', 'fem_adaptivity', 'periodic_eigensolver',
+packages = ('cem_common', 'fem_adaptivity', 'periodic_eigensolver',
     'fdfd_waveguide_modes', 'fdfd_periodic_modes', 'fdfd_band_structure', 'fdfd_scattering',
     'fem_waveguide_modes', 'fem_periodic_modes', 'fem_waveguide_scattering', 'fem_electrostatics')
 for name in packages:
@@ -33,6 +34,7 @@ assert np.max(result.residuals) < 1e-8
 
 import importlib.util
 assert importlib.util.find_spec('fdfd_periodic_modes.refined_shift_invert_arnoldi') is None
+assert importlib.util.find_spec('fem_common') is None
 
 from fem_waveguide_modes import ModeSolver1D, ModeSolver2D, load_result
 for solver in (ModeSolver1D(frequency=10e9, x_range=.02),
@@ -47,8 +49,8 @@ for solver in (ModeSolver1D(frequency=10e9, x_range=.02),
 from fem_electrostatics import ElectrostaticSolver, load_result
 for dimension in (1, 2):
     solver = ElectrostaticSolver(dim=dimension, x_range=1., outer_potential=None)
-    solver.set_potential(region='left', potential=0.)
-    solver.set_potential(region='right', potential=1.)
+    solver.set_potential(geometry='left', potential=0.)
+    solver.set_potential(geometry='right', potential=1.)
     result = solver.solve(max_refinements=0)
     np.testing.assert_allclose(result.potential, result.coordinates[:, 0], atol=1e-12)
     result.save('static.h5')
@@ -63,7 +65,7 @@ for solver in (PeriodicModeSolver2D(frequency=10e9, x_range=.02, z_range=.005),
     np.testing.assert_array_equal(load_result('periodic.h5').neff, result.neff)
 
 from fem_waveguide_scattering import WaveguideScatteringSolver2D, load_result
-solver = WaveguideScatteringSolver2D(frequency=299792458., x_range=.5, z_range=(-2., 2.), transverse_boundary='pec')
+solver = WaveguideScatteringSolver2D(frequency=299792458., x_range=.5, z_range=(-2., 2.), boundary=materials.PEC)
 solver.add_pml(thickness=.5, direction='z')
 solver.mesh(max_element_size=.1)
 solver.solve_modes(num_modes=1, neff_guess=1., max_refinements=0)
@@ -72,7 +74,40 @@ result = solver.solve(max_refinements=0)
 assert abs(result.S21-1) < 1e-8 and abs(result.S11) < 1e-8
 result.save('scattering.h5')
 np.testing.assert_array_equal(load_result('scattering.h5').E_total, result.E_total)
-print('Installed distributions, native eigensolver, FEM dimensions, physics, and archives: PASS')
+
+from fdfd_waveguide_modes import ModeSolver1D as GridModeSolver1D, load_result as load_grid_modes
+grid = GridModeSolver1D(frequency=299792458., x_range=1.,
+                        background_material=Material(name='fill', epsilon=2.25))
+grid.add_geometry(shape=shapes.Interval(bounds=(0., .05)), material=materials.PEC)
+grid.add_geometry(shape=shapes.Interval(bounds=(.95, 1.)), material=materials.PEC)
+grid.mesh(resolution=20)
+grid_result = grid.solve(num_modes=1, neff_guess=1.4, polarization='TE')
+grid_result.save('grid-modes.h5')
+np.testing.assert_allclose(load_grid_modes('grid-modes.h5').neff, grid_result.neff)
+
+from fdfd_periodic_modes import PeriodicModeSolver2D as GridPeriodicModeSolver2D
+periodic_grid = GridPeriodicModeSolver2D(frequency=299792458., x_range=1., z_range=.25,
+    polarization='TM', background_material=Material(name='fill', epsilon=2.25))
+periodic_grid.mesh(resolution=(8, 8))
+assert np.isfinite(periodic_grid.solve(num_modes=1, neff_guess=1.4).neff).all()
+
+from fdfd_band_structure import BandStructureSolver2D
+band = BandStructureSolver2D(x_range=1., y_range=1.)
+band.add_circle(center=(.5, .5), radius=.2, material=Material(name='rod', epsilon=4.))
+band.mesh(resolution=(8, 8))
+path = band.make_bloch_path(points=((0., 0.), (np.pi, 0.)), num_points=3)
+assert band.solve(beta_path=path, num_modes=1, polarizations=('TE',)).frequencies['TE'].shape == (1, 3)
+
+from fdfd_scattering import ScatteringSolver2D as GridScatteringSolver2D
+scatter = GridScatteringSolver2D(frequency=299792458., x_range=(-1., 1.), y_range=(-1., 1.))
+scatter.add_circle(center=(0., 0.), radius=.2, material=Material(name='rod', epsilon=2.))
+scatter.add_pml(thickness=.2)
+scatter.mesh(resolution=(20, 20))
+scatter.add_source(angle=0.)
+scatter.set_source_region(inset=.3)
+assert np.isfinite(scatter.solve().fields['Ez']).all()
+
+print('Installed distributions, native eigensolver, all solver families, physics, and archives: PASS')
 '''
 
 

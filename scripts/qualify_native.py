@@ -1,4 +1,5 @@
 """Check Python-written 1.0 archives with native inspectors and offscreen viewers."""
+from cem_common import Material, SurfaceImpedance, materials, shapes
 import argparse
 import os
 from pathlib import Path
@@ -39,7 +40,7 @@ def main():
     run('fem-periodic-mode-inspect',path,'1','0','--coefficients')
     from fem_waveguide_scattering import WaveguideScatteringSolver2D
     import numpy as np
-    solver=WaveguideScatteringSolver2D(frequency=299792458.,x_range=.5,z_range=(-2.,2.),transverse_boundary='pec')
+    solver=WaveguideScatteringSolver2D(frequency=299792458.0, x_range=0.5, z_range=(-2.0, 2.0), boundary=materials.PEC)
     solver.add_pml(thickness=.5,direction='z')
     solver.mesh(max_element_size=.1)
     result=solver.solve(max_refinements=0)

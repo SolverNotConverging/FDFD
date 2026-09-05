@@ -26,7 +26,7 @@ def main():
             target.mkdir(parents=True)
             shutil.copytree(original/'src',target/'src',ignore=shutil.ignore_patterns(
                 '__pycache__','*.egg-info','*.pyc','*.pyd','*.so','_cython_kernels.c'))
-            for name in ('pyproject.toml','README.rst','API_REFERENCE.rst','LICENSE'):
+            for name in ('pyproject.toml','README.rst','LICENSE'):
                 if (original/name).is_file():shutil.copy2(original/name,target/name)
             sources.append(target)
         subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", *( ["--no-build-isolation"] if args.no_build_isolation else []), "--wheel-dir", str(args.output),

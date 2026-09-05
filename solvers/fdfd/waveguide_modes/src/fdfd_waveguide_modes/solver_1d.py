@@ -9,7 +9,7 @@ from .impedance_1d import (
 )
 
 
-class ModeSolver1D:
+class _ModeSolver1D:
     """1D Yee-grid mode solver using ``exp(+j*omega*t - j*beta*z)``."""
 
     def __init__(self, frequency, x_range, Nx, num_modes, guess=None):
@@ -778,7 +778,7 @@ class ModeSolver1D:
         Omega = Omega[free_mask, :][:, free_mask]
         if Omega.shape[0] <= self.num_modes:
             raise ValueError(f"Not enough unconstrained DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes.")
-        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma)
+        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
         order = np.argsort(np.real(eigenvalues))
         eigenvalues = eigenvalues[order]
         eigenvectors_reduced = eigenvectors_reduced[:, order]

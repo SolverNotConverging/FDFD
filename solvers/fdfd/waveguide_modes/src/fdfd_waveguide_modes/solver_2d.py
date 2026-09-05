@@ -9,7 +9,7 @@ from .impedance_2d import (
 )
 
 
-class ModeSolver2D:
+class _ModeSolver2D:
     """2D Yee-grid mode solver using ``exp(+j*omega*t - j*beta*z)``."""
 
     def __init__(self, frequency, x_range, y_range, Nx, Ny, num_modes, guess=None):
@@ -1135,7 +1135,7 @@ class ModeSolver2D:
                 f"Not enough unconstrained electric DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes."
             )
 
-        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma)
+        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
         eigenvectors = np.zeros((self.n_e, self.num_modes), dtype=complex)
         eigenvectors[free_exy, :] = eigenvectors_reduced
 

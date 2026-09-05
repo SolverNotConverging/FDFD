@@ -13,9 +13,10 @@ DESCRIPTIONS = {
     "z_range": "Physical z extent or increasing bounds, in metres.",
     "epsilon": "Relative permittivity; supported scalar/tensor forms are described below.",
     "mu": "Relative permeability; supported scalar/diagonal forms are described below.",
-    "background_epsilon": "Relative permittivity of the unfilled domain.",
-    "background_mu": "Relative permeability of the unfilled domain.",
-    "boundary": "Exterior boundary condition.",
+    "background_material": "Predefined bulk Material assigned to unfilled space.",
+    "boundary": "Predefined PEC or PMC exterior-boundary material.",
+    "material": "A predefined bulk, ideal-boundary, or supported SIBC material.",
+    "geometry": "A handle returned by add_geometry or a geometry convenience method.",
     "max_element_size": "Maximum initial element edge length in metres.",
     "resolution": "Initial node counts; use instead of a maximum element size.",
     "wavelength_elements": "Minimum number of initial elements per local wavelength.",
@@ -52,6 +53,8 @@ DESCRIPTIONS = {
     "outer_potential": "Exterior potential in volts; None permits natural boundaries.",
     "density": "Volume charge density in coulombs per cubic metre.",
     "region": "Geometry primitive or supported boundary name.",
+    "shape": "A predefined cem_common.shapes object in metres.",
+    "clip": "Intersect the shape with the solver domain; otherwise out-of-bounds objects raise GeometryError.",
     "name": "Optional name used for later identification and diagnostics.",
     "center": "Physical centre coordinates in metres.",
     "radius": "Positive radius in metres.",
@@ -104,7 +107,7 @@ def entry(name, obj, returned):
 
 
 def main():
-    inventory = json.loads((ROOT/'docs/public_api.json').read_text())
+    inventory = json.loads((ROOT/'doc/public_api.json').read_text())
     for package, spec in inventory.items():
         module = import_module(package)
         out = section(package+" user API", "=")
@@ -160,15 +163,15 @@ def main():
             if package == 'fem_periodic_modes':
                 out += "Periodic fields are Bloch envelopes. ``period`` is in m; each mode also\nprovides ``gamma``, ``bloch_multiplier``, folded propagation quantities,\nand Gauss-law/PML filtering diagnostics. Combine solved cases with\n``PeriodicSweepResult.from_results(results)`` and call ``save(path)``.\nLoaded multi-case archives index cases lazily.\n\n"
         out += section("Geometry and material values")
-        for name in spec['exports']:
-            obj = getattr(module, name)
-            if name in ('Material','Interval','Rectangle','Circle','Polygon','Box','Sphere','Cylinder'):
-                out += entry(name, obj, 'an immutable geometry/material value for solver configuration')
-            elif name == 'good_conductor_surface_impedance':
-                out += entry(name,obj,'the passive surface impedance in ohms')
+        out += ("Define reusable materials and shapes with ``cem_common`` before assigning them.\n"
+                "Use ``Material(name=..., epsilon=..., mu=...)`` for bulk media,\n"
+                "``materials.PEC`` or ``materials.PMC`` for ideal boundaries, and the\n"
+                "documented ``materials.copper``-style presets where SIBC is supported.\n"
+                "Continuous primitives and Boolean/transformed shapes live in\n"
+                "``cem_common.shapes``. Solver packages do not re-export these shared values.\n\n")
         out += entry('load_result',module.load_result,'a typed result; multi-case archives provide lazy case access')
         out += section("Errors")+"Invalid inputs raise ``ConfigurationError`` or ``GeometryError`` where available.\nMesh and numerical failures raise the corresponding ``MeshError`` or\n``SolverError``. ``NoResultError`` requires a successful solve first.\n``PersistenceError`` identifies an incompatible or unreadable archive.\nViewer errors include the executable path or installation setting needed to\ncorrect a launch failure. Saving and loading do not require an active GUI.\n\n"
-        (ROOT/spec['path']/'API_REFERENCE.rst').write_text(out.rstrip() + '\n',encoding='utf-8')
+        (ROOT/spec['documentation']/'API_REFERENCE.rst').write_text(out.rstrip() + '\n',encoding='utf-8')
 
 
 if __name__=='__main__':main()

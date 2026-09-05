@@ -4,9 +4,10 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from fem_common import MeshSnapshot, mesh_snapshot
-from fem_common.errors import PersistenceError, ConfigurationError
-from fem_common.persistence import atomic_h5, write_envelope, validate_envelope, write_value, read_value
+from cem_common import MeshSnapshot
+from cem_common.contracts import mesh_snapshot
+from cem_common.errors import PersistenceError, ConfigurationError
+from cem_common.persistence import atomic_h5, write_envelope, validate_envelope, write_value, read_value
 from .results import ElectrostaticResult
 
 

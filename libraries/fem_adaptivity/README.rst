@@ -1,19 +1,11 @@
 FEM adaptivity policy
 =====================
 
-Version 1.0.0 of the shared adaptive policy used by Computational
-Electromagnetics. This independently installable library supplies error
-estimation and refinement policy to the FEM families. Assembly remains in
-the individual solvers.
+Part of Computational Electromagnetics, version 1.0.0.
+This package is independently installable from its wheel. Installation and
+project quick-start instructions are in the root README.md.
 
-Users configure adaptation through their solver's ``solve`` method::
+Source-checkout documentation:
 
-    result = solver.solve(max_refinements=2, adaptive_tolerance=0.05)
-
-Zero refinements means one solve on the initial mesh. Results expose stopping
-status, element counts, and discretization residuals through ``solve_info``.
-Algebraic residuals remain separate. Mesh and numerical failures are visible.
-
-Install through ``python scripts/install_python.py`` from the repository
-root, or install this wheel with its declared dependencies. See
-`API_REFERENCE.rst <API_REFERENCE.rst>`_ for the supported user surface.
+* `User guide <../../doc/libraries/fem_adaptivity/guide.rst>`_
+* `Public API <../../doc/libraries/fem_adaptivity/API_REFERENCE.rst>`_

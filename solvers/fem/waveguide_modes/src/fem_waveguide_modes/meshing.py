@@ -192,6 +192,10 @@ def discretize_1d(
 
 
 def _add_occ_shape(gmsh: object, shape: object, origin: tuple[float, float], scale: float) -> tuple[int, int]:
+    from cem_common.shapes import Shape
+    from cem_common._occ import add_shape
+    if isinstance(shape, Shape):
+        return add_shape(gmsh, shape, origin, scale)
     occ = gmsh.model.occ
     x0, y0 = origin
     if isinstance(shape, Rectangle):
@@ -527,6 +531,12 @@ def discretize_2d(
             else:
                 surfaces = inputs
                 fragment_map = [[inputs[0]]]
+            domain_surfaces = {
+                int(entity)
+                for mapped in fragment_map[:len(base_cells)]
+                for dimension, entity in mapped
+                if dimension == 2
+            }
             curved_surface_membership = {
                 item.id: {
                     int(entity)
@@ -546,6 +556,9 @@ def discretize_2d(
                 physical_names[index] = region.name
 
             for _, entity in gmsh.model.getEntities(2):
+                if entity not in domain_surfaces:
+                    excluded_surfaces.append(entity)
+                    continue
                 center = occ.getCenterOfMass(2, entity)
                 px = center[0] / scale + xmin
                 py = center[1] / scale + ymin

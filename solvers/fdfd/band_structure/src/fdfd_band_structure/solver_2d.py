@@ -57,7 +57,7 @@ class BandStructureResult:
     eigenvalues: dict[str, np.ndarray]
 
 
-class BandStructureSolver2D:
+class _BandStructureSolver2D:
     """Finite-difference frequency-domain band diagram solver.
 
     Phasors use ``exp(+j*omega*t)`` and Bloch fields use the spatial factor
@@ -316,14 +316,14 @@ class BandStructureSolver2D:
 
             if "TM" in polarisations:
                 A_tm = -DHX @ URyy_inv @ DEX - DHY @ URxx_inv @ DEY
-                vals_tm = eigs(A_tm, M=ERzz_diag, k=num_bands, sigma=eig_sigma)[0]
+                vals_tm = eigs(A_tm, M=ERzz_diag, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_tm = self._sort_eigenvalues(vals_tm, num_bands)
                 eigenvalues["TM"][:, idx] = eig_tm
                 frequencies["TM"][:, idx] = self._normalise_eigenvalues(eig_tm)
 
             if "TE" in polarisations:
                 A_te = -DEX @ ERyy_inv @ DHX - DEY @ ERxx_inv @ DHY
-                vals_te = eigs(A_te, M=URzz_diag, k=num_bands, sigma=eig_sigma)[0]
+                vals_te = eigs(A_te, M=URzz_diag, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_te = self._sort_eigenvalues(vals_te, num_bands)
                 eigenvalues["TE"][:, idx] = eig_te
                 frequencies["TE"][:, idx] = self._normalise_eigenvalues(eig_te)
