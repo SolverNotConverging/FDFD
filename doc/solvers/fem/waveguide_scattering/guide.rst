@@ -40,7 +40,7 @@ Working with the solver
 Before the scattering solve, use ``solve_modes()`` and ``set_incident_mode(0)``
 to configure the first lead mode. The mesh is 2D; the fields are 2.5D full-vector.
 
-Part of **Computational Electromagnetics**, version 1.0.0.
+Part of **FDFD**, version 1.0.0.
 
 A **2.5D full-vector** scattered-field solver on a two-dimensional x/z mesh.
 The invariant-direction factor is ``exp(-i*ky*y)``.
@@ -70,7 +70,8 @@ The adaptive defaults are two refinements and a relative tolerance of 0.05.
 The example uses a fixed mesh for reproducibility. Geometry edits invalidate
 ``mesh_data`` and ``result``; an automatic rebuild reuses explicit mesh settings.
 
-``show()`` uses the separately built native viewer. Launch failures report
+``show()`` uses the native viewer included in the complete Windows wheel (or
+built separately for source installations). Launch failures report
 the executable discovery setting; saving and loading work without the viewer.
 
 ``slot = solver.add_slot(geometry=sheet, z_range=(z0, z1))`` cuts an opening

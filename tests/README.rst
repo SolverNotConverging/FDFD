@@ -1,5 +1,5 @@
-Computational Electromagnetics tests
-====================================
+FDFD tests
+==========
 
 Run all Python tests from the repository root::
 

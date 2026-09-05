@@ -1,0 +1,8 @@
+include README.md LICENSE CMakeLists.txt environment.yml
+recursive-include src *.py
+recursive-include libraries *.py *.pyx *.toml *.rst
+recursive-include solvers *.py *.toml *.rst
+recursive-include apps *.cpp *.h *.hpp CMakeLists.txt *.rst *.ps1
+recursive-include scripts *.py
+prune outputs
+global-exclude __pycache__ *.pyc *.pyd *.so

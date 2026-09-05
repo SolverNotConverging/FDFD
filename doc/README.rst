@@ -1,8 +1,8 @@
-Computational Electromagnetics documentation
-============================================
+FDFD documentation
+==================
 
 Start with the `project setup <../README.md>`_ and `runnable examples <../examples/README.rst>`_.
-Python packages are independently installable; their detailed documentation lives here.
+All solver families are installed together by the complete FDFD wheel. Their detailed documentation lives here.
 
 Solver families
 ---------------

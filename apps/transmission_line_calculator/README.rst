@@ -1,6 +1,11 @@
 Transmission Line Calculator
 ============================
 
+Windows x64 / Python 3.12 users can install this app with all solvers using the
+`single FDFD release wheel <../../README.md#installation>`_. Launch it with
+``python -m fdfd calculator``; no C++ build is needed. The build instructions
+below are for source installations, including Linux and macOS.
+
 Transmission Line Calculator is a native C++20 application for fast quasi-TEM extraction of coaxial, microstrip, stripline, and coplanar-waveguide cross-sections. It provides a Qt 6 desktop GUI and an FTXUI terminal interface. It is a standalone rewrite of the Python calculator: both front ends, the mesher, sparse finite-element solve, field plots, and repeated benchmarks run without Python, NumPy, SciPy, scikit-fem, or Matplotlib. Geometry and conforming triangular meshing use the native Gmsh 4 C++ API.
 
 The numerical core is also available as the reusable ``tl-core`` CMake target.
@@ -76,24 +81,21 @@ The build requires:
 
 * Eigen 3.4 or newer (Eigen 5 is also accepted);
 
-* Gmsh 4, including ``gmsh.h`` and its C++ library.
+* Gmsh 4, including ``gmsh.h``, its C++ library, and OpenCASCADE support
+  (``gmsh[occ]`` in vcpkg).
 
 Keep every dependency built for the same compiler, architecture, and runtime as the application. For example, an MSVC build cannot link to MinGW libraries.
 
 Windows with MSVC and vcpkg
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Install Visual Studio 2022 with **Desktop development with C++**, CMake, and `vcpkg <https://learn.microsoft.com/vcpkg/get_started/get-started>`_. Then run:
-
-.. code-block:: powershell
-
-   C:\vcpkg\vcpkg.exe install qtbase eigen3 gmsh ftxui --triplet x64-windows
-   cmake --fresh -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 `
-     -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-   cmake --build build-msvc --config Release --parallel
-   ctest --test-dir build-msvc -C Release --output-on-failure
-
-Replace ``C:\vcpkg`` with the location of your vcpkg checkout. Visual Studio places the executables under ``build-msvc\Release``.
+Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
+deploying DLLs and Qt plugins, and connecting the native viewers to Python.
+The walkthrough's commands run from the repository root and install all three
+applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
+select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
+use the root walkthrough's CMake install/deployment commands for MSVC.
 
 Windows with MinGW-w64 (MSYS2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

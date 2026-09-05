@@ -1,4 +1,4 @@
-"""Install the maintained packages using the active Python environment."""
+"""Install the complete FDFD source distribution using the active interpreter."""
 from pathlib import Path
 import argparse
 import subprocess
@@ -25,10 +25,9 @@ def main():
     command = [sys.executable, "-m", "pip", "install"]
     if args.no_build_isolation:
         command.append("--no-build-isolation")
-    for package in PACKAGES:
-        if args.editable:
-            command.append("--editable")
-        command.append(str(ROOT / package))
+    if args.editable:
+        command.append("--editable")
+    command.append(str(ROOT))
     subprocess.run(command, check=True)
 
 

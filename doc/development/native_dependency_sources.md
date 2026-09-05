@@ -1,0 +1,233 @@
+# Native dependency sources for FDFD 1.0.0
+
+The complete Windows wheel contains native applications and dynamically linked
+MSYS2 libraries. These exact source archives include upstream sources, patches,
+and MSYS2 build recipes. Links and SHA256 hashes were checked during packaging.
+
+Application source and packaging code: [FDFD repository](https://github.com/SolverNotConverging/FDFD).
+The release notes identify the source commit for the complete wheel.
+
+To rebuild a dependency, extract its archive in MSYS2, enter the directory
+containing PKGBUILD, and run `MINGW_ARCH=mingw64 makepkg-mingw -sCLf`.
+Build FDFD with CMake, the MinGW64 prefix, Release, and VTK enabled.
+
+- [mingw-w64-aom-3.14.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aom-3.14.1-1.src.tar.zst)
+  SHA256: `420b80c94cf52cd4197616a71f0df90ee2def4659828a89496e8b7f92def16d3`
+- [mingw-w64-aws-c-auth-0.10.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-auth-0.10.1-1.src.tar.zst)
+  SHA256: `4a977e0925f028bb162f7150f2fd3034fe604afd2e905bbdf7eafb808a923dc1`
+- [mingw-w64-aws-c-cal-0.9.13-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-cal-0.9.13-1.src.tar.zst)
+  SHA256: `9596dead4e4a68adf54145c9cc442944d14a5a5463ea94cd6bb533180b4102c9`
+- [mingw-w64-aws-c-common-0.12.6-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-common-0.12.6-3.src.tar.zst)
+  SHA256: `b6fa7d22ad636c21fa804c04cf64e0aa54f5e174272e18e76a1db8ea3e468bc6`
+- [mingw-w64-aws-c-compression-0.3.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-compression-0.3.2-1.src.tar.zst)
+  SHA256: `055f99be98b0b603c08145d21366b7e5f5884def4748974b69a00c33b5aa2cb0`
+- [mingw-w64-aws-c-http-0.10.14-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-http-0.10.14-1.src.tar.zst)
+  SHA256: `8e272e4e281ae414684a0339071f24d99bb84940056e1283059a30e05b53d87b`
+- [mingw-w64-aws-c-io-0.26.3-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-io-0.26.3-3.src.tar.zst)
+  SHA256: `e15f80ee37767b7a6ce5741b41ae8566328d6119bb49ecb7d5b2b079600b16f5`
+- [mingw-w64-aws-c-s3-0.12.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-s3-0.12.2-1.src.tar.zst)
+  SHA256: `5347096008418fc44f8471c48cf932ff686c2a5b7a6e9435275a261e5f78241a`
+- [mingw-w64-aws-c-sdkutils-0.2.4-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-c-sdkutils-0.2.4-1.src.tar.zst)
+  SHA256: `686b30b42bf6287dd9b5171efb74fdd80632f8114139145db70ec0fa673e4514`
+- [mingw-w64-aws-checksums-0.2.10-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-aws-checksums-0.2.10-1.src.tar.zst)
+  SHA256: `c0471dc8ebdfdffd04783415e1937a9ce92311bf8ec113ffa295fa75c027b48d`
+- [mingw-w64-brotli-1.2.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-brotli-1.2.0-1.src.tar.zst)
+  SHA256: `2f0f93875aac21990d20f1eaf0ad8b970eb6f186c663c77ae47aaaf9e5711fcf`
+- [mingw-w64-bzip2-1.0.8-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-bzip2-1.0.8-3.src.tar.zst)
+  SHA256: `b818b3d164cd409b1fd883e3ecc056c5bc4d6cad408e871f2781bc11faf5a413`
+- [mingw-w64-cairo-1.18.4-4.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-cairo-1.18.4-4.src.tar.zst)
+  SHA256: `3a83c94fd2818872441db8ded3e500aa1401e673fa389390b8423be954bafea2`
+- [mingw-w64-dav1d-1.5.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-dav1d-1.5.3-1.src.tar.zst)
+  SHA256: `5514b5fe5970c1c3e509e5138a9839a7de84b9d54235b6e1772c956208e1401f`
+- [mingw-w64-double-conversion-3.4.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-double-conversion-3.4.0-1.src.tar.zst)
+  SHA256: `340756c3955495ce9f8c56f929ba2549a4360187d3c50d0209386d8e650684ba`
+- [mingw-w64-eigen3-5.0.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-eigen3-5.0.1-1.src.tar.zst)
+  SHA256: `cb76d0d673fd10bdce9927f34162419b120423f1e08b7cf333b4c1f97e17afe3`
+- [mingw-w64-expat-2.8.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-expat-2.8.2-1.src.tar.zst)
+  SHA256: `e81ebe8069473b2ca011a01bdb95ab01a58b46395d37f9af3e74d9bd1b2648ea`
+- [mingw-w64-ffmpeg-8.1.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-ffmpeg-8.1.2-1.src.tar.zst)
+  SHA256: `65ff8e2317bfb8596c1f9ca6bb05059c1a5af134397dc1b20c281686a9913874`
+- [mingw-w64-fltk-1.4.5-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-fltk-1.4.5-1.src.tar.zst)
+  SHA256: `bec07a4f4def8c1797a93e03a1e6e5ba43bdbf0fdfa563860990b45a625f9ae2`
+- [mingw-w64-fmt-12.2.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-fmt-12.2.0-1.src.tar.zst)
+  SHA256: `88dfcdfeb8f1a6b19aff46b43582ca71f2b932d37dec32f1f4a7af4f3f2c3b70`
+- [mingw-w64-fontconfig-2.18.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-fontconfig-2.18.2-1.src.tar.zst)
+  SHA256: `f093ba20c007bc5cb80c7ea0678af5cfa8647ac968fd1e5a192ffa76288020c6`
+- [mingw-w64-freeimage-3.18.0-18.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-freeimage-3.18.0-18.src.tar.zst)
+  SHA256: `6e901cd02aaa36ceb8339728dee071a041061e15f8237dfee38089a981f4e629`
+- [mingw-w64-freetype-2.14.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-freetype-2.14.3-1.src.tar.zst)
+  SHA256: `ee8071d0a6e82a274e959902898115f4c9c376a2a8e209d83dfe746c18004ec0`
+- [mingw-w64-fribidi-1.0.16-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-fribidi-1.0.16-1.src.tar.zst)
+  SHA256: `a496fd3c7973d443e741626e1be7af58d8adcbc1d4a1c056d07a011f0edc6d0b`
+- [mingw-w64-ftxui-7.0.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-ftxui-7.0.0-1.src.tar.zst)
+  SHA256: `57402ef91acb6be211e79b6a3074715b33b0a334a7470d0525f938e2dec599d8`
+- [mingw-w64-gcc-16.1.0-5.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gcc-16.1.0-5.src.tar.zst)
+  SHA256: `947166ed372d28ab8ffa25a66bc5e37a60a42e96a686424ce58cad304fcaea15`
+- [mingw-w64-gdk-pixbuf2-2.44.7-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gdk-pixbuf2-2.44.7-1.src.tar.zst)
+  SHA256: `34986b21db1b40021a37835e90dad04250d1e31dc90da538b9922acd097e0019`
+- [mingw-w64-gettext-1.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gettext-1.0-1.src.tar.zst)
+  SHA256: `cca0d0c8f60353faccc5ad40405240014e4a7ccc8b1c6ca9f4626aef3097d26e`
+- [mingw-w64-glib2-2.88.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-glib2-2.88.2-1.src.tar.zst)
+  SHA256: `6952af7120b5d44a21623e7e3ae10ef27202ecb53ce6b119a0a8bf5e7dcf4dd7`
+- [mingw-w64-gmp-6.3.0-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gmp-6.3.0-2.src.tar.zst)
+  SHA256: `f288f944fd9609db220bcf6a8dd0703a5674eeb906ef35eb8485bb8192135994`
+- [mingw-w64-gmsh-4.15.2-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gmsh-4.15.2-2.src.tar.zst)
+  SHA256: `ec3fc85cd5f06c8829d7528dc553ed622af26faa539695da7fc4a4654293c423`
+- [mingw-w64-gnutls-3.8.13-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gnutls-3.8.13-3.src.tar.zst)
+  SHA256: `7889cd73810d909642c0f122b40cfe0eaec5b0d2985804f145cd90c6a51c0435`
+- [mingw-w64-graphite2-1.3.15-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-graphite2-1.3.15-1.src.tar.zst)
+  SHA256: `eb76ce274c68ea6bad0883144c21e44a803ec94fed9dc0f6584feb0a8415a1d6`
+- [mingw-w64-gsm-1.0.24-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-gsm-1.0.24-1.src.tar.zst)
+  SHA256: `623729958cd0ca08e15ff6a51a54aa1bb73fe0356c29a42fc35342087497d61a`
+- [mingw-w64-harfbuzz-14.2.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-harfbuzz-14.2.1-1.src.tar.zst)
+  SHA256: `1776f26fcb0a81b0fda74f4782df6f4c4632e167af9506e4adbf37d14dbbeead`
+- [mingw-w64-hdf5-2.1.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-hdf5-2.1.1-1.src.tar.zst)
+  SHA256: `bc0c84bf003e301df66f40fc3535f98f85572ae3eeb072a1a30e18229b58b267`
+- [mingw-w64-highway-1.4.0-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-highway-1.4.0-3.src.tar.zst)
+  SHA256: `ce2cbf7c1c2af92796a35250a3e3e5669968446656dc78b278d89ac650ed14bb`
+- [mingw-w64-icu-78.3-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-icu-78.3-3.src.tar.zst)
+  SHA256: `59f5d77ab17ecefe9b174dc2b78f5a530b3f243f6c1932672b4f01423486fe11`
+- [mingw-w64-imath-3.2.2-4.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-imath-3.2.2-4.src.tar.zst)
+  SHA256: `459e7f816c3c0877bb9ac95991a4549d440b3adcb9d5c393902e686ce7a20a6a`
+- [mingw-w64-jbigkit-2.1-5.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-jbigkit-2.1-5.src.tar.zst)
+  SHA256: `402e264e13ffd10424d3217e83076d9e1e3ab0db16303a33d42a4bd4cda4088b`
+- [mingw-w64-jxrlib-1.1-4.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-jxrlib-1.1-4.src.tar.zst)
+  SHA256: `97425966e7374ead283a420e692408e64164795dc91cb3c206796c2c8c0f5506`
+- [mingw-w64-lame-3.100-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-lame-3.100-3.src.tar.zst)
+  SHA256: `dfd51143ea25aa0b67f5d355127b8a89a27379b1b128f0b2f9eed7c3327656ab`
+- [mingw-w64-lcms2-2.19.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-lcms2-2.19.1-1.src.tar.zst)
+  SHA256: `83414d0d95c5cb2548d3050670694e9efc64304a52190f42bcad951efa038b41`
+- [mingw-w64-lerc-4.1.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-lerc-4.1.1-1.src.tar.zst)
+  SHA256: `697824f8dba0b297949b294d7f850a21dfa817802cf91f3a73b6192a7c234f46`
+- [mingw-w64-libaec-1.1.7-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libaec-1.1.7-1.src.tar.zst)
+  SHA256: `1277a89d7e1970520fb811f4352e6205e125202da1e31532e8e48b7a77727034`
+- [mingw-w64-libb2-0.98.1-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libb2-0.98.1-3.src.tar.zst)
+  SHA256: `2069710882bfe0b70872b32c558af9895a37f742a11e0cb15f80dd7eedaf5717`
+- [mingw-w64-libbluray-1.4.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libbluray-1.4.1-1.src.tar.zst)
+  SHA256: `b67b1f41330c3fd52069540f0d9cb8c82ba04f18b711ffbfebcf47a68e378022`
+- [mingw-w64-libdatrie-0.2.14-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libdatrie-0.2.14-1.src.tar.zst)
+  SHA256: `da58ca439051a8cfb1d7f15cdd82af104e1ea1eeefdb090e608d2305a747df7d`
+- [mingw-w64-libdeflate-1.25-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libdeflate-1.25-1.src.tar.zst)
+  SHA256: `53b756599ad6e44975bfe3224475a395e6b1c1c22783ae1216c5553fbfb8d746`
+- [mingw-w64-libffi-3.6.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libffi-3.6.0-1.src.tar.zst)
+  SHA256: `181a08e1bed2a07a21d0dc4a5bd01ea2483de65d8597c062bb61158420c5087a`
+- [mingw-w64-libgme-0.6.5-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libgme-0.6.5-2.src.tar.zst)
+  SHA256: `b77a9be1dd65255df797a793a525a25a73b75a8c3c1379f79b2ea9376e854fd6`
+- [mingw-w64-libiconv-1.19-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libiconv-1.19-1.src.tar.zst)
+  SHA256: `74428280c17094da5b702c29b2e1a0abae59556ea5dfdd65705cc8ccc1e000fb`
+- [mingw-w64-libidn2-2.3.8-4.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libidn2-2.3.8-4.src.tar.zst)
+  SHA256: `cd83e8514fbeb6a4499299b88691b9b9ecc3114cca1e2be4f6c54aab6ae9ddd0`
+- [mingw-w64-libjpeg-turbo-3.2.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libjpeg-turbo-3.2.0-1.src.tar.zst)
+  SHA256: `98bfbef730e79ca74c88842eb27730db11429dbae4d95e0f5d7859e316026a74`
+- [mingw-w64-libjxl-0.12.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libjxl-0.12.0-1.src.tar.zst)
+  SHA256: `2f2e1c4537d8824898a713fa3e7d475e66223b0b1b20141dfa73b26da5bc4a54`
+- [mingw-w64-liblc3-1.1.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-liblc3-1.1.3-1.src.tar.zst)
+  SHA256: `20e74ad319fd5da576e071a8b54dbb2c9891e7ddcf6f16a557a33011c2dc7262`
+- [mingw-w64-libmodplug-0.8.9.0-5.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libmodplug-0.8.9.0-5.src.tar.zst)
+  SHA256: `6b2094f45342bcc7a1e76a7d936d26de877fc911fb445f1ff1b74514fdc7b486`
+- [mingw-w64-libogg-1.3.6-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libogg-1.3.6-1.src.tar.zst)
+  SHA256: `af94ea3c4011694b7a68904144ec1ab73c6c649152c78cb93a7df2a6c386b351`
+- [mingw-w64-libpng-1.6.58-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libpng-1.6.58-1.src.tar.zst)
+  SHA256: `9e985fc4cef509ec689f982dc6a948e9a8ee5184db25d65e9dd4c21872092348`
+- [mingw-w64-libraw-0.22.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libraw-0.22.1-1.src.tar.zst)
+  SHA256: `a9a79e53f9f83de23ad43da6378c2f4af47f38f482825aefb7bc8078cb2cf0b9`
+- [mingw-w64-librsvg-2.62.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-librsvg-2.62.3-1.src.tar.zst)
+  SHA256: `6007e8f5960b63f2d71d6a8418bc414104c5c9998f741cd8f53e17a7cced41ac`
+- [mingw-w64-libsoxr-0.1.3-5.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libsoxr-0.1.3-5.src.tar.zst)
+  SHA256: `6473c8fe8f9f25bd9335cb00432c42e311ce134475f7baa1d741d0a3399c787a`
+- [mingw-w64-libssh-0.12.0-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libssh-0.12.0-3.src.tar.zst)
+  SHA256: `4943be1467a44939b150c400871cda22739908fe0dc23eac294901234e63d494`
+- [mingw-w64-libtasn1-4.21.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libtasn1-4.21.0-1.src.tar.zst)
+  SHA256: `c626129c5131eef0a45c736274f0844747605a105161cc0f7d39f6e1c70ed0ff`
+- [mingw-w64-libthai-0.1.30-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libthai-0.1.30-1.src.tar.zst)
+  SHA256: `e4f8d840fca132eb47aed311fc2c36dc59604b9ecd0aa310161b9d1e2cee4d03`
+- [mingw-w64-libtheora-1.2.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libtheora-1.2.0-1.src.tar.zst)
+  SHA256: `2390e994f10cb3e3e5f32898010ecede4e61bd10d47cfe4d1500ed8c7a774e85`
+- [mingw-w64-libtiff-4.7.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libtiff-4.7.2-1.src.tar.zst)
+  SHA256: `11f3bdc23a154a5cea2f8fffeab3e2a118bd773d2769e1dcea926ff02f2cf3e2`
+- [mingw-w64-libunistring-1.4.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libunistring-1.4.2-1.src.tar.zst)
+  SHA256: `a5bafb360d5c13c5c52ef071d5a8288ce2345346b902f20ed6e9322766ec60eb`
+- [mingw-w64-libva-2.24.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libva-2.24.1-1.src.tar.zst)
+  SHA256: `7854d48806606fd1503444f3aba96a7aa19a3c6c07f74f4b0f50257dac9a1469`
+- [mingw-w64-libvorbis-1.3.7-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libvorbis-1.3.7-2.src.tar.zst)
+  SHA256: `7468586f3f7818bd415ac2f7b81d12c14a073e93b04df2bb84c90ae46202c513`
+- [mingw-w64-libvpl-2.17.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libvpl-2.17.0-1.src.tar.zst)
+  SHA256: `4bd392447f4a5f986462cfc412ab7ace3dfaa980e53b41f35d08c44b8b31cc9d`
+- [mingw-w64-libvpx-1.16.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libvpx-1.16.0-1.src.tar.zst)
+  SHA256: `88c3e01f150f884d9ae385a2058f58b1d2dd729b3776f12a86e67c67f5334d3c`
+- [mingw-w64-libwebp-1.6.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libwebp-1.6.0-1.src.tar.zst)
+  SHA256: `c8c63f98e018a7595d22e8a3e65b7caf83345fed666866a6e67d153b16f48141`
+- [mingw-w64-libxml2-2.15.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-libxml2-2.15.3-1.src.tar.zst)
+  SHA256: `5328b89cd2b1b475da12fddd1792c9ea2f1e6dbb09504402b62ada78539f3d86`
+- [mingw-w64-lz4-1.10.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-lz4-1.10.0-1.src.tar.zst)
+  SHA256: `d5cccad7b20a3e5d0cd59ebb6abb0819e8fe21c1cda4c2427161bbd416e9c08d`
+- [mingw-w64-md4c-0.5.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-md4c-0.5.3-1.src.tar.zst)
+  SHA256: `e693a205a5c7c7dbc75b12b03e20ce21e7279b7422756f0794ec8e85626c97d0`
+- [mingw-w64-med-6.0.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-med-6.0.1-1.src.tar.zst)
+  SHA256: `78c56be8066301c4bbd3c7cc9cec233d9e6e866f942405accc9d93375a89a307`
+- [mingw-w64-nettle-4.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-nettle-4.0-1.src.tar.zst)
+  SHA256: `453187e86139bce3c5b94542cc709ead7f523f0fc33ce4cc2b8fe9d5a9719cdd`
+- [mingw-w64-opencascade-7.9.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-opencascade-7.9.3-1.src.tar.zst)
+  SHA256: `b63c48e72806581efa5fcb0777c3301a23e3f736ad2e423183d290970aae7e23`
+- [mingw-w64-opencore-amr-0.1.6-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-opencore-amr-0.1.6-1.src.tar.zst)
+  SHA256: `359bb4bcea1f8f49f875898887c25ab5c3c95af5b34afeca00fffd7256e5bccb`
+- [mingw-w64-openexr-3.4.13-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-openexr-3.4.13-3.src.tar.zst)
+  SHA256: `94413cc124656d75eac65e8f7f9f9e6f1ab341e4070d5d8a7fa3411094654e51`
+- [mingw-w64-openjpeg2-2.5.4-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-openjpeg2-2.5.4-2.src.tar.zst)
+  SHA256: `88be024421b79a557ea9cc94932806f5daddcae5d917895d81ac974df7f38b24`
+- [mingw-w64-openjph-0.30.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-openjph-0.30.1-1.src.tar.zst)
+  SHA256: `7b8462f7a8416e8e1b542d7e031f0962f6c0fcb49ad67d2954e0ca1f66f62161`
+- [mingw-w64-openssl-3.6.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-openssl-3.6.3-1.src.tar.zst)
+  SHA256: `b8e8625cf89996d32c3d6c4db8a98c46de6558f5a4e7e98ae1287ec2d6a97e51`
+- [mingw-w64-openvr-2.5.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-openvr-2.5.1-1.src.tar.zst)
+  SHA256: `7249af6ab574fbe13bb59b92afb50609bc2dad8b1db33f40f29d0117ca71d6f7`
+- [mingw-w64-opus-1.6.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-opus-1.6.1-1.src.tar.zst)
+  SHA256: `f9f4f73a700edcd35e11d7f47bcb164c850b781fa2cccb48cd30d505262b43a2`
+- [mingw-w64-p11-kit-0.26.4-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-p11-kit-0.26.4-1.src.tar.zst)
+  SHA256: `941a6b3e0b496cc5b80deae20ee7d73b1f5ccea69c75ee3959a73196c316936d`
+- [mingw-w64-pango-1.58.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-pango-1.58.0-1.src.tar.zst)
+  SHA256: `b1628ad6ce3f8787fb8b7a5859e8024b12e500d33a7d2ad39397ebd4a6f32c82`
+- [mingw-w64-pcre2-10.47-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-pcre2-10.47-1.src.tar.zst)
+  SHA256: `d1af57f4346ec9542f1d191c94c470340f6268bfa732718f6db1b89d75fd6502`
+- [mingw-w64-pixman-0.46.4-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-pixman-0.46.4-3.src.tar.zst)
+  SHA256: `2661cb135a6448f6d594e4642a643b2dec6fa0d773ac046aa786987a719160ed`
+- [mingw-w64-pugixml-1.16-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-pugixml-1.16-1.src.tar.zst)
+  SHA256: `2d99dc025184bbc22d52b144cf5282a9c9b3b9c5f7b4622120b983ee9b387c18`
+- [mingw-w64-qt6-base-6.11.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-qt6-base-6.11.1-1.src.tar.zst)
+  SHA256: `9f59a1e2f0fae33805a94a0fcce3b9add630d931457af8e85ba0abb5528aa0e0`
+- [mingw-w64-qt6-svg-6.11.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-qt6-svg-6.11.1-1.src.tar.zst)
+  SHA256: `ce0d9bfaa97ffeb9900d7e1bbf676dbd0bb8a74f243a749170bfaafb6fda90e4`
+- [mingw-w64-rav1e-0.8.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-rav1e-0.8.1-1.src.tar.zst)
+  SHA256: `4a991f3a7d0e4ef23bc5e7eaae9ea0c83d16a18c48a3e621f1f3dfb10464b49d`
+- [mingw-w64-rtmpdump-2.6-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-rtmpdump-2.6-2.src.tar.zst)
+  SHA256: `1f2b4eb1886b9934e60728cbe4b60fffa5a316b339e8ccae4b1eef9180d32cb5`
+- [mingw-w64-shaderc-2026.2-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-shaderc-2026.2-1.src.tar.zst)
+  SHA256: `63f8080f99815cdab0ef3d77d724afbf21f8957ce5bd3d287a21527dc0a211b5`
+- [mingw-w64-speex-1.2.1-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-speex-1.2.1-1.src.tar.zst)
+  SHA256: `e1a419b525ee19d808c47fce97890a4cae610627c5a74e533a1c322d596f11ef`
+- [mingw-w64-srt-1.5.5-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-srt-1.5.5-1.src.tar.zst)
+  SHA256: `94cf384e3c1cf4bd1d886055d3916238b178b5ab7d8e9bb3cdfe85d5b0e84322`
+- [mingw-w64-svt-av1-4.1.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-svt-av1-4.1.0-1.src.tar.zst)
+  SHA256: `782da694549933d117a37743f14066be568765304b28ee529cffab86864e50c6`
+- [mingw-w64-tbb-2023.0.0-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-tbb-2023.0.0-1.src.tar.zst)
+  SHA256: `04c3d345c0260a24b0760879b3f60fd0209bb941c3dcfeebcf53df8f0bd619ba`
+- [mingw-w64-vtk-9.6.2-3.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-vtk-9.6.2-3.src.tar.zst)
+  SHA256: `44fb12bf265b75705a625b839434df5287a9071182b42272633ac3e3e2604efa`
+- [mingw-w64-winpthreads-14.0.0.r179.g24aaa6147-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-winpthreads-14.0.0.r179.g24aaa6147-1.src.tar.zst)
+  SHA256: `5b1659ca665551b57c3c4b0075ef323839457eeb62c3cc3855df9149f84978d6`
+- [mingw-w64-x264-0.165.r3222.b35605a-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-x264-0.165.r3222.b35605a-2.src.tar.zst)
+  SHA256: `e40be604f1961138c1eed85f47c7a40977960f5e49cdf5fb6d22fab6646552e5`
+- [mingw-w64-x265-4.2-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-x265-4.2-2.src.tar.zst)
+  SHA256: `8d292144ac8fa15c8fcd27bb68daa60345918a155096d2cc61b64aeb042ee98e`
+- [mingw-w64-xvidcore-1.3.7-5.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-xvidcore-1.3.7-5.src.tar.zst)
+  SHA256: `400fb6859dcfbfa3f416098a3ff0cde2ca89daaae587b59dc34d150175d4841a`
+- [mingw-w64-xz-5.8.3-1.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-xz-5.8.3-1.src.tar.zst)
+  SHA256: `a6096b17f7144d3ec4a35f70ebdc0819df0f6ed331f53b04d2a4452d5b66ed55`
+- [mingw-w64-zlib-1.3.2-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-zlib-1.3.2-2.src.tar.zst)
+  SHA256: `eef69dea52357e01b272d6fd6dc4d7c0773f71260cb7bcde6047c8c383518db3`
+- [mingw-w64-zlib-ng-2.3.3-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-zlib-ng-2.3.3-2.src.tar.zst)
+  SHA256: `ef7a4579ba62860903cf0e7e151745bac3b0bdead0a1244befa4dbf1d5cfc3c4`
+- [mingw-w64-zstd-1.5.7-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-zstd-1.5.7-2.src.tar.zst)
+  SHA256: `306797282df799e95d550e6d0bb4b0a7b848027b8e13893a24236e060837c217`
+- [mingw-w64-zvbi-0.2.44-2.src.tar.zst](https://repo.msys2.org/mingw/sources/mingw-w64-zvbi-0.2.44-2.src.tar.zst)
+  SHA256: `9f7c6fa99246b8f021d35b50384bf7f8681838b9609f58abe16905bb515016a1`

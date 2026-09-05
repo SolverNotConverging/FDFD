@@ -1,4 +1,4 @@
-"""Install every wheel outside the checkout and exercise installed solvers."""
+"""Install the complete wheel outside the checkout and exercise solvers and apps."""
 from pathlib import Path
 import argparse
 import json
@@ -108,27 +108,70 @@ scatter.set_source_region(inset=.3)
 assert np.isfinite(scatter.solve().fields['Ez']).all()
 
 print('Installed distributions, native eigensolver, all solver families, physics, and archives: PASS')
+
+import fdfd
+from importlib.metadata import distribution
+assert Path(fdfd.__file__).is_relative_to(Path(sys.prefix))
+installed = distribution('fdfd')
+assert not any(requirement.startswith(('cem-common', 'fem-', 'fdfd-', 'periodic-eigensolver')) for requirement in installed.requires)
+from cem_common._native import bundled_executable
+from fem_waveguide_scattering.viewer import find_viewer_executable
+from fem_periodic_modes.persistence import _viewer_candidates
+assert find_viewer_executable() == bundled_executable('fem-waveguide-scattering-viewer')
+assert _viewer_candidates('fem-periodic-mode-viewer.exe')[0] == bundled_executable('fem-periodic-mode-viewer')
+'''
+
+NATIVE_SMOKE = r'''
+import os
+import subprocess
+from pathlib import Path
+import sys
+import fdfd
+from cem_common._native import bundled_executable, bundled_environment
+
+native = Path(fdfd.__file__).parent / 'native'
+for name, arguments in (
+    ('transmission-line-calculator', ['--calculate-smoke-test']),
+    ('transmission-line-calculator-cli', ['--smoke-test']),
+    ('fem-periodic-mode-viewer', ['--smoke-test', str(native / 'samples/periodic-3d.h5')]),
+    ('fem-waveguide-scattering-viewer', ['--smoke-test', str(native / 'samples/scattering-sweep.h5')]),
+    ('fem-periodic-mode-inspect', [str(native / 'samples/periodic-sweep.h5'), '1', '0']),
+    ('fem-waveguide-scattering-viewer-inspect', [str(native / 'samples/scattering-sweep.h5'), '1']),
+):
+    exe = bundled_executable(name)
+    env = bundled_environment(exe)
+    env['PATH'] = str(exe.parent) + os.pathsep + str(Path(os.environ['SystemRoot']) / 'System32')
+    env['QT_QPA_PLATFORM'] = 'offscreen'
+    subprocess.run([str(exe), *arguments], env=env, check=True, timeout=90,
+                   creationflags=subprocess.CREATE_NO_WINDOW)
+subprocess.run([sys.executable, '-I', '-m', 'fdfd', 'info'], check=True)
+subprocess.run([str(Path(sys.prefix) / 'Scripts/transmission-line-calculator-cli.exe'), '--smoke-test'], check=True)
+print('Bundled native applications and installed command entry points: PASS')
 '''
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dist', type=Path, default=ROOT/'outputs/dist')
+    parser.add_argument('--fresh', action='store_true', help='Download dependencies into a clean environment.')
     args = parser.parse_args()
     wheels = sorted(args.dist.resolve().glob('*.whl'))
-    if len(wheels) != 11:
-        raise SystemExit(f'Expected 11 maintained wheels, found {len(wheels)}.')
-    native = next(p for p in wheels if p.name.startswith('periodic_eigensolver-'))
+    if len(wheels) != 1 or wheels[0].name != 'fdfd-1.0.0-cp312-cp312-win_amd64.whl':
+        raise SystemExit(f'Expected the one complete FDFD Windows 3.12 wheel, found {wheels}.')
+    native = wheels[0]
     with zipfile.ZipFile(native) as archive:
         if not any(name.endswith(('.pyd', '.so')) for name in archive.namelist()):
             raise SystemExit('The periodic eigensolver wheel lacks its compiled extension.')
-    with tempfile.TemporaryDirectory(prefix='cem-wheel-qualification-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='fdfd-wheel-qualification-') as temporary:
         work = Path(temporary)
-        venv.EnvBuilder(with_pip=True, system_site_packages=True).create(work/'env')
+        venv.EnvBuilder(with_pip=True, system_site_packages=not args.fresh).create(work/'env')
         python = work/'env'/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
         for wheel in wheels:
-            subprocess.run([str(python), '-I', '-m', 'pip', 'install', '--no-index', '--no-deps', str(wheel)], cwd=work, check=True)
+            subprocess.run([str(python), '-I', '-m', 'pip', 'install',
+                            *([] if args.fresh else ['--no-index', '--no-deps']), str(wheel)], cwd=work, check=True)
+        subprocess.run([str(python), '-I', '-m', 'pip', 'check'], cwd=work, check=True)
         subprocess.run([str(python), '-I', '-c', SMOKE], cwd=work, check=True)
+        subprocess.run([str(python), '-I', '-c', NATIVE_SMOKE], cwd=work, check=True)
     print('Wheel qualification passed outside the checkout.')
 
 

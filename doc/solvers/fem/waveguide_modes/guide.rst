@@ -59,7 +59,7 @@ elements. The benchmark records budget exhaustion separately from convergence.
 4. Call ``solve(...)`` to obtain a typed result; ``max_refinements=0`` uses one fixed mesh.
 5. Inspect diagnostics, then call ``show()``, ``plot()``, or ``save(path)`` explicitly.
 
-Part of **Computational Electromagnetics**, version 1.0.0.
+Part of **FDFD**, version 1.0.0.
 
 Workflow
 --------

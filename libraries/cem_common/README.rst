@@ -1,9 +1,9 @@
-Shared Computational Electromagnetics API
-=========================================
+Shared FDFD API
+===============
 
-Part of Computational Electromagnetics, version 1.0.0.
+Part of FDFD, version 1.0.0.
 This package contains shared materials, shapes, errors, and result metadata.
-It is independently installable from its wheel. Installation and
+It is included in the complete FDFD distribution. Installation and
 project quick-start instructions are in the root README.md.
 
 Source-checkout documentation:

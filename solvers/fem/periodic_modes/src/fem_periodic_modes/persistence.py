@@ -8,6 +8,7 @@ field hyperslabs are read only when a case or mode is requested.
 from __future__ import annotations
 
 from cem_common import MeshSnapshot
+from cem_common._native import bundled_executable, bundled_environment
 from cem_common.persistence import write_envelope, validate_envelope, write_value, read_value
 
 from collections.abc import Iterable, Sequence
@@ -1292,12 +1293,15 @@ def validate_periodic_h5(
 
 
 def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
-    """Return override, checkout-build, and installed viewer candidates."""
+    """Return override, bundled, checkout-build, and installed viewer candidates."""
 
     candidates: list[Path] = []
     configured = os.environ.get("FEM_PERIODIC_MODE_VIEWER_EXECUTABLE")
     if configured:
         candidates.append(Path(configured).expanduser())
+    bundled = bundled_executable(executable_name)
+    if bundled is not None:
+        candidates.append(bundled)
     repository = next((parent for parent in Path(__file__).resolve().parents
                        if (parent / "apps" / "fem_periodic_mode_viewer").is_dir()), None)
     build_roots = []
@@ -1342,6 +1346,9 @@ def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
 def _build_runtime_environment(executable: Path) -> dict[str, str] | None:
     """Return the MinGW DLL/plugin environment recorded by CMake."""
 
+    bundled = bundled_environment(executable)
+    if bundled is not None:
+        return bundled
     if os.name != "nt":
         return None
     for directory in (executable.parent, *executable.parents):

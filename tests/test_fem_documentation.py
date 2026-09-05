@@ -46,7 +46,7 @@ def test_rst_is_valid(package):
 
 
 def test_release_environment_is_project_named():
-    assert (ROOT / 'environment.yml').read_text().startswith('name: cem\n')
+    assert (ROOT / 'environment.yml').read_text().startswith('name: fdfd\n')
     for directory in ('scripts', 'doc', 'solvers', 'libraries', 'examples', 'apps'):
         for path in (ROOT / directory).rglob('*'):
             if path.is_file() and path.suffix in ('.rst', '.ps1', '.yml', '.yaml'):

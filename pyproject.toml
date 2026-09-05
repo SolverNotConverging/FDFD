@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77", "wheel", "Cython>=3,<4", "numpy>=1.26,<3", "scipy>=1.12,<2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fdfd"
+version = "1.0.0"
+description = "FDFD: electromagnetic solvers and interactive native applications"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "MIT AND GPL-3.0-or-later AND LGPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+  "numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4",
+  "h5py>=3.15,<4", "scikit-fem>=12,<13", "gmsh>=4.13,<5", "meshio>=5.3,<6",
+]
+
+[project.urls]
+Repository = "https://github.com/SolverNotConverging/FDFD"
+Releases = "https://github.com/SolverNotConverging/FDFD/releases"
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "docutils"]
+
+[project.scripts]
+fdfd = "fdfd.__main__:main"
+transmission-line-calculator = "fdfd._apps:calculator"
+transmission-line-calculator-cli = "fdfd._apps:calculator_cli"
+fem-periodic-mode-viewer = "fdfd._apps:periodic_viewer"
+fem-periodic-mode-inspect = "fdfd._apps:periodic_inspector"
+fem-waveguide-scattering-viewer = "fdfd._apps:scattering_viewer"
+fem-waveguide-scattering-viewer-inspect = "fdfd._apps:scattering_inspector"

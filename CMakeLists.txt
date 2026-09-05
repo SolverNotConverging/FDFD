@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(ComputationalElectromagnetics VERSION 1.0.0 LANGUAGES C CXX)
+project(FDFD VERSION 1.0.0 LANGUAGES C CXX)
 
 include(CTest)
 

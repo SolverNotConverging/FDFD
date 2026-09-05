@@ -1,6 +1,11 @@
 FEM Waveguide Scattering Viewer
 =================================
 
+Windows x64 / Python 3.12 users can install this app with all solvers using the
+`single FDFD release wheel <../../README.md#installation>`_. Launch it with
+``python -m fdfd scattering-viewer``; no C++ build is needed. The build instructions
+below are for source installations, including Linux and macOS.
+
 FEM Waveguide Scattering Viewer is a native C++20/Qt 6 desktop application for inspecting FEM Waveguide Scattering schema-v1 HDF5 results. It is independent of the Python solver and does not import FEM Waveguide Scattering, NumPy, h5py, Tk, or Matplotlib.
 
 The viewer uses a deliberately lazy loading path:
@@ -69,16 +74,13 @@ HDF5 2.x native-complex datasets are supported when building against HDF5 2.x. B
 Windows with MSVC and vcpkg
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Install Visual Studio 2022 with **Desktop development with C++**, CMake, and `vcpkg <https://learn.microsoft.com/vcpkg/get_started/get-started>`_. Then run:
-
-.. code-block:: powershell
-
-   C:\vcpkg\vcpkg.exe install qtbase hdf5 --triplet x64-windows
-   cmake --fresh -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 `
-     -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-   cmake --build build-msvc --config Release --parallel
-
-Replace ``C:\vcpkg`` with the location of your vcpkg checkout. Visual Studio places the executables under ``build-msvc\Release``.
+Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
+deploying DLLs and Qt plugins, and connecting the native viewers to Python.
+The walkthrough's commands run from the repository root and install all three
+applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
+select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
+use the root walkthrough's CMake install/deployment commands for MSVC.
 
 Windows with MinGW-w64 (MSYS2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,7 +144,8 @@ The build creates:
 
 * ``fem-waveguide-scattering-viewer-inspect`` — a headless schema/benchmark utility.
 
-With a standalone build these are under ``build/`` (or a configuration subdirectory for Visual Studio). A repository-root build places them under ``build/FEMWaveguideScatteringViewer/``.
+With a standalone build these are under ``build/`` (or a configuration subdirectory for Visual Studio). A repository-root build places them under ``outputs/build/apps/fem_waveguide_scattering_viewer/`` when using
+``-B outputs/build`` at the root.
 
 Windows MinGW install
 ---------------------

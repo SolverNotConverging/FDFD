@@ -1,6 +1,11 @@
 FEM Periodic Mode Viewer
 ========================
 
+Windows x64 / Python 3.12 users can install this app with all solvers using the
+`single FDFD release wheel <../../README.md#installation>`_. Launch it with
+``python -m fdfd periodic-viewer``; no C++ build is needed. The build instructions
+below are for source installations, including Linux and macOS.
+
 FEM Periodic Mode Viewer is a standalone C++20 desktop application for inspecting ``fem-periodic-modes`` HDF5 results. It does not import or link the Python solver, NumPy, h5py, Matplotlib, or the repository's FEM Waveguide Scattering viewer.
 
 Qt 6 and QPainter provide the native 2D triangle view. VTK is optional and adds a tetrahedral 3D mesh view with surface edges, an optional movable plane cut, and decimated E/H vector glyphs. The separate ``fem-periodic-mode-inspect`` executable validates and summarizes a selected case and mode without Qt or a display server.
@@ -151,6 +156,8 @@ Always required:
 
 Optional 3D support requires VTK 9.2 or newer with ``GUISupportQt``, OpenGL2, and a Qt 6 build. Qt, HDF5, VTK, and the compiler must use the same architecture and runtime.
 
+Standalone commands in the following sections run from the repository root.
+
 Windows: MSYS2 MinGW64
 ----------------------
 
@@ -175,18 +182,18 @@ Build and test from PowerShell:
 .. code-block:: powershell
 
    $env:Path = "C:\msys64\mingw64\bin;$env:Path"
-   cmake --fresh -S FEMPeriodicModeViewer -B FEMPeriodicModeViewer/build-mingw -G Ninja `
+   cmake --fresh -S apps/fem_periodic_mode_viewer -B outputs/build-periodic-mingw -G Ninja `
      -DCMAKE_BUILD_TYPE=Release `
      -DCMAKE_PREFIX_PATH=C:/msys64/mingw64 `
      -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=AUTO
-   cmake --build FEMPeriodicModeViewer/build-mingw --parallel
-   ctest --test-dir FEMPeriodicModeViewer/build-mingw --output-on-failure
+   cmake --build outputs/build-periodic-mingw --parallel
+   ctest --test-dir outputs/build-periodic-mingw --output-on-failure
 
 The provided installer builds, installs, runs ``windeployqt``, and copies MinGW/HDF5/VTK runtime DLLs into ``%LOCALAPPDATA%\FEMPeriodicModeViewer``:
 
 .. code-block:: powershell
 
-   powershell -ExecutionPolicy Bypass -File .\FEMPeriodicModeViewer\scripts\install.ps1
+   powershell -ExecutionPolicy Bypass -File .\apps\fem_periodic_mode_viewer\scripts\install.ps1
 
 This bundle is a local development convenience. Before redistributing it, review the licenses and deployment obligations of the bundled Qt, HDF5, VTK, and toolchain runtime libraries and include their required third-party notices.
 
@@ -194,37 +201,20 @@ Pass ``-WithoutVtk`` for a 2D-only build or ``-Destination D:\Tools\FEMPeriodicM
 
 .. code-block:: powershell
 
-   powershell -ExecutionPolicy Bypass -File .\FEMPeriodicModeViewer\scripts\uninstall.ps1
+   powershell -ExecutionPolicy Bypass -File .\apps\fem_periodic_mode_viewer\scripts\uninstall.ps1
 
 The uninstaller refuses to recursively remove a directory whose final name is not ``FEMPeriodicModeViewer``.
 
 Windows: MSVC and vcpkg
 -----------------------
 
-Install Visual Studio 2022 with **Desktop development with C++**, CMake, and vcpkg. For a 2D-only build:
-
-.. code-block:: powershell
-
-   C:\vcpkg\vcpkg.exe install qtbase hdf5 --triplet x64-windows
-
-For 3D, also install VTK with its Qt feature:
-
-.. code-block:: powershell
-
-   C:\vcpkg\vcpkg.exe install "vtk[qt]" --triplet x64-windows
-
-Configure, build, and test:
-
-.. code-block:: powershell
-
-   cmake --fresh -S FEMPeriodicModeViewer -B FEMPeriodicModeViewer/build-msvc `
-     -G "Visual Studio 17 2022" -A x64 `
-     -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
-     -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=AUTO
-   cmake --build FEMPeriodicModeViewer/build-msvc --config Release --parallel
-   ctest --test-dir FEMPeriodicModeViewer/build-msvc -C Release --output-on-failure
-
-Use ``windeployqt`` and vcpkg's application-local deployment workflow before moving the executable away from its build/runtime directory.
+Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
+deploying DLLs and Qt plugins, and connecting the native viewers to Python.
+The walkthrough's commands run from the repository root and install all three
+applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
+select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
+use the root walkthrough's CMake install/deployment commands for MSVC.
 
 macOS: AppleClang and Homebrew
 ------------------------------
@@ -233,12 +223,12 @@ macOS: AppleClang and Homebrew
 
    xcode-select --install
    brew install cmake ninja qt hdf5 vtk
-   cmake --fresh -S FEMPeriodicModeViewer -B FEMPeriodicModeViewer/build-macos -G Ninja \
+   cmake --fresh -S apps/fem_periodic_mode_viewer -B outputs/build-periodic-macos -G Ninja \
      -DCMAKE_BUILD_TYPE=Release \
      -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix hdf5);$(brew --prefix vtk)" \
      -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=AUTO
-   cmake --build FEMPeriodicModeViewer/build-macos --parallel
-   ctest --test-dir FEMPeriodicModeViewer/build-macos --output-on-failure
+   cmake --build outputs/build-periodic-macos --parallel
+   ctest --test-dir outputs/build-periodic-macos --output-on-failure
 
 The GUI target is emitted as a macOS application bundle; the inspector remains a normal command-line executable. A recent Xcode/libc++ is required for ``std::format``.
 
@@ -256,11 +246,11 @@ For 3D, additionally install the distribution's VTK development package with Qt 
 
 .. code-block:: bash
 
-   cmake --fresh -S FEMPeriodicModeViewer -B FEMPeriodicModeViewer/build-linux -G Ninja \
+   cmake --fresh -S apps/fem_periodic_mode_viewer -B outputs/build-periodic-linux -G Ninja \
      -DCMAKE_BUILD_TYPE=Release \
      -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=AUTO
-   cmake --build FEMPeriodicModeViewer/build-linux --parallel
-   ctest --test-dir FEMPeriodicModeViewer/build-linux --output-on-failure
+   cmake --build outputs/build-periodic-linux --parallel
+   ctest --test-dir outputs/build-periodic-linux --output-on-failure
 
 Select Clang on the first configure with ``-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++``. Use a recent GCC or Clang/libstdc++ combination that implements ``std::format``.
 
@@ -275,7 +265,10 @@ Launch the GUI with or without an initial file:
 
 Use **Open directory…** to populate the in-window **File** selector with every readable ``.h5`` and ``.hdf5`` file in that directory. Opening one file directly populates the same selector from its parent directory. Supplying a directory on the command line scans it and loads the first valid result in name order; an invalid earlier file does not hide valid siblings from the selector.
 
-The Python ``result.show()`` operation prefers repository build directories, including multi-configuration outputs, before ``PATH`` and the default local Windows installation. Set ``FEM_PERIODIC_MODE_VIEWER_EXECUTABLE`` to an absolute executable path to override that search.
+The complete Windows FDFD wheel includes this viewer. Python ``result.show()``
+finds the bundled executable before repository builds, ``PATH``, and local
+installations. Set ``FEM_PERIODIC_MODE_VIEWER_EXECUTABLE`` to an absolute
+executable path to override that search.
 
 Inspect the first case and mode:
 
@@ -293,7 +286,7 @@ The inspector prints machine-readable ``key=value`` lines and returns nonzero fo
 
 .. code-block:: bash
 
-   cmake --install FEMPeriodicModeViewer/build-linux --prefix install
+   cmake --install outputs/build-periodic-linux --prefix install
 
 Tests
 -----

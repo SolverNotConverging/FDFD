@@ -1,8 +1,8 @@
 FDFD Waveguide Modes Solver
 ===========================
 
-Part of Computational Electromagnetics, version 1.0.0.
-This package is independently installable from its wheel. Installation and
+Part of FDFD, version 1.0.0.
+This package is included in the complete FDFD distribution. Installation and
 project quick-start instructions are in the root README.md.
 
 Source-checkout documentation:

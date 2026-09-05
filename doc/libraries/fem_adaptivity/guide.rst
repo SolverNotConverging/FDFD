@@ -1,8 +1,7 @@
 FEM adaptivity policy
 =====================
 
-Version 1.0.0 of the shared adaptive policy used by Computational
-Electromagnetics. This independently installable library supplies error
+Version 1.0.0 of the shared adaptive policy included in FDFD. This library supplies error
 estimation and refinement policy to the FEM families. Assembly remains in
 the individual solvers.
 

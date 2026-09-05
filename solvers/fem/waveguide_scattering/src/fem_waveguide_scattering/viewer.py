@@ -10,6 +10,7 @@ import subprocess
 from typing import Any
 
 from .exceptions import ViewerError
+from cem_common._native import bundled_executable, bundled_environment
 
 
 _VIEWER_BASENAME = "fem-waveguide-scattering-viewer"
@@ -19,6 +20,9 @@ _BUILD_CONFIGURATIONS = ("Release", "RelWithDebInfo", "Debug")
 def _build_runtime_environment(executable: Path) -> dict[str, str] | None:
     """Return the MinGW runtime environment recorded by the build tree."""
 
+    bundled = bundled_environment(executable)
+    if bundled is not None:
+        return bundled
     if os.name != "nt":
         return None
     for directory in (executable.parent, *executable.parents):
@@ -157,16 +161,18 @@ def _build_candidates(repository: Path) -> list[Path]:
 def find_viewer_executable() -> Path:
     """Find the native GUI in an override, build tree, ``PATH``, or install.
 
-    ``FEM_WAVEGUIDE_SCATTERING_VIEWER_EXECUTABLE`` has highest priority.  Source checkouts are
-    searched for both standalone ``FEMWaveguideScatteringViewer/build*`` trees and root CMake
-    ``build*/FEMWaveguideScatteringViewer`` trees, including multi-config subdirectories,
-    before potentially older installed copies.
+    The explicit environment override has highest priority, followed by the native
+    application bundled with FDFD, checkout builds, PATH, and local installations.
     """
 
     candidates: list[Path] = []
     configured = os.environ.get("FEM_WAVEGUIDE_SCATTERING_VIEWER_EXECUTABLE")
     if configured:
         candidates.append(Path(configured).expanduser())
+
+    bundled = bundled_executable(_VIEWER_BASENAME)
+    if bundled is not None:
+        candidates.append(bundled)
 
     repository = _repository_root()
     if repository is not None:

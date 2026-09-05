@@ -44,7 +44,7 @@ complex effective index, passive attenuation, and output tables and plots.
 4. Call ``solve(...)`` to obtain a typed result; ``max_refinements=0`` uses one fixed mesh.
 5. Inspect diagnostics, then call ``show()``, ``plot()``, or ``save(path)`` explicitly.
 
-Part of **Computational Electromagnetics**, version 1.0.0.
+Part of **FDFD**, version 1.0.0.
 
 Workflow
 --------
@@ -69,7 +69,8 @@ The adaptive defaults are two refinements and a relative tolerance of 0.05.
 The example uses a fixed mesh for reproducibility. Geometry edits invalidate
 ``mesh_data`` and ``result``; an automatic rebuild reuses explicit mesh settings.
 
-``show()`` uses the separately built native viewer. Launch failures report
+``show()`` uses the native viewer included in the complete Windows wheel (or
+built separately for source installations). Launch failures report
 the executable discovery setting; saving and loading work without the viewer.
 
 Electromagnetic fields use ``exp(+i*omega*t)`` and guided propagation
