@@ -8,7 +8,11 @@ field hyperslabs are read only when a case or mode is requested.
 from __future__ import annotations
 
 from cem_common import MeshSnapshot
-from cem_common._native import bundled_executable, bundled_environment
+from cem_common._native import (
+    bundled_executable,
+    bundled_environment,
+    source_build_environment,
+)
 from cem_common.persistence import write_envelope, validate_envelope, write_value, read_value
 
 from collections.abc import Iterable, Sequence
@@ -1292,6 +1296,36 @@ def validate_periodic_h5(
         )
 
 
+def _repository_root() -> Path | None:
+    """Return the source checkout containing the periodic-mode viewer."""
+
+    return next(
+        (
+            parent
+            for parent in Path(__file__).resolve().parents
+            if (parent / "apps" / "fem_periodic_mode_viewer").is_dir()
+        ),
+        None,
+    )
+
+
+def _cmake_cache_candidates(executable: Path) -> tuple[Path, ...]:
+    """Return nearby and editable-install CMake caches in priority order."""
+
+    candidates = [directory / "CMakeCache.txt" for directory in (executable.parent, *executable.parents)]
+    repository = _repository_root()
+    if repository is not None:
+        build_roots = [
+            repository / "build",
+            *sorted(repository.glob("build*")),
+            repository / "outputs",
+        ]
+        for build_root in build_roots:
+            if build_root.is_dir():
+                candidates.extend(sorted(build_root.rglob("CMakeCache.txt")))
+    return tuple(dict.fromkeys(candidates))
+
+
 def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
     """Return override, bundled, checkout-build, and installed viewer candidates."""
 
@@ -1302,8 +1336,7 @@ def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
     bundled = bundled_executable(executable_name)
     if bundled is not None:
         candidates.append(bundled)
-    repository = next((parent for parent in Path(__file__).resolve().parents
-                       if (parent / "apps" / "fem_periodic_mode_viewer").is_dir()), None)
+    repository = _repository_root()
     build_roots = []
     if repository is not None:
         source_root = repository / "apps" / "fem_periodic_mode_viewer"
@@ -1349,51 +1382,7 @@ def _build_runtime_environment(executable: Path) -> dict[str, str] | None:
     bundled = bundled_environment(executable)
     if bundled is not None:
         return bundled
-    if os.name != "nt":
-        return None
-    for directory in (executable.parent, *executable.parents):
-        cache = directory / "CMakeCache.txt"
-        if not cache.is_file():
-            continue
-        try:
-            lines = cache.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            return None
-        compiler_value = next(
-            (
-                line.split("=", 1)[1]
-                for line in lines
-                if line.startswith("CMAKE_CXX_COMPILER:") and "=" in line
-            ),
-            None,
-        )
-        if compiler_value is None:
-            return None
-        runtime = Path(compiler_value).expanduser().resolve().parent
-        if not any((runtime / name).is_file() for name in ("Qt6Core.dll", "libstdc++-6.dll")):
-            return None
-        environment = os.environ.copy()
-        existing = environment.get("PATH", "")
-        entries = [entry for entry in existing.split(os.pathsep) if entry]
-        runtime_text = str(runtime)
-        runtime_key = os.path.normcase(os.path.normpath(runtime_text))
-        # A Conda IDE environment commonly includes MinGW late in PATH.  It
-        # must still be moved to the front or Windows loads Conda's Qt DLLs
-        # first and the MinGW viewer dies with STATUS_ENTRYPOINT_NOT_FOUND.
-        entries = [
-            entry
-            for entry in entries
-            if os.path.normcase(os.path.normpath(entry)) != runtime_key
-        ]
-        environment["PATH"] = os.pathsep.join((runtime_text, *entries))
-        plugins = runtime.parent / "share" / "qt6" / "plugins"
-        if plugins.is_dir():
-            environment["QT_PLUGIN_PATH"] = str(plugins)
-            platform_plugins = plugins / "platforms"
-            if platform_plugins.is_dir():
-                environment["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(platform_plugins)
-        return environment
-    return None
+    return source_build_environment(executable, _cmake_cache_candidates(executable))
 
 
 def _confirm_viewer_started(process: object, executable: Path) -> None:

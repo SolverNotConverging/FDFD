@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(TransmissionLineCalculator VERSION 1.0.0 LANGUAGES CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NativeRuntime.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,7 +70,7 @@ find_package(ftxui CONFIG REQUIRED)
 
 function(tl_enable_warnings target_name)
     if(MSVC)
-        target_compile_options(${target_name} PRIVATE /W4 /permissive-)
+        target_compile_options(${target_name} PRIVATE /W4 /permissive- /utf-8)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -224,16 +225,27 @@ if(BUILD_TESTING)
     )
 endif()
 
-install(TARGETS
-    tl-core
-    transmission-line-calculator
-    transmission-line-calculator-cli
-    RUNTIME DESTINATION bin
-    BUNDLE DESTINATION .
-    ARCHIVE DESTINATION lib
-)
-install(FILES
-    native/model.hpp
-    native/solver.hpp
-    DESTINATION include/TransmissionLineCalculator
-)
+fdfd_native_runtime(transmission-line-calculator)
+fdfd_native_runtime(transmission-line-calculator-cli)
+if(SKBUILD)
+    install(TARGETS
+        transmission-line-calculator
+        transmission-line-calculator-cli
+        RUNTIME DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
+        BUNDLE DESTINATION "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}"
+    )
+else()
+    install(TARGETS
+        tl-core
+        transmission-line-calculator
+        transmission-line-calculator-cli
+        RUNTIME DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
+        BUNDLE DESTINATION "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}"
+        ARCHIVE DESTINATION lib
+    )
+    install(FILES
+        native/model.hpp
+        native/solver.hpp
+        DESTINATION include/TransmissionLineCalculator
+    )
+endif()

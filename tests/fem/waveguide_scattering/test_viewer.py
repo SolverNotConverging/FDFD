@@ -41,6 +41,7 @@ def _result(*, frequency_hz: float = 1.0e9) -> ScatteringResult:
 def _disable_external_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FEM_WAVEGUIDE_SCATTERING_VIEWER_EXECUTABLE", raising=False)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(viewer, "bundled_executable", lambda _name: None)
     monkeypatch.setattr(viewer.shutil, "which", lambda _name: None)
 
 
@@ -83,6 +84,7 @@ def test_launch_viewer_defaults_to_current_directory(
     sentinel = object()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(viewer, "find_viewer_executable", lambda: executable)
+    monkeypatch.setattr(viewer, "_build_runtime_environment", lambda _path: None)
     monkeypatch.setattr(
         viewer.subprocess,
         "Popen",
@@ -158,6 +160,31 @@ def test_build_runtime_environment_uses_cmake_toolchain(
     )
     assert environment["QT_PLUGIN_PATH"] == str(plugins)
     assert environment["QT_QPA_PLATFORM_PLUGIN_PATH"] == str(platform_plugins)
+
+
+@pytest.mark.skipif(viewer.os.name != "nt", reason="MinGW runtime is Windows-only")
+def test_build_runtime_environment_finds_editable_build_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "checkout"
+    runtime = tmp_path / "toolchain" / "bin"
+    runtime.mkdir(parents=True)
+    (runtime / "libstdc++-6.dll").write_bytes(b"runtime")
+    build = repository / "build" / "cp312-cp312-win_amd64"
+    build.mkdir(parents=True)
+    (build / "CMakeCache.txt").write_text(
+        f"CMAKE_CXX_COMPILER:FILEPATH={runtime / 'c++.exe'}\n",
+        encoding="utf-8",
+    )
+    executable = tmp_path / "venv" / "site-packages" / "fdfd" / "native" / "bin" / viewer._executable_names()[0]
+    executable.parent.mkdir(parents=True)
+    monkeypatch.setattr(viewer, "_repository_root", lambda: repository)
+    monkeypatch.setenv("PATH", r"C:\Windows")
+
+    environment = viewer._build_runtime_environment(executable)
+
+    assert environment is not None
+    assert environment["PATH"].split(viewer.os.pathsep)[0] == str(runtime.resolve())
 
 
 def test_launch_viewer_reports_early_native_exit(tmp_path: Path) -> None:

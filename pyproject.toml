@@ -1,6 +1,12 @@
 [build-system]
-requires = ["setuptools>=77", "wheel", "Cython>=3,<4", "numpy>=1.26,<3", "scipy>=1.12,<2"]
-build-backend = "setuptools.build_meta"
+requires = [
+  "scikit-build-core>=1.0,<2",
+  "cython-cmake>=0.2,<1",
+  "Cython>=3,<4",
+  "numpy>=1.26,<3",
+  "scipy>=1.12,<2",
+]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "fdfd"
@@ -22,6 +28,14 @@ Releases = "https://github.com/SolverNotConverging/FDFD/releases"
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "docutils"]
 
+[dependency-groups]
+dev = [
+  "pytest>=8,<10",
+  "docutils",
+  "pandas",
+  "tqdm",
+]
+
 [project.scripts]
 fdfd = "fdfd.__main__:main"
 transmission-line-calculator = "fdfd._apps:calculator"
@@ -30,3 +44,38 @@ fem-periodic-mode-viewer = "fdfd._apps:periodic_viewer"
 fem-periodic-mode-inspect = "fdfd._apps:periodic_inspector"
 fem-waveguide-scattering-viewer = "fdfd._apps:scattering_viewer"
 fem-waveguide-scattering-viewer-inspect = "fdfd._apps:scattering_inspector"
+
+[tool.uv]
+package = true
+default-groups = ["dev"]
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "CMakeLists.txt" },
+  { file = "cmake/**" },
+  { file = "apps/**/CMakeLists.txt" },
+  { file = "apps/**/native/**" },
+  { file = "libraries/**/src/**" },
+  { file = "solvers/**/src/**" },
+  { file = "src/**" },
+]
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+cmake.build-type = "Release"
+wheel.packages = [
+  "src/fdfd",
+  "libraries/cem_common/src/cem_common",
+  "libraries/fem_adaptivity/src/fem_adaptivity",
+  "libraries/periodic_eigensolver/src/periodic_eigensolver",
+  "solvers/fdfd/band_structure/src/fdfd_band_structure",
+  "solvers/fdfd/periodic_modes/src/fdfd_periodic_modes",
+  "solvers/fdfd/scattering/src/fdfd_scattering",
+  "solvers/fdfd/waveguide_modes/src/fdfd_waveguide_modes",
+  "solvers/fem/electrostatics/src/fem_electrostatics",
+  "solvers/fem/periodic_modes/src/fem_periodic_modes",
+  "solvers/fem/waveguide_modes/src/fem_waveguide_modes",
+  "solvers/fem/waveguide_scattering/src/fem_waveguide_scattering",
+]
+wheel.exclude = ["**/*.pyx", "**/__pycache__/**"]
+sdist.exclude = [".idea", "outputs", "**/__pycache__", "**/build"]

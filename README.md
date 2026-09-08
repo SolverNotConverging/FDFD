@@ -49,48 +49,25 @@ Transmission Line Calculator, with their runtime DLLs and Qt plugins.
 **Linux and macOS users must [build from source](#build-from-source)**; this release
 provides no wheels for those platforms or for other Python versions.
 
-### 1. Create or activate a Python 3.12 environment
+### 1. Create the FDFD Python environment
 
-Use an existing **64-bit CPython 3.12** environment, or choose one of these options.
-You only need one environment manager. Commands below use Windows PowerShell.
-
-**Python venv:** install [Python 3.12 for Windows](https://www.python.org/downloads/windows/)
-with its Python launcher and Tcl/Tk components, then run:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then create
+the project-local environment. FDFD pins Python 3.12 in `.python-version`, and uv
+downloads that interpreter when it is not already installed:
 
 ```powershell
-py -3.12 -m venv .venv
+uv venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, use `.\.venv\Scripts\python.exe` instead of
-`python` in subsequent commands; activation is optional. See Python's
-[venv documentation](https://docs.python.org/3.12/library/venv.html).
-
-**Conda:** install [Miniforge](https://github.com/conda-forge/miniforge#install),
-Miniconda, or Anaconda, open its prompt, and run:
-
-```sh
-conda create --name fdfd --channel conda-forge python=3.12 pip tk
-conda activate fdfd
-```
-
-**uv:** [install uv](https://docs.astral.sh/uv/getting-started/installation/), then
-create an environment with pip included (`--seed`):
-
-```powershell
-uv venv --python 3.12 --seed .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-uv can download Python 3.12 if necessary. See its
-[environment guide](https://docs.astral.sh/uv/pip/environments/).
+Activation is optional when commands are prefixed with `uv run`.
 
 ### 2. Install everything with one command
 
-Run this in your chosen environment:
+Install the release into the FDFD environment:
 
 ```sh
-python -m pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-win_amd64.whl"
+uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-win_amd64.whl"
 ```
 
 Pip installs FDFD and its numerical Python dependencies. No repository clone,
@@ -100,14 +77,14 @@ It is distributed through GitHub Releases; use the complete URL above.
 
 You can also download the single `.whl` from the
 [FDFD v1.0.0 release](https://github.com/SolverNotConverging/FDFD/releases/tag/v1.0.0)
-and install the local file with `python -m pip install path/to/fdfd-1.0.0-cp312-cp312-win_amd64.whl`.
+and install the local file with `uv pip install path/to/fdfd-1.0.0-cp312-cp312-win_amd64.whl`.
 Use a fresh environment if you previously installed the separate internal packages,
 so multiple distributions do not own the same Python files.
 
 ### 3. Check the installation and open an app
 
 ```sh
-python -m pip check
+uv pip check
 python -m fdfd info
 python -m fdfd calculator
 ```
@@ -218,7 +195,7 @@ python embedded_electrode_2d_anisotropic.py
 ```
 
 If an example reports `ModuleNotFoundError`, check `python -c "import sys; print(sys.executable)"`
-and `python -m pip show fdfd`.
+and `uv pip show fdfd`.
 Activate the environment where you installed the packages, or repeat your chosen
 installation method with the interpreter used to run the example.
 
@@ -243,36 +220,36 @@ This is the installation route for **Linux and macOS**, and for developers or
 Windows users who want to compile their own build. The Windows release wheel
 above is the default for end users. Source builds support Python 3.11–3.13.
 
-Install [Git](https://git-scm.com/downloads) and
-[Miniforge](https://github.com/conda-forge/miniforge#install) (an existing conda
-installation also works). Open its prompt on Windows, or a terminal on Linux/macOS:
+Install [Git](https://git-scm.com/downloads), [uv](https://docs.astral.sh/uv/), a
+C/C++ compiler, and the native dependencies listed below. Then run:
 
 ```sh
 git clone https://github.com/SolverNotConverging/FDFD.git
 cd FDFD
-conda env create --name fdfd -f environment.yml
-conda activate fdfd
-python -m pip install --no-build-isolation .
-python -m pip check
-python examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py
+uv sync
+uv pip check
+uv run python examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py
 ```
 
-Run installation commands from the root directory containing `pyproject.toml`.
-Conda installs numerical/build dependencies; pip builds and installs the one FDFD
-source distribution. Internet access is needed to download dependencies. For an
-editable development installation use `python -m pip install --editable --no-build-isolation .`.
-Repeat installation after changing metadata or compiled extension code, or moving
-an editable checkout. `python scripts/install_python.py` is a convenience wrapper
-around the same root-package installation using the active interpreter.
+`uv sync` creates only this checkout's `.venv`, resolves `uv.lock`, installs the
+development tools, and performs an editable build. scikit-build-core invokes the
+root `CMakeLists.txt`, which builds the Cython eigensolver and all three native C++
+applications and installs them inside the `fdfd` package. `uv run` automatically
+re-syncs after dependency changes; use `uv sync --reinstall-package fdfd` after
+changing CMake or native sources if an incremental editable build is stale.
 
-The optional Cython eigensolver needs a C compiler: MSVC on Windows, GCC on Linux,
-or Apple's command-line tools on macOS. Without one, source installation can use
-the NumPy/SciPy fallback. `python -m fdfd info` reports whether acceleration is active.
+The build requires MinGW or MSVC on Windows, GCC/Clang on Linux, or Apple's command-line
+tools on macOS. CMake must also be able to find Qt 6, HDF5, Eigen, Gmsh, and FTXUI;
+VTK is optional unless 3D viewer support is explicitly enabled. On Windows, set
+`CMAKE_TOOLCHAIN_FILE` through `CMAKE_ARGS` before `uv sync` when using vcpkg:
 
-Source installs build Python solvers first. Build the C++ applications separately
-using the sections below, then point the two viewer environment variables at your
-executables. The microstrip example uses Matplotlib and works before building the
-native apps. On Linux/macOS, follow the app-specific prerequisites and commands:
+```powershell
+$vcpkgRoot = "C:\dev\vcpkg"
+$env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows"
+uv sync
+```
+
+For platform-specific native prerequisites, see:
 
 - [FEM Waveguide Scattering Viewer](apps/fem_waveguide_scattering_viewer/README.rst)
 - [FEM Periodic Mode Viewer](apps/fem_periodic_mode_viewer/README.rst)
@@ -284,12 +261,35 @@ The following steps are for building applications **from source**. Windows wheel
 users already have all three native apps installed. The two FEM viewers inspect
 saved HDF5 results; the Transmission Line Calculator includes its own solver.
 
+### Compiler portability
+
+The normal `uv sync` / `uv build` workflow uses scikit-build-core and CMake's
+compiler selection on every platform: MinGW or MSVC on Windows, Apple Clang
+on macOS, and GCC or Clang on Linux. No compiler is forced in the shared
+configuration. `CC`, `CXX`, CMake toolchain files, and the generator can select
+a toolchain explicitly. Use a C++20 compiler and standard library supporting
+`std::format`, with native dependencies built for that compiler and architecture.
+In particular, MSVC must use MSVC-compatible dependencies, not MSYS2 MinGW DLLs.
+
+When switching compilers within one checkout, select a fresh build directory,
+for example `uv sync --reinstall-package fdfd --config-setting build-dir=build/msvc`.
+Keep those settings when subsequently rebuilding. The shared default build
+directory includes the Python/platform wheel tag, but not the compiler name.
+
+Source installs record Windows DLL/plugin locations and preserve external
+library search paths on macOS/Linux. Native executable discovery supports
+Windows `.exe` files, Linux binaries, and macOS `.app` bundles. Keep the native
+dependency installation available; local source wheels do not bundle all
+third-party libraries. The per-app MSYS2 `install.ps1` scripts and
+`package_native_windows.py` remain specialized MinGW deployment tools, not
+part of the cross-platform `uv sync` build path.
+
 ### Windows: MSVC and vcpkg, step by step
 
 These instructions build all three apps for **64-bit Windows**. MSVC compiles C++,
 CMake configures the build, and vcpkg builds and supplies the external libraries.
-Use one compiler/architecture throughout. The Python conda environment supplies
-Python dependencies; native dependencies come from vcpkg.
+Use one compiler/architecture throughout. uv supplies Python and its packages;
+native dependencies come from vcpkg.
 
 #### 1. Install the Windows build tools
 
@@ -303,7 +303,7 @@ and run the installer. The full Visual Studio 2022 IDE also works. Select the
 
 Click **Install**, allow the installation to finish, then open **Developer
 PowerShell for VS 2022** from the Start menu. Use this terminal for all native
-commands below. Keep it separate from your conda/MinGW terminal to avoid loading
+commands below. Keep it separate from any MinGW terminal to avoid loading
 their Qt DLLs. Install Git if you have not already done so, then check:
 
 ```powershell
@@ -501,7 +501,7 @@ runtimes and build the single complete wheel:
 python scripts/qualify_native.py
 python scripts/package_native_windows.py --phase stage
 python scripts/package_native_windows.py --phase finish
-python scripts/build_wheels.py --no-build-isolation
+uv run python scripts/build_wheels.py
 python scripts/qualify_wheels.py --fresh
 python scripts/check_documentation.py
 python scripts/qualify_examples.py
@@ -522,12 +522,11 @@ Shared library guides: [materials, shapes, and errors](doc/libraries/cem_common/
 
 ## Python native eigensolver
 
-The optional Cython extension speeds up the shared periodic eigensolver. A source
+The Cython extension speeds up the shared periodic eigensolver. A source
 installation requires a compiler compatible with the active Python ABI; official
-Windows CPython normally uses MSVC. Cython, NumPy, SciPy, and setuptools build
-dependencies are included in `environment.yml`. Without a compiler, a source
-install can use the NumPy/SciPy fallback. A release binary wheel must contain the
-extension; `scripts/build_wheels.py` enforces that requirement.
+Windows CPython normally uses MSVC. Cython, cython-cmake, NumPy, and SciPy are
+isolated build dependencies in `pyproject.toml`. CMake always builds the extension,
+and `scripts/build_wheels.py` verifies it in release wheels.
 
 Check the active environment with:
 

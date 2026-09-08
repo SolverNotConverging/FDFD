@@ -45,8 +45,12 @@ def test_rst_is_valid(package):
         assert not messages.getvalue(), messages.getvalue()
 
 
-def test_release_environment_is_project_named():
-    assert (ROOT / 'environment.yml').read_text().startswith('name: fdfd\n')
+def test_release_environment_is_uv_managed():
+    assert (ROOT / '.python-version').read_text().strip() == '3.12'
+    pyproject = (ROOT / 'pyproject.toml').read_text()
+    assert 'build-backend = "scikit_build_core.build"' in pyproject
+    assert '[tool.uv]' in pyproject
+    assert not (ROOT / 'environment.yml').exists()
     for directory in ('scripts', 'doc', 'solvers', 'libraries', 'examples', 'apps'):
         for path in (ROOT / directory).rglob('*'):
             if path.is_file() and path.suffix in ('.rst', '.ps1', '.yml', '.yaml'):

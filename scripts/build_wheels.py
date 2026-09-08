@@ -2,20 +2,22 @@
 from pathlib import Path
 import argparse
 import os
-import shutil
 import subprocess
 import sys
-from tempfile import TemporaryDirectory
 import zipfile
 
-from install_python import PACKAGES, ROOT
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOTS = (
+    ROOT / "src",
+    *(path / "src" for path in sorted((ROOT / "libraries").iterdir()) if (path / "src").is_dir()),
+    *(path / "src" for path in sorted((ROOT / "solvers").glob("*/*")) if (path / "src").is_dir()),
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/dist")
     parser.add_argument("--native-bundle", type=Path, default=ROOT / "outputs/native-release-1.0.0/FDFD-1.0.0-windows-x64")
-    parser.add_argument("--no-build-isolation", action="store_true")
     args = parser.parse_args()
     if sys.platform != "win32" or sys.version_info[:2] != (3, 12):
         parser.error("The complete 1.0.0 release wheel targets Windows x64 / CPython 3.12.")
@@ -29,26 +31,19 @@ def main():
     if not (bundle / "SOURCE_INDEX.md").is_file():
         parser.error("Run package_native_windows.py --phase stage, then --phase finish first.")
     environment = dict(os.environ, FDFD_NATIVE_BUNDLE=str(bundle))
-    with TemporaryDirectory(prefix="fdfd-release-build-") as temporary:
-        staging = Path(temporary)
-        for name in ("pyproject.toml", "setup.py", "MANIFEST.in", "README.md", "LICENSE"):
-            shutil.copy2(ROOT / name, staging / name)
-        for source in [ROOT / "src", *(ROOT / package / "src" for package in PACKAGES)]:
-            shutil.copytree(source, staging / source.relative_to(ROOT), ignore=shutil.ignore_patterns(
-                "__pycache__", "*.egg-info", "*.pyc", "*.pyd", "*.so", "_cython_kernels.c"))
-        command = [sys.executable, "-m", "pip", "wheel", "--no-cache-dir", "--no-deps", "--wheel-dir", str(output)]
-        if args.no_build_isolation:
-            command.append("--no-build-isolation")
-        subprocess.run([*command, str(staging)], env=environment, check=True)
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(output), str(ROOT)],
+        cwd=ROOT,
+        env=environment,
+        check=True,
+    )
     wheels = list(output.glob("*.whl"))
     if len(wheels) != 1 or wheels[0].name != "fdfd-1.0.0-cp312-cp312-win_amd64.whl":
         raise SystemExit(f"Unexpected release artifacts: {wheels}")
     with zipfile.ZipFile(wheels[0]) as archive:
         members = set(archive.namelist())
-        expected = {"fdfd/" + str(path.relative_to(ROOT / "src/fdfd")).replace("\\", "/")
-                    for path in (ROOT / "src/fdfd").rglob("*.py")}
-        for package in PACKAGES:
-            source = ROOT / package / "src"
+        expected = set()
+        for source in SOURCE_ROOTS:
             expected.update(path.relative_to(source).as_posix() for path in source.rglob("*.py"))
         packaged = {name for name in members if name.endswith(".py")}
         if packaged != expected:

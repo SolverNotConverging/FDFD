@@ -378,6 +378,7 @@ def test_launch_viewer_accepts_directory_and_discovers_macos_bundle(
     marker = object()
 
     monkeypatch.setenv("FEM_PERIODIC_MODE_VIEWER_EXECUTABLE", str(executable))
+    monkeypatch.setattr(persistence, "_build_runtime_environment", lambda _path: None)
     monkeypatch.setattr(
         persistence.subprocess,
         "Popen",
@@ -464,6 +465,33 @@ def test_build_runtime_environment_uses_cmake_toolchain(
     )
     assert environment["QT_PLUGIN_PATH"] == str(plugins)
     assert environment["QT_QPA_PLATFORM_PLUGIN_PATH"] == str(platform_plugins)
+
+
+@pytest.mark.skipif(
+    persistence.os.name != "nt", reason="MinGW runtime is Windows-only"
+)
+def test_build_runtime_environment_finds_editable_build_cache(
+    tmp_path, monkeypatch
+) -> None:
+    repository = tmp_path / "checkout"
+    runtime = tmp_path / "toolchain" / "bin"
+    runtime.mkdir(parents=True)
+    (runtime / "libstdc++-6.dll").write_bytes(b"runtime")
+    build = repository / "build" / "cp312-cp312-win_amd64"
+    build.mkdir(parents=True)
+    (build / "CMakeCache.txt").write_text(
+        f"CMAKE_CXX_COMPILER:FILEPATH={runtime / 'c++.exe'}\n",
+        encoding="utf-8",
+    )
+    executable = tmp_path / "venv" / "site-packages" / "fdfd" / "native" / "bin" / "fem-periodic-mode-viewer.exe"
+    executable.parent.mkdir(parents=True)
+    monkeypatch.setattr(persistence, "_repository_root", lambda: repository)
+    monkeypatch.setenv("PATH", r"C:\Windows")
+
+    environment = persistence._build_runtime_environment(executable)
+
+    assert environment is not None
+    assert environment["PATH"].split(persistence.os.pathsep)[0] == str(runtime.resolve())
 
 
 def test_launch_viewer_reports_early_native_exit(tmp_path) -> None:

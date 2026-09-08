@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(FEMPeriodicModeViewer VERSION 1.0.0 LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NativeRuntime.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -129,11 +130,13 @@ if(FEM_PERIODIC_MODE_VTK_ENABLED)
 endif()
 
 install(TARGETS fem-periodic-mode-viewer fem-periodic-mode-inspect
-    RUNTIME DESTINATION bin
-    BUNDLE DESTINATION .
+    RUNTIME DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
+    BUNDLE DESTINATION "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}"
 )
+fdfd_native_runtime(fem-periodic-mode-viewer)
+fdfd_native_runtime(fem-periodic-mode-inspect)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-    DESTINATION share/licenses/FEMPeriodicModeViewer
+    DESTINATION "${FDFD_NATIVE_LICENSE_INSTALL_DIR}/FEMPeriodicModeViewer"
 )
 
 if(BUILD_TESTING)

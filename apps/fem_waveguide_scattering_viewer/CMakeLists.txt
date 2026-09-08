@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(FEMWaveguideScatteringViewer VERSION 1.0.0 LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NativeRuntime.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +41,7 @@ target_compile_definitions(fem-waveguide-scattering-viewer PRIVATE
 
 function(cem_scattering_enable_warnings target_name)
     if(MSVC)
-        target_compile_options(${target_name} PRIVATE /W4 /permissive-)
+        target_compile_options(${target_name} PRIVATE /W4 /permissive- /utf-8)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -49,7 +50,9 @@ endfunction()
 cem_scattering_enable_warnings(fem-waveguide-scattering-viewer)
 cem_scattering_enable_warnings(fem-waveguide-scattering-viewer-inspect)
 
+fdfd_native_runtime(fem-waveguide-scattering-viewer)
+fdfd_native_runtime(fem-waveguide-scattering-viewer-inspect)
 install(TARGETS fem-waveguide-scattering-viewer fem-waveguide-scattering-viewer-inspect
-    RUNTIME DESTINATION bin
-    BUNDLE DESTINATION .
+    RUNTIME DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
+    BUNDLE DESTINATION "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}"
 )
