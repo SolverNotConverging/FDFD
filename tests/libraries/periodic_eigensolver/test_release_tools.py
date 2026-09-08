@@ -12,7 +12,6 @@ from benchmarks.periodic_eigensolver.benchmark_end_to_end import (
     _build_problem,
     enforce_release_gate,
 )
-from libraries.periodic_eigensolver.scripts import build_release_wheel as release_module
 from libraries.periodic_eigensolver.scripts.verify_native_wheel import verify_native_wheel
 
 
@@ -40,50 +39,6 @@ def test_native_wheel_contract_requires_exactly_one_extension(tmp_path: Path) ->
         verify_native_wheel(missing)
     with pytest.raises(RuntimeError, match="exactly one"):
         verify_native_wheel(duplicated)
-
-
-def test_release_builder_verifies_before_moving_wheel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    extension = "periodic_eigensolver/_cython_kernels.abi3.so"
-    commands: list[list[str]] = []
-
-    def fake_run(command, *, cwd, check):
-        assert check is True
-        assert Path(cwd).name == "periodic_eigensolver"
-        commands.append(list(command))
-        wheel_directory = Path(command[command.index("--wheel-dir") + 1])
-        _write_wheel(
-            wheel_directory / "periodic_eigensolver-0.2.0-cp312-abi3-any.whl",
-            (extension,),
-        )
-
-    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
-    destination = release_module.build_release_wheel(
-        tmp_path / "dist", no_build_isolation=True
-    )
-
-    assert destination.is_file()
-    assert verify_native_wheel(destination) == extension
-    assert "--no-build-isolation" in commands[0]
-
-
-def test_release_builder_does_not_publish_fallback_wheel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output = tmp_path / "dist"
-
-    def fake_run(command, *, cwd, check):
-        wheel_directory = Path(command[command.index("--wheel-dir") + 1])
-        _write_wheel(
-            wheel_directory / "periodic_eigensolver-0.2.0-py3-none-any.whl",
-            (),
-        )
-
-    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
-    with pytest.raises(RuntimeError, match="exactly one"):
-        release_module.build_release_wheel(output)
-    assert not list(output.glob("*.whl"))
 
 
 def test_end_to_end_gate_enforces_five_percent_limit() -> None:

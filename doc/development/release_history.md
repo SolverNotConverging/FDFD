@@ -8,6 +8,11 @@ release; use the root README and current solver guides for 1.0 syntax.
 
 ## 1.0.0 — FDFD — 2026-09-06
 
+Packaging cleanup (2026-09-08): the root `pyproject.toml` is now the sole
+package manifest. Removed the internal library and solver manifests and the
+standalone periodic-eigensolver wheel builder. The release remains one complete
+`fdfd` wheel; users do not install internal components separately.
+
 The project becomes a collection of eight Python solver families, supported by
 shared libraries and three native applications. The final release distribution
 is one complete Windows x64 / CPython 3.12 wheel, installed with one pip command.
