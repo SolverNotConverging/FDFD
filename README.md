@@ -70,7 +70,7 @@ Install the release into the FDFD environment:
 uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-win_amd64.whl"
 ```
 
-Pip installs FDFD and its numerical Python dependencies. No repository clone,
+uv installs FDFD and its numerical Python dependencies. No repository clone,
 compiler, Qt installer, vcpkg, or separate native-app installation is needed.
 The wheel is larger than the solver code because it includes the native runtimes.
 It is distributed through GitHub Releases; use the complete URL above.
@@ -216,276 +216,83 @@ All FEM archives use `cem-fem-results` schema `1.0`, with physical units, field 
 
 ## Build from source
 
-This is the installation route for **Linux and macOS**, and for developers or
-Windows users who want to compile their own build. The Windows release wheel
-above is the default for end users. Source builds support Python 3.11–3.13.
-
-Install [Git](https://git-scm.com/downloads), [uv](https://docs.astral.sh/uv/), a
-C/C++ compiler, and the native dependencies listed below. Then run:
+Install [Git](https://git-scm.com/downloads), [uv](https://docs.astral.sh/uv/),
+a C/C++ toolchain, and the native development libraries below. Then run:
 
 ```sh
 git clone https://github.com/SolverNotConverging/FDFD.git
 cd FDFD
 uv sync
-uv pip check
-uv run python examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py
+uv run python -m fdfd info
 ```
 
-`uv sync` creates only this checkout's `.venv`, resolves `uv.lock`, installs the
-development tools, and performs an editable build. scikit-build-core invokes the
-root `CMakeLists.txt`, which builds the Cython eigensolver and all three native C++
-applications and installs them inside the `fdfd` package. `uv run` automatically
-re-syncs after dependency changes; use `uv sync --reinstall-package fdfd` after
-changing CMake or native sources if an incremental editable build is stale.
+`uv sync` creates the checkout's `.venv`, installs the locked Python dependencies,
+and automatically builds and installs the Cython extension and all three native
+applications through scikit-build-core. No separate native build or install step
+is needed. The checkout defaults to Python 3.12; source builds support 3.11–3.13.
 
-The build requires MinGW or MSVC on Windows, GCC/Clang on Linux, or Apple's command-line
-tools on macOS. CMake must also be able to find Qt 6, HDF5, Eigen, Gmsh, and FTXUI;
-VTK is optional unless 3D viewer support is explicitly enabled. On Windows, set
-`CMAKE_TOOLCHAIN_FILE` through `CMAKE_ARGS` before `uv sync` when using vcpkg:
+### Native prerequisites
+
+Use a C++20 compiler and standard library supporting `std::format`: MinGW or MSVC
+on Windows, Apple Clang on macOS, or GCC/Clang on Linux. Install CMake 3.24+ and
+a suitable build tool (Ninja, Make, or Visual Studio), plus the libraries and
+development headers below. All native dependencies must match the compiler and
+architecture; MSVC and MinGW libraries cannot be mixed.
+
+| Library | Required components |
+|---|---|
+| Qt 6.2+ | Widgets and Concurrent; OpenGL for 3D |
+| HDF5 1.10+ | C library |
+| Eigen 3.4+ | Headers |
+| Gmsh 4 | C++ library and headers, with OpenCASCADE support |
+| FTXUI | Component, DOM, and screen libraries |
+| VTK 9.2+ | Optional periodic 3D viewer: Qt 6 integration and OpenGL rendering |
+
+Install these through your platform's package manager or SDK installer. The
+Python `gmsh` and `h5py` packages do not replace the native development libraries.
+Without a compatible VTK installation, the periodic viewer builds with 2D support.
+
+For MSVC, use an **x64 Visual Studio Developer PowerShell** and a
+[vcpkg installation](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started).
+Install the dependencies once, then point the build at that installation:
 
 ```powershell
 $vcpkgRoot = "C:\dev\vcpkg"
+& "$vcpkgRoot/vcpkg.exe" install "qtbase[concurrent,widgets,opengl]" hdf5 eigen3 "gmsh[occ]" ftxui "vtk[qt,opengl]" --triplet x64-windows
 $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows"
 uv sync
 ```
 
-For platform-specific native prerequisites, see:
+For MinGW, macOS, or Linux, make the compiler and dependency installation
+discoverable in your build shell. Set `CMAKE_PREFIX_PATH` if the libraries are
+outside the usual search paths. Platform-specific prerequisite details are in
+the [periodic viewer](apps/fem_periodic_mode_viewer/README.rst),
+[scattering viewer](apps/fem_waveguide_scattering_viewer/README.rst), and
+[calculator](apps/transmission_line_calculator/README.rst) guides.
 
-- [FEM Waveguide Scattering Viewer](apps/fem_waveguide_scattering_viewer/README.rst)
-- [FEM Periodic Mode Viewer](apps/fem_periodic_mode_viewer/README.rst)
-- [Transmission Line Calculator](apps/transmission_line_calculator/README.rst)
+Keep the native libraries installed: a local source build uses their runtime
+files. If changing compilers in the same checkout, use a fresh build directory,
+for example `uv sync --reinstall-package fdfd --config-setting build-dir=build/new-toolchain`.
+To rebuild after native source changes, use `uv sync --reinstall-package fdfd`
+with the same toolchain settings.
 
 ## Native applications
 
-The following steps are for building applications **from source**. Windows wheel
-users already have all three native apps installed. The two FEM viewers inspect
-saved HDF5 results; the Transmission Line Calculator includes its own solver.
+After installing the release wheel or running `uv sync`, open an app with:
 
-### Compiler portability
-
-The normal `uv sync` / `uv build` workflow uses scikit-build-core and CMake's
-compiler selection on every platform: MinGW or MSVC on Windows, Apple Clang
-on macOS, and GCC or Clang on Linux. No compiler is forced in the shared
-configuration. `CC`, `CXX`, CMake toolchain files, and the generator can select
-a toolchain explicitly. Use a C++20 compiler and standard library supporting
-`std::format`, with native dependencies built for that compiler and architecture.
-In particular, MSVC must use MSVC-compatible dependencies, not MSYS2 MinGW DLLs.
-
-When switching compilers within one checkout, select a fresh build directory,
-for example `uv sync --reinstall-package fdfd --config-setting build-dir=build/msvc`.
-Keep those settings when subsequently rebuilding. The shared default build
-directory includes the Python/platform wheel tag, but not the compiler name.
-
-Source installs record Windows DLL/plugin locations and preserve external
-library search paths on macOS/Linux. Native executable discovery supports
-Windows `.exe` files, Linux binaries, and macOS `.app` bundles. Keep the native
-dependency installation available; local source wheels do not bundle all
-third-party libraries. The per-app MSYS2 `install.ps1` scripts and
-`package_native_windows.py` remain specialized MinGW deployment tools, not
-part of the cross-platform `uv sync` build path.
-
-### Windows: MSVC and vcpkg, step by step
-
-These instructions build all three apps for **64-bit Windows**. MSVC compiles C++,
-CMake configures the build, and vcpkg builds and supplies the external libraries.
-Use one compiler/architecture throughout. uv supplies Python and its packages;
-native dependencies come from vcpkg.
-
-#### 1. Install the Windows build tools
-
-Download [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)
-and run the installer. The full Visual Studio 2022 IDE also works. Select the
-**Desktop development with C++** workload and include these components:
-
-- **MSVC v143 – VS 2022 C++ x64/x86 build tools** (the current VS 2022 update).
-- A **Windows 10 or Windows 11 SDK**.
-- **C++ CMake tools for Windows**; this project needs CMake 3.24 or newer.
-
-Click **Install**, allow the installation to finish, then open **Developer
-PowerShell for VS 2022** from the Start menu. Use this terminal for all native
-commands below. Keep it separate from any MinGW terminal to avoid loading
-their Qt DLLs. Install Git if you have not already done so, then check:
-
-```powershell
-git --version
-cmake --version
-cl
+```sh
+uv run python -m fdfd calculator
+uv run python -m fdfd periodic-viewer
+uv run python -m fdfd scattering-viewer
 ```
 
-`cl` should print the Microsoft compiler banner (with no source file it may also
-report that a filename is missing). If it is not recognized, reopen the Developer
-PowerShell shortcut after installing the workload. Microsoft's
-[C++ installation walkthrough](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=msvc-170)
-shows the installer screens.
+The viewers inspect saved HDF5 results; the calculator includes its own solver.
+`solver.show()` and `result.show()` discover the installed viewers automatically.
+Run an example from the checkout with:
 
-#### 2. Download vcpkg and install the dependencies
-
-Use a short writable directory for vcpkg. The example uses `C:\dev\vcpkg`; you can
-choose another location by changing `$vcpkgRoot`. Run this once:
-
-```powershell
-New-Item -ItemType Directory -Force C:\dev | Out-Null
-$vcpkgRoot = "C:\dev\vcpkg"
-git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-& "$vcpkgRoot/bootstrap-vcpkg.bat"
-& "$vcpkgRoot/vcpkg.exe" install "qtbase[concurrent,widgets,opengl,windeployqt]" hdf5 eigen3 "gmsh[occ]" ftxui "vtk[qt,opengl]" --triplet x64-windows
+```sh
+uv run python examples/fem/waveguide_modes/microstrip_2d_surface_impedance.py
 ```
-
-If you already have a current vcpkg checkout, set `$vcpkgRoot` to it and run the
-install command. Wait for each command to succeed before continuing. The first
-dependency build, particularly Qt/VTK/OpenCASCADE, can take a long time and use
-many gigabytes of disk space. vcpkg downloads and builds transitive dependencies
-automatically; a separate Qt installer is unnecessary. See Microsoft's
-[vcpkg setup guide](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started).
-
-| Library / vcpkg port | Used by | Required feature |
-|---|---|---|
-| Qt 6.2+ / `qtbase` | All GUIs | Widgets, Concurrent; OpenGL for 3D; `windeployqt` for Windows deployment |
-| HDF5 1.10+ / `hdf5` | Both viewers | C library for result archives |
-| Eigen 3.4+ / `eigen3` | Calculator | Linear algebra headers |
-| Gmsh 4 / `gmsh[occ]` | Calculator | OpenCASCADE geometry operations |
-| `ftxui` | Calculator CLI | Terminal interface components |
-| VTK 9.2+ / `vtk[qt,opengl]` | Periodic viewer's 3D display | Qt 6 integration and OpenGL rendering |
-
-The [`gmsh` port's `occ` feature](https://vcpkg.io/en/package/gmsh.html) is necessary
-for the calculator's geometry, and [`qtbase`'s `windeployqt` feature](https://vcpkg.io/en/package/qtbase.html)
-installs the deployment tool. The [`vtk` Qt feature](https://vcpkg.io/en/package/vtk.html)
-provides the Qt integration required by the periodic viewer.
-
-For a smaller **2D-only periodic viewer** build, omit `"vtk[qt,opengl]"` from the
-install command and use `-DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=OFF` below. All three
-apps still build, but the periodic viewer has no interactive 3D viewport.
-
-#### 3. Configure and compile FDFD's native apps
-
-In Developer PowerShell, change into the root of your FDFD checkout. If you only
-installed wheels and have no checkout yet:
-
-```powershell
-cd C:\dev
-git clone https://github.com/SolverNotConverging/FDFD.git
-cd FDFD
-```
-
-If you already cloned FDFD elsewhere, use `cd` with that folder's absolute path
-instead. From the directory containing the root `CMakeLists.txt`, run:
-
-```powershell
-$vcpkgRoot = "C:\dev\vcpkg"
-$vcpkgPrefix = Join-Path $vcpkgRoot "installed/x64-windows"
-cmake -S . -B outputs/build-msvc -G "Visual Studio 17 2022" -A x64 `
-  "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake" `
-  -DVCPKG_TARGET_TRIPLET=x64-windows `
-  -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=ON
-cmake --build outputs/build-msvc --config Release --parallel 2
-```
-
-The trailing backtick continues a PowerShell command onto the next line; do not
-put spaces after it. Configure locates the dependencies and writes build files;
-build produces the executables. Two parallel compile jobs limit peak memory use;
-increase this number if your machine has capacity. Executables are placed under
-`outputs/build-msvc/apps/<app_directory>/Release/`. If you change compiler or
-architecture, choose a new build directory instead of reusing another toolchain's
-CMake cache.
-
-Make the vcpkg runtime libraries and Qt plugins visible in this terminal, then test:
-
-```powershell
-$env:Path = "$vcpkgPrefix/bin;$env:Path"
-$env:QT_PLUGIN_PATH = & "$vcpkgPrefix/tools/Qt6/bin/qtpaths.exe" --query QT_INSTALL_PLUGINS
-ctest --test-dir outputs/build-msvc -C Release --output-on-failure
-```
-
-CTest runs numerical, archive-reader, and GUI startup checks. A failing test prints
-its diagnostic output; resolve failures before installing.
-
-#### 4. Install the executables and their runtime files
-
-Install to a directory owned by your Windows user, then copy the release DLLs and
-deploy the Qt plugins. Continue in the same Developer PowerShell terminal:
-
-```powershell
-$installRoot = Join-Path $env:LOCALAPPDATA "FDFD"
-$installBin = Join-Path $installRoot "bin"
-cmake --install outputs/build-msvc --config Release --prefix "$installRoot"
-Copy-Item "$vcpkgPrefix/bin/*.dll" -Destination $installBin -Force
-$deployQt = Join-Path $vcpkgPrefix "tools/Qt6/bin/windeployqt.exe"
-$guiApps = @(
-  "fem-waveguide-scattering-viewer.exe",
-  "fem-periodic-mode-viewer.exe",
-  "transmission-line-calculator.exe"
-)
-foreach ($app in $guiApps) {
-  & $deployQt --release --compiler-runtime --dir "$installBin" (Join-Path $installBin $app)
-  if ($LASTEXITCODE -ne 0) { throw "Qt deployment failed for $app" }
-}
-```
-
-CMake installs the applications; the DLL copy supplies the vcpkg release runtimes
-(including HDF5, Gmsh, and VTK). Qt's
-[`windeployqt`](https://doc.qt.io/qt-6/windows-deployment.html) supplies the Qt plugins
-and compiler runtime deployment. Keep the resulting `bin` directory together;
-copying a lone `.exe` does not install its dependencies. This recipe copies the
-release DLLs from the chosen vcpkg installation, so a dedicated vcpkg checkout
-keeps the local bundle smaller.
-
-Open the calculator or a viewer from PowerShell:
-
-```powershell
-& "$env:LOCALAPPDATA/FDFD/bin/transmission-line-calculator.exe"
-& "$env:LOCALAPPDATA/FDFD/bin/fem-waveguide-scattering-viewer.exe"
-& "$env:LOCALAPPDATA/FDFD/bin/fem-periodic-mode-viewer.exe"
-```
-
-You can also open `%LOCALAPPDATA%\FDFD\bin` in File Explorer and create shortcuts
-to those executables. `transmission-line-calculator-cli.exe` is the terminal UI;
-run it from a terminal. The two companion `*-inspect.exe` programs read HDF5
-archives without opening a GUI.
-
-#### 5. Connect the viewers to Python
-
-Set these **user-level** environment variables once so `result.show()` finds the
-installed viewers from any checkout or wheel environment:
-
-```powershell
-[Environment]::SetEnvironmentVariable("FEM_WAVEGUIDE_SCATTERING_VIEWER_EXECUTABLE", "$env:LOCALAPPDATA/FDFD/bin/fem-waveguide-scattering-viewer.exe", "User")
-[Environment]::SetEnvironmentVariable("FEM_PERIODIC_MODE_VIEWER_EXECUTABLE", "$env:LOCALAPPDATA/FDFD/bin/fem-periodic-mode-viewer.exe", "User")
-```
-
-Restart your terminal or IDE to inherit these settings, activate your Python environment, and run
-a FEM periodic or scattering example. The variables must name the executable,
-not its containing folder. To open saved results directly, pass the `.h5` path
-as an argument to either viewer.
-
-### Native installation troubleshooting
-
-| Symptom | Check or fix |
-|---|---|
-| `git`, `cmake`, or `cl` is not recognized | Install the tools in step 1 and reopen Developer PowerShell for VS 2022. |
-| CMake cannot find Qt, HDF5, Gmsh, or VTK | Check that vcpkg finished successfully, `$vcpkgRoot` is correct, and both the vcpkg triplet and CMake architecture are x64. Pass the toolchain file on the first configure. |
-| Calculator reports OpenCASCADE is unavailable | Install `gmsh[occ]`, rebuild, and repeat runtime deployment. |
-| `windeployqt.exe` is missing | Install the `qtbase[windeployqt]` feature and use the tool from that same vcpkg checkout. |
-| Missing DLL, or Qt cannot load its Windows platform plugin | Repeat step 4; keep `bin/platforms/qwindows.dll` and all copied DLLs. Avoid Qt plugin paths pointing at another installation. Install the [x64 MSVC runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) if it is missing. |
-| Python reports that a viewer cannot be found | Check step 5's executable paths and restart the terminal/IDE. |
-
-### Other native build options
-
-App-specific documentation covers standalone builds, MSYS2/MinGW, macOS, and Linux.
-The bundled PowerShell `install.ps1` scripts are **MSYS2/MinGW installers**; use
-the CMake install and deployment steps above for MSVC.
-
-To build only selected apps from the root, add the appropriate `OFF` switches to
-the configure command (all default to `ON`):
-
-```text
--DCEM_BUILD_TRANSMISSION_LINE_CALCULATOR=OFF
--DCEM_BUILD_FEM_WAVEGUIDE_SCATTERING_VIEWER=OFF
--DCEM_BUILD_FEM_PERIODIC_MODE_VIEWER=OFF
-```
-
-- [FEM Waveguide Scattering Viewer](apps/fem_waveguide_scattering_viewer/README.rst)
-- [FEM Periodic Mode Viewer](apps/fem_periodic_mode_viewer/README.rst)
-- [Transmission Line Calculator](apps/transmission_line_calculator/README.rst)
 
 ## Testing and release checks
 
@@ -534,9 +341,8 @@ Check the active environment with:
 python -c "from periodic_eigensolver import native_backend_available; print(native_backend_available())"
 ```
 
-The extension uses SciPy's BLAS implementation. If a source install fell back to
-Python and native acceleration is wanted, configure a compatible compiler and
-rerun your source installation command.
+The extension uses SciPy's BLAS implementation and is built automatically by
+`uv sync`. If compilation fails, check the compiler setup and rerun `uv sync`.
 
 ## Analytical benchmarks
 
