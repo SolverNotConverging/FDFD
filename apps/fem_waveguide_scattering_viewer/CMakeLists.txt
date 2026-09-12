@@ -52,6 +52,7 @@ cem_scattering_enable_warnings(fem-waveguide-scattering-viewer-inspect)
 
 fdfd_native_runtime(fem-waveguide-scattering-viewer)
 fdfd_native_runtime(fem-waveguide-scattering-viewer-inspect)
+fdfd_macos_qt_plugins(fem-waveguide-scattering-viewer)
 install(TARGETS fem-waveguide-scattering-viewer fem-waveguide-scattering-viewer-inspect
     RUNTIME DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
     BUNDLE DESTINATION "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}"

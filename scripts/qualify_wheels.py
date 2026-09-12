@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SMOKE = r'''
 from importlib import import_module
 from pathlib import Path
+import os
 import sys
 import numpy as np
 import scipy.sparse as sp
@@ -57,10 +59,16 @@ for dimension in (1, 2):
     load_result('static.h5').plot().savefig('static.png')
 
 from fem_periodic_modes import PeriodicModeSolver2D, PeriodicModeSolver3D, load_result
-for solver in (PeriodicModeSolver2D(frequency=10e9, x_range=.02, z_range=.005),
-               PeriodicModeSolver3D(frequency=10e9, x_range=.02, y_range=.01, z_range=.005)):
-    solver.mesh(max_element_size=.006)
-    result = solver.solve(num_modes=1, neff_guess=.66, max_refinements=0, eigensolver='dense')
+periodic_cases = (
+    (PeriodicModeSolver2D(frequency=10e9, x_range=.02, z_range=.005),
+     dict(max_element_size=.006), .66),
+    (PeriodicModeSolver3D(frequency=10e9, x_range=.02, y_range=.01, z_range=.005,
+                          background_material=Material(name='fill', epsilon=2.25)),
+     dict(max_element_size=.006, wavelength_elements=8), 1.3),
+)
+for solver, mesh_settings, neff_guess in periodic_cases:
+    solver.mesh(**mesh_settings)
+    result = solver.solve(num_modes=1, neff_guess=neff_guess, max_refinements=0, eigensolver='dense')
     result.save('periodic.h5')
     np.testing.assert_array_equal(load_result('periodic.h5').neff, result.neff)
 
@@ -117,8 +125,10 @@ assert not any(requirement.startswith(('cem-common', 'fem-', 'fdfd-', 'periodic-
 from cem_common._native import bundled_executable
 from fem_waveguide_scattering.viewer import find_viewer_executable
 from fem_periodic_modes.persistence import _viewer_candidates
-assert find_viewer_executable() == bundled_executable('fem-waveguide-scattering-viewer')
-assert _viewer_candidates('fem-periodic-mode-viewer.exe')[0] == bundled_executable('fem-periodic-mode-viewer')
+assert find_viewer_executable() == bundled_executable(
+    'fem-waveguide-scattering-viewer').resolve()
+viewer_name = 'fem-periodic-mode-viewer.exe' if os.name == 'nt' else 'fem-periodic-mode-viewer'
+assert _viewer_candidates(viewer_name)[0].resolve() == bundled_executable('fem-periodic-mode-viewer').resolve()
 '''
 
 NATIVE_SMOKE = r'''
@@ -126,26 +136,34 @@ import os
 import subprocess
 from pathlib import Path
 import sys
-import fdfd
 from cem_common._native import bundled_executable, bundled_environment
 
-native = Path(fdfd.__file__).parent / 'native'
+periodic = Path.cwd() / 'periodic.h5'
+scattering = Path.cwd() / 'scattering.h5'
 for name, arguments in (
     ('transmission-line-calculator', ['--calculate-smoke-test']),
     ('transmission-line-calculator-cli', ['--smoke-test']),
-    ('fem-periodic-mode-viewer', ['--smoke-test', str(native / 'samples/periodic-3d.h5')]),
-    ('fem-waveguide-scattering-viewer', ['--smoke-test', str(native / 'samples/scattering-sweep.h5')]),
-    ('fem-periodic-mode-inspect', [str(native / 'samples/periodic-sweep.h5'), '1', '0']),
-    ('fem-waveguide-scattering-viewer-inspect', [str(native / 'samples/scattering-sweep.h5'), '1']),
+    ('fem-periodic-mode-viewer', ['--smoke-test', str(periodic)]),
+    ('fem-waveguide-scattering-viewer', ['--smoke-test', str(scattering)]),
+    ('fem-periodic-mode-inspect', [str(periodic)]),
+    ('fem-waveguide-scattering-viewer-inspect', [str(scattering)]),
 ):
     exe = bundled_executable(name)
-    env = bundled_environment(exe)
-    env['PATH'] = str(exe.parent) + os.pathsep + str(Path(os.environ['SystemRoot']) / 'System32')
+    env = bundled_environment(exe) or dict(os.environ)
+    if os.name == 'nt':
+        env['PATH'] = str(exe.parent) + os.pathsep + str(Path(os.environ['SystemRoot']) / 'System32')
+        creationflags = subprocess.CREATE_NO_WINDOW
+    else:
+        env['PATH'] = str(exe.parent) + os.pathsep + '/usr/bin:/bin'
+        creationflags = 0
     env['QT_QPA_PLATFORM'] = 'offscreen'
     subprocess.run([str(exe), *arguments], env=env, check=True, timeout=90,
-                   creationflags=subprocess.CREATE_NO_WINDOW)
+                   creationflags=creationflags)
 subprocess.run([sys.executable, '-I', '-m', 'fdfd', 'info'], check=True)
-subprocess.run([str(Path(sys.prefix) / 'Scripts/transmission-line-calculator-cli.exe'), '--smoke-test'], check=True)
+scripts = Path(sys.prefix) / ('Scripts' if os.name == 'nt' else 'bin')
+command = scripts / ('transmission-line-calculator-cli.exe'
+                     if os.name == 'nt' else 'transmission-line-calculator-cli')
+subprocess.run([str(command), '--smoke-test'], check=True)
 print('Bundled native applications and installed command entry points: PASS')
 '''
 
@@ -156,8 +174,14 @@ def main():
     parser.add_argument('--fresh', action='store_true', help='Download dependencies into a clean environment.')
     args = parser.parse_args()
     wheels = sorted(args.dist.resolve().glob('*.whl'))
-    if len(wheels) != 1 or wheels[0].name != 'fdfd-1.0.0-cp312-cp312-win_amd64.whl':
-        raise SystemExit(f'Expected the one complete FDFD Windows 3.12 wheel, found {wheels}.')
+    if sys.platform == 'win32' and platform.machine().lower() in ('amd64', 'x86_64'):
+        expected = 'fdfd-1.0.0-cp312-cp312-win_amd64.whl'
+    elif sys.platform == 'darwin' and platform.machine() == 'arm64':
+        expected = 'fdfd-1.0.0-cp312-cp312-macosx_15_0_arm64.whl'
+    else:
+        raise SystemExit('Wheel qualification supports Windows x64 and macOS Apple silicon.')
+    if len(wheels) != 1 or wheels[0].name != expected:
+        raise SystemExit(f'Expected the complete {expected} wheel, found {wheels}.')
     native = wheels[0]
     with zipfile.ZipFile(native) as archive:
         if not any(name.endswith(('.pyd', '.so')) for name in archive.namelist()):

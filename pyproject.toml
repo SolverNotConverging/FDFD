@@ -32,6 +32,7 @@ test = ["pytest>=8,<10", "docutils"]
 dev = [
   "pytest>=8,<10",
   "docutils",
+  "delocate>=0.13,<1; sys_platform == 'darwin'",
   "pandas",
   "tqdm",
 ]

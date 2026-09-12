@@ -56,6 +56,22 @@ def test_bundled_runtime_location_and_environment(tmp_path, monkeypatch):
     assert environment["PATH"].split(_native.os.pathsep)[0] == str(binary.parent)
 
 
+def test_macos_bundle_uses_its_qt_plugins(tmp_path, monkeypatch):
+    contents = tmp_path / "viewer.app/Contents"
+    binary = contents / "MacOS/viewer"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    monkeypatch.setenv("QT_PLUGIN_PATH", "another-python/qt/plugins")
+    monkeypatch.setenv("QT_QPA_PLATFORM_PLUGIN_PATH", "another-python/qt/platforms")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+
+    environment = _native.bundled_environment(binary)
+
+    assert environment["QT_PLUGIN_PATH"] == str(contents / "PlugIns")
+    assert environment["QT_QPA_PLATFORM_PLUGIN_PATH"] == str(contents / "PlugIns/platforms")
+    assert environment["QT_QPA_PLATFORM"] == "offscreen"
+
+
 @pytest.mark.skipif(_native.os.name != "nt", reason="Windows-only native applications")
 def test_editable_install_finds_cmake_install_tree(tmp_path, monkeypatch):
     source = tmp_path / "checkout/fdfd/__init__.py"

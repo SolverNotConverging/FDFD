@@ -45,14 +45,19 @@ endif()
 
 # Gmsh packages do not all export the same CMake target name. Prefer their
 # package configuration, then fall back to the library and header installed by
-# system package managers and the official SDK.
-find_package(gmsh CONFIG QUIET)
-foreach(gmsh_candidate IN ITEMS gmsh::shared gmsh::lib gmsh::gmsh gmsh)
-    if(TARGET "${gmsh_candidate}")
-        set(TL_GMSH_TARGET "${gmsh_candidate}")
-        break()
-    endif()
-endforeach()
+# system package managers and the official SDK. Homebrew's exported target can
+# contain absolute paths to dependency versions and SDKs from the bottle build
+# machine. Link its dynamic library directly on macOS; the dylib records those
+# runtime dependencies itself.
+if(NOT APPLE)
+    find_package(gmsh CONFIG QUIET)
+    foreach(gmsh_candidate IN ITEMS gmsh::shared gmsh::lib gmsh::gmsh gmsh)
+        if(TARGET "${gmsh_candidate}")
+            set(TL_GMSH_TARGET "${gmsh_candidate}")
+            break()
+        endif()
+    endforeach()
+endif()
 
 if(NOT TL_GMSH_TARGET)
     find_path(TL_GMSH_INCLUDE_DIR NAMES gmsh.h REQUIRED)
@@ -227,6 +232,7 @@ endif()
 
 fdfd_native_runtime(transmission-line-calculator)
 fdfd_native_runtime(transmission-line-calculator-cli)
+fdfd_macos_qt_plugins(transmission-line-calculator)
 if(SKBUILD)
     install(TARGETS
         transmission-line-calculator

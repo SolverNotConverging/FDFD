@@ -25,6 +25,7 @@
 #include <format>
 #include <limits>
 #include <map>
+#include <numbers>
 #include <tuple>
 
 namespace fem_waveguide_scattering {

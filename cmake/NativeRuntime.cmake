@@ -30,3 +30,34 @@ function(fdfd_native_runtime target)
         "compiler=${CMAKE_CXX_COMPILER_ID}\n[dlls]\n${runtime_files}\n[directories]\n${runtime_directories}\n[platform-plugin]\n${plugin_file}\n")
     install(FILES "${hint}" DESTINATION "${FDFD_NATIVE_INSTALL_DIR}")
 endfunction()
+
+# A wheel cannot rely on the Qt installation used by the build machine.  The
+# shared libraries are relocated by delocate after the wheel is built, while
+# Qt's dynamically discovered plugins must first be installed explicitly.
+function(fdfd_macos_qt_plugins target)
+    if(NOT APPLE OR NOT SKBUILD)
+        return()
+    endif()
+
+    set(qt_plugins
+        "Qt6::QCocoaIntegrationPlugin|platforms"
+        "Qt6::QOffscreenIntegrationPlugin|platforms"
+        "Qt6::QMacStylePlugin|styles"
+        "Qt6::QGifPlugin|imageformats"
+        "Qt6::QICOPlugin|imageformats"
+        "Qt6::QJpegPlugin|imageformats"
+    )
+    foreach(plugin IN LISTS qt_plugins)
+        string(REPLACE "|" ";" plugin_fields "${plugin}")
+        list(GET plugin_fields 0 plugin_target)
+        list(GET plugin_fields 1 plugin_directory)
+        if(TARGET "${plugin_target}")
+            install(FILES "$<TARGET_FILE:${plugin_target}>"
+                DESTINATION
+                    "${FDFD_NATIVE_BUNDLE_INSTALL_DIR}/${target}.app/Contents/PlugIns/${plugin_directory}"
+            )
+        elseif(plugin_target STREQUAL "Qt6::QCocoaIntegrationPlugin")
+            message(FATAL_ERROR "The macOS Qt platform plugin is required for wheel builds")
+        endif()
+    endforeach()
+endfunction()

@@ -26,7 +26,10 @@ def bundled_executable(name: str) -> Path | None:
 
 def bundled_environment(executable: Path) -> dict[str, str] | None:
     """Keep another Python/Qt installation's plugin settings out of this process."""
-    if not (executable.parent.parent / "build-manifest.json").is_file():
+    manifest = executable.parent.parent / "build-manifest.json"
+    app_contents = executable.parent.parent
+    macos_bundle = app_contents.name == "Contents" and app_contents.parent.suffix == ".app"
+    if not manifest.is_file() and not macos_bundle:
         return None
     environment = {key: value for key, value in os.environ.items()
                    if not key.upper().startswith(("QT_", "QML"))}
@@ -34,6 +37,10 @@ def bundled_environment(executable: Path) -> dict[str, str] | None:
     if "QT_QPA_PLATFORM" in os.environ:
         environment["QT_QPA_PLATFORM"] = os.environ["QT_QPA_PLATFORM"]
     environment["PATH"] = str(executable.parent) + os.pathsep + environment.get("PATH", "")
+    if macos_bundle:
+        plugins = app_contents / "PlugIns"
+        environment["QT_PLUGIN_PATH"] = str(plugins)
+        environment["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(plugins / "platforms")
     return environment
 
 

@@ -135,6 +135,7 @@ install(TARGETS fem-periodic-mode-viewer fem-periodic-mode-inspect
 )
 fdfd_native_runtime(fem-periodic-mode-viewer)
 fdfd_native_runtime(fem-periodic-mode-inspect)
+fdfd_macos_qt_plugins(fem-periodic-mode-viewer)
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
     DESTINATION "${FDFD_NATIVE_LICENSE_INSTALL_DIR}/FEMPeriodicModeViewer"
 )

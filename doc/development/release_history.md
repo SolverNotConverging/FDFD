@@ -13,11 +13,18 @@ package manifest. Removed the internal library and solver manifests and the
 standalone periodic-eigensolver wheel builder. The release remains one complete
 `fdfd` wheel; users do not install internal components separately.
 
+macOS packaging update (2026-09-12): the release now also provides a complete
+Apple-silicon macOS 15+ / CPython 3.12 wheel. It bundles the native applications,
+Qt platform plugins, and recursively relocated native libraries. The source build
+also tolerates stale, incomplete Command Line Tools libc++ headers and Homebrew's
+Gmsh package metadata containing bottle-build paths.
+
 The project becomes a collection of eight Python solver families, supported by
 shared libraries and three native applications. The final release distribution
-is one complete Windows x64 / CPython 3.12 wheel, installed with one pip command.
-It includes native application executables, DLLs, Qt plugins, and the compiled
-periodic eigensolver. Linux and macOS users build from source.
+is a complete platform wheel for Windows x64 or Apple-silicon macOS 15+ with
+CPython 3.12, installed with one pip command. It includes native application
+executables, runtime libraries, Qt plugins, and the compiled periodic eigensolver.
+Linux, Intel Mac, and earlier macOS users build from source.
 Its simplified workflow is: define a solver, define materials, add geometry,
 mesh, solve, and open an interactive results viewer.
 
@@ -74,17 +81,18 @@ those individual release artifacts and adds automatic bundled-viewer discovery
 and native-app launch commands. All 34 numerical examples passed and all 38
 tutorial/postprocessing scripts imported successfully. The two Python warnings are the expected
 coarse-PML adaptive fixtures. The README microstrip code was executed verbatim,
-and its GUI screenshot shows a computed result. Binary wheel qualification is for Windows x64
-with CPython 3.12; other platforms use source builds and are not claimed as
-binary-qualified by this release.
+and its GUI screenshot shows a computed result. Binary wheel qualification covers
+Windows x64 and Apple-silicon macOS 15+ with CPython 3.12; other platforms use
+source builds and are not claimed as binary-qualified by this release.
 
 The complete wheel was additionally installed into a fresh Python 3.12 virtual
 environment with no inherited site packages. Dependency resolution, all solver
 families, the compiled eigensolver, HDF5 results, bundled viewer discovery, native
 applications, and installed launch commands passed. The packaging/viewer regression
 selection passed 57 tests; all 52 C++ tests and 15 native runtime checks also passed.
-The release now contains one Windows wheel; the install guide offers venv, conda,
-and uv setup before the same pip command, with source builds documented afterward.
+The release now contains Windows x64 and Apple-silicon macOS 15+ wheels; the
+install guide offers venv, conda, and uv setup before the platform-specific pip
+command, with source builds documented afterward.
 
 ## 0.7 — Real Metal, Consistent Signs — 2026-08-26
 

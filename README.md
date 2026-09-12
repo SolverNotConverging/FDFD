@@ -43,11 +43,11 @@ outputs/      Ignored generated files
 
 ## Installation
 
-**Windows x64 with Python 3.12:** install the complete release wheel. It includes
-all solvers, the compiled periodic eigensolver, both native FEM viewers, and the
-Transmission Line Calculator, with their runtime DLLs and Qt plugins.
-**Linux and macOS users must [build from source](#build-from-source)**; this release
-provides no wheels for those platforms or for other Python versions.
+**Windows x64 or Apple-silicon macOS 15+ with Python 3.12:** install the complete
+release wheel. It includes all solvers, the compiled periodic eigensolver, both
+native FEM viewers, and the Transmission Line Calculator, with their native
+libraries and Qt plugins. **Linux, Intel Mac, earlier macOS, and other Python
+versions must [build from source](#build-from-source).**
 
 ### 1. Create the FDFD Python environment
 
@@ -64,10 +64,16 @@ Activation is optional when commands are prefixed with `uv run`.
 
 ### 2. Install everything with one command
 
-Install the release into the FDFD environment:
+Install the release into the FDFD environment. On Windows x64:
 
 ```sh
 uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-win_amd64.whl"
+```
+
+On Apple-silicon macOS 15 or later:
+
+```sh
+uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-macosx_15_0_arm64.whl"
 ```
 
 uv installs FDFD and its numerical Python dependencies. No repository clone,
@@ -75,9 +81,9 @@ compiler, Qt installer, vcpkg, or separate native-app installation is needed.
 The wheel is larger than the solver code because it includes the native runtimes.
 It is distributed through GitHub Releases; use the complete URL above.
 
-You can also download the single `.whl` from the
+You can also download the wheel for your platform from the
 [FDFD v1.0.0 release](https://github.com/SolverNotConverging/FDFD/releases/tag/v1.0.0)
-and install the local file with `uv pip install path/to/fdfd-1.0.0-cp312-cp312-win_amd64.whl`.
+and install the local file with `uv pip install path/to/fdfd-1.0.0-….whl`.
 Use a fresh environment if you previously installed the separate internal packages,
 so multiple distributions do not own the same Python files.
 
@@ -118,7 +124,7 @@ Python example below into your own script without cloning anything.
 
 | Installation problem | Fix |
 |---|---|
-| Wheel is not supported on this platform | Check `python --version` is 3.12 and `python -c "import struct; print(struct.calcsize('P') * 8)"` prints 64. Use Windows x64, or build from source on Linux/macOS. |
+| Wheel is not supported on this platform | Check `python --version` is 3.12 and `python -c "import platform; print(platform.machine())"` reports `AMD64` on Windows or `arm64` on macOS 15+. Otherwise build from source. |
 | `ModuleNotFoundError` after installing | Check `python -c "import sys; print(sys.executable)"` and select that environment in your terminal/IDE. |
 | An older viewer opens | Remove an old `FEM_PERIODIC_MODE_VIEWER_EXECUTABLE` or `FEM_WAVEGUIDE_SCATTERING_VIEWER_EXECUTABLE` override, then restart your terminal/IDE. Explicit overrides take priority over the bundle. |
 
@@ -315,7 +321,16 @@ python scripts/qualify_examples.py
 python scripts/qualify_native.py
 ```
 
-Wheel qualification installs the one wheel outside the checkout and checks every solver family, the compiled eigensolver, native applications, and launch commands. The `--fresh` check downloads Python dependencies into a clean environment. Example qualification runs every solver example with viewer launches suppressed. Native qualification checks Python-written archives in the inspectors and offscreen viewers. Published changes are recorded in the [release history](doc/development/release_history.md).
+On Apple-silicon macOS 15+, `uv sync` installs `delocate`; build the complete
+wheel with its Qt plugins and relocated native libraries, then qualify it in a
+clean environment:
+
+```sh
+uv run python scripts/build_macos_wheel.py
+uv run python scripts/qualify_wheels.py --dist outputs/dist-macos --fresh
+```
+
+Wheel qualification installs the platform wheel outside the checkout and checks every solver family, the compiled eigensolver, native applications, and launch commands. The `--fresh` check downloads Python dependencies into a clean environment. Example qualification runs every solver example with viewer launches suppressed. Native qualification checks Python-written archives in the inspectors and offscreen viewers. Published changes are recorded in the [release history](doc/development/release_history.md).
 
 The [documentation index](doc/README.rst) contains all Python solver and library
 guides and API references. Solver and library READMEs are short navigation pages.
