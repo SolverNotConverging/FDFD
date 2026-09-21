@@ -1,6 +1,6 @@
 import numpy as np
+from .diagnostics import eigenpair_residuals, solve_eigenpairs, equation_residual
 from scipy.sparse import bmat, coo_matrix, diags
-from scipy.sparse.linalg import eigs
 
 from .metal_surface_impedance import canonical_metal_name, good_conductor_surface_impedance
 from .impedance_2d import (
@@ -1135,12 +1135,15 @@ class _ModeSolver2D:
                 f"Not enough unconstrained electric DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes."
             )
 
-        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
+        eigenvalues, eigenvectors_reduced = solve_eigenpairs(
+            Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.),
+            wide_search=getattr(self, "_tracking_wide_search", False))
         eigenvectors = np.zeros((self.n_e, self.num_modes), dtype=complex)
         eigenvectors[free_exy, :] = eigenvectors_reduced
 
         order = np.argsort(np.real(eigenvalues))
         self.eigenvalues = eigenvalues[order]
+        self.residuals = eigenpair_residuals(Omega, self.eigenvalues, eigenvectors_reduced[:, order])
         Exy_flat = eigenvectors[:, order]
         self.eigenvectors = Exy_flat
         self.neff = self._passive_positive_neff(-self.eigenvalues)
@@ -1150,15 +1153,22 @@ class _ModeSolver2D:
         # eigenvalue = -neff**2.  For exp(+j*omega*t - j*beta*z), the
         # propagation branch used in the E/H reconstruction is +j*neff.
         sqrt_eigenvalues = 1j * self.neff
-        if np.any(np.abs(sqrt_eigenvalues) < 1e-300):
-            raise ValueError("Encountered a near-zero eigenvalue while reconstructing magnetic fields.")
-        eigenvalues_inv = diags(1.0 / sqrt_eigenvalues, format="csr")
+        # At cutoff this reconstruction is singular. Preserve the eigenpair,
+        # but mark its fields unresolved without dividing by a small beta.
+        self.reconstruction_valid = abs(self.neff) > getattr(self, '_cutoff_neff_tolerance', 1e-8)
+        inverse = np.divide(1.0, sqrt_eigenvalues, out=np.zeros_like(sqrt_eigenvalues),
+                            where=self.reconstruction_valid)
+        eigenvalues_inv = diags(inverse, format="csr")
 
         ex_flat = np.asarray(Exy_flat[:self.n_ex, :], dtype=complex)
         ey_flat = np.asarray(Exy_flat[self.n_ex:, :], dtype=complex)
         Hxy_reduced = Q_reduced @ Exy_flat @ eigenvalues_inv
         Hxy_flat = np.zeros((self.n_h, self.num_modes), dtype=complex)
         Hxy_flat[free_hxy, :] = Hxy_reduced
+        self.field_residuals = np.maximum(
+            equation_residual((P_reduced @ Hxy_reduced)[free_exy],
+                              (-1j*self.neff*Exy_flat)[free_exy]),
+            equation_residual(Q_reduced @ Exy_flat, -1j*self.neff*Hxy_reduced))
         hx_flat = np.asarray(Hxy_flat[:self.n_hx, :], dtype=complex)
         hy_flat = np.asarray(Hxy_flat[self.n_hx:, :], dtype=complex)
         ez_flat = np.asarray(eps_zz_inv @ (d_hy_ez @ hy_flat - d_hx_ez @ hx_flat), dtype=complex)
@@ -1172,6 +1182,8 @@ class _ModeSolver2D:
         self.Hz = self._unflatten_modes(hz_flat, self.shape_hz)
         self._zero_constrained_fields(pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask)
         self._rotate_modes_to_most_real()
+        for name in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
+            getattr(self, name)[..., ~self.reconstruction_valid] = np.nan
 
     def _has_lossy_material(self):
         for values in (

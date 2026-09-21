@@ -4,6 +4,7 @@ from cem_common import materials, shapes
 from cem_common.grid import GridSceneMixin, GridResult, load_grid_result
 from cem_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve
 from cem_common.errors import ConfigurationError
+from .diagnostics import boundary_provenance
 
 
 class ModeSet(GridResult):
@@ -24,11 +25,21 @@ class _WaveguideAPI(GridSceneMixin):
         apply_pml(self, backend, resolution, spec)
     def add_pml(self, *, thickness, direction='all', order=3, sigma_max=5.):
         self._record_pml(thickness=thickness, direction=direction, order=order, sigma_max=sigma_max)
-    def _result_from_fields(self, fields, neff, polarizations):
+    def _result_from_fields(self, fields, neff, polarizations, residuals, source_indices, field_residuals):
         metadata = {'k0': self._backend.k_0, 'field_representation': 'staggered-fields; exp(-i*beta*z)',
                     'field_normalization': 'native eigenvector normalization; H_num=-i*eta0*H',
                     'polarizations': tuple(polarizations), 'context': self._scene_context(),
-                    'solve_info': {'eigensolver_tolerance': self._backend._eigensolver_tolerance}}
+                    'eta0': float(np.sqrt(self._backend.mu0 / self._backend.epsilon0)),
+                    'pml': tuple(dict(p) for p in self._pmls),
+                    'boundaries': boundary_provenance(self._backend),
+                    'source_indices': tuple(source_indices),
+                    'solve_info': {'eigensolver_tolerance': self._backend._eigensolver_tolerance,
+                                   'residuals': np.asarray(residuals),
+                                   'field_residuals': np.asarray(field_residuals),
+                                   'eigenvalues': -np.asarray(neff)**2,
+                                   'reconstruction_valid': np.array([
+                                       all(np.isfinite(v[..., i]).all() for v in fields.values())
+                                       for i in range(len(neff))])}}
         self._result = ModeSet('fdfd_waveguide_modes', self.mesh_data, self.frequency,
                                fields, field_coordinates(self, fields), np.array(neff), metadata)
         return self.result
@@ -59,14 +70,18 @@ class ModeSolver1D(_WaveguideAPI):
         backend.solve(sigma=None if neff_guess is None else -complex(neff_guess)**2)
         candidates = [(pol, i, getattr(backend, 'neff_'+pol)[i]) for pol in ('TE', 'TM')
                       if polarization in ('both', pol) for i in range(num_modes)]
-        candidates.sort(key=lambda item: abs(item[2]-(neff_guess if neff_guess is not None else max(abs(v[2]) for v in candidates))))
+        target = neff_guess if neff_guess is not None else max(abs(v[2]) for v in candidates)
+        candidates.sort(key=lambda item: abs(item[2]-target))
         selected = candidates[:num_modes]
         fields = {}
         for component in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
             raw = np.asarray(getattr(backend, component))
             pol = 'TE' if component in ('Ey', 'Hx', 'Hz') else 'TM'
             fields[component] = np.column_stack([raw[:, i] if p == pol else np.zeros(raw.shape[0], complex) for p, i, _ in selected])
-        return self._result_from_fields(fields, [v for _, _, v in selected], [p for p, _, _ in selected])
+        return self._result_from_fields(fields, [v for _, _, v in selected], [p for p, _, _ in selected],
+                                        [getattr(backend, 'residuals_'+p)[i] for p, i, _ in selected],
+                                        [(p, i) for p, i, _ in selected],
+                                        [getattr(backend, 'field_residuals_'+p)[i] for p, i, _ in selected])
 
 
 class ModeSolver2D(_WaveguideAPI):
@@ -92,4 +107,6 @@ class ModeSolver2D(_WaveguideAPI):
         self._result = None
         self._backend.solve(sigma=None if neff_guess is None else -complex(neff_guess)**2)
         fields = {name: np.array(getattr(self._backend, name), copy=True) for name in ('Ex','Ey','Ez','Hx','Hy','Hz')}
-        return self._result_from_fields(fields, self._backend.neff, ['vector']*num_modes)
+        return self._result_from_fields(fields, self._backend.neff, ['vector']*num_modes,
+                                        self._backend.residuals, [('vector', i) for i in range(num_modes)],
+                                        self._backend.field_residuals)

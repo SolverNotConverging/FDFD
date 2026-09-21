@@ -10,3 +10,4 @@ Source-checkout documentation:
 * `User guide <../../../doc/solvers/fdfd/waveguide_modes/guide.rst>`_
 * `Public API <../../../doc/solvers/fdfd/waveguide_modes/API_REFERENCE.rst>`_
 * `Runnable examples <../../../examples/fdfd/waveguide_modes/README.rst>`_
+* `Port mode tracking development plan <../mode_tracking/README.rst>`_

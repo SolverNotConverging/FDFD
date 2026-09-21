@@ -12,6 +12,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = json.loads((ROOT / "doc/fdfd_public_api.json").read_text(encoding="utf-8"))
 EXPORTS = {
+    "fdfd_mode_tracking": {"ModeTracker1D", "ModeTracker2D", "PortSpec", "VerificationSpec", "TrackingConfig", "TrackedSweep", "PortMode",
+                           "track_modes", "load_sweep", "export_subspace"},
     "fdfd_waveguide_modes": {"ModeSolver1D", "ModeSolver2D", "ModeSet", "load_result"},
     "fdfd_periodic_modes": {
         "PeriodicModeSolver2D",
@@ -55,7 +57,10 @@ def test_fdfd_user_rst_is_valid(package: str) -> None:
     from docutils.core import publish_doctree
 
     family = package.removeprefix("fdfd_")
-    for filename in ("guide.rst", "API_REFERENCE.rst"):
+    filenames = ("guide.rst", "API_REFERENCE.rst")
+    if family == "mode_tracking":
+        filenames += ("mathematics.rst",)
+    for filename in filenames:
         path = ROOT / "doc" / "solvers" / "fdfd" / family / filename
         messages = io.StringIO()
         publish_doctree(

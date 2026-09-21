@@ -135,6 +135,7 @@ dependencies = [
     { name = "scikit-fem" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -149,7 +150,6 @@ dev = [
     { name = "docutils" },
     { name = "pandas" },
     { name = "pytest" },
-    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -163,6 +163,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<10" },
     { name = "scikit-fem", specifier = ">=12,<13" },
     { name = "scipy", specifier = ">=1.12,<2" },
+    { name = "tqdm", specifier = ">=4.66,<5" },
 ]
 provides-extras = ["test"]
 
@@ -172,7 +173,6 @@ dev = [
     { name = "docutils" },
     { name = "pandas" },
     { name = "pytest", specifier = ">=8,<10" },
-    { name = "tqdm" },
 ]
 
 [[package]]

@@ -1,4 +1,12 @@
 {
+  "fdfd_mode_tracking": {
+    "ModeTracker1D": ["__init__", "add_geometry", "add_layer", "set_material", "set_shape", "remove", "mesh", "solve", "show"],
+    "ModeTracker2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "set_material", "set_shape", "remove", "mesh", "solve", "show"],
+    "PortSpec": ["__init__"],
+    "VerificationSpec": ["__init__"],
+    "TrackingConfig": ["__init__"],
+    "TrackedSweep": ["save", "export", "plot", "show"]
+  },
   "fdfd_waveguide_modes": {
     "ModeSolver1D": [
       "__init__",

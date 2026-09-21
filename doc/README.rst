@@ -8,6 +8,7 @@ Solver families
 ---------------
 
 * fdfd waveguide modes: `guide <solvers/fdfd/waveguide_modes/guide.rst>`_, `API <solvers/fdfd/waveguide_modes/API_REFERENCE.rst>`_, `examples <../examples/fdfd/waveguide_modes/README.rst>`_
+* fdfd mode tracking: `guide <solvers/fdfd/mode_tracking/guide.rst>`_, `mathematics <solvers/fdfd/mode_tracking/mathematics.rst>`_, `API <solvers/fdfd/mode_tracking/API_REFERENCE.rst>`_, `examples <../examples/fdfd/mode_tracking/README.rst>`_
 * fdfd periodic modes: `guide <solvers/fdfd/periodic_modes/guide.rst>`_, `API <solvers/fdfd/periodic_modes/API_REFERENCE.rst>`_, `examples <../examples/fdfd/periodic_modes/README.rst>`_
 * fdfd band structure: `guide <solvers/fdfd/band_structure/guide.rst>`_, `API <solvers/fdfd/band_structure/API_REFERENCE.rst>`_, `examples <../examples/fdfd/band_structure/README.rst>`_
 * fdfd scattering: `guide <solvers/fdfd/scattering/guide.rst>`_, `API <solvers/fdfd/scattering/API_REFERENCE.rst>`_, `examples <../examples/fdfd/scattering/README.rst>`_

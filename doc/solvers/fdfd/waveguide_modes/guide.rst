@@ -62,6 +62,14 @@ physical ``thickness``, axis ``direction``, polynomial ``order``, and optional
 Examples and API
 ----------------
 
+For frequency continuation, bound evanescent modes and cutoff bracketing, see
+the `tracked port mode guide <../mode_tracking/guide.rst>`_. Waveguide results
+now include measured reduced-system ``residuals``, reconstructed
+``field_residuals`` and ``reconstruction_valid`` arrays in ``solve_info``.
+Metadata records the magnetic impedance scale and explicit boundary/PML
+provenance. At singular 2D cutoff the eigenpair is retained, with NaN fields
+marked invalid instead of dividing by beta.
+
 Start with `rectangular_waveguide_2d.py <../../../../examples/fdfd/waveguide_modes/rectangular_waveguide_2d.py>`_.
 The `family example index <../../../../examples/fdfd/waveguide_modes/README.rst>`_
 then covers slab, microstrip, dielectric, dispersion, and postprocessing cases.

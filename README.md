@@ -269,9 +269,22 @@ $env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.
 uv sync
 ```
 
-For MinGW, macOS, or Linux, make the compiler and dependency installation
-discoverable in your build shell. Set `CMAKE_PREFIX_PATH` if the libraries are
-outside the usual search paths. Platform-specific prerequisite details are in
+For an MSYS2 MinGW64 checkout on Windows, use the repository helper before the
+first `uv` build. It selects Ninja/GCC, exposes the matching dependency prefix,
+checks the Gmsh import library and runtime DLL, and archives a stale MSVC CMake
+cache rather than attempting to reuse it:
+
+```powershell
+. .\scripts\setup_mingw_windows.ps1
+uv sync --reinstall-package fdfd
+```
+
+Use `.\scripts\setup_mingw_windows.ps1 -PersistUser` once, then restart PyCharm,
+when IDE-created processes should inherit the same MinGW settings. The helper
+defaults to `C:\msys64`; pass `-MsysRoot` for another installation. On macOS or
+Linux, make the compiler and dependency installation discoverable in the build
+shell and set `CMAKE_PREFIX_PATH` when libraries are outside the usual search
+paths. Platform-specific prerequisite details are in
 the [periodic viewer](apps/fem_periodic_mode_viewer/README.rst),
 [scattering viewer](apps/fem_waveguide_scattering_viewer/README.rst), and
 [calculator](apps/transmission_line_calculator/README.rst) guides.

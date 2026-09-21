@@ -1,6 +1,6 @@
 import numpy as np
+from .diagnostics import eigenpair_residuals, solve_eigenpairs, equation_residual
 from scipy.sparse import coo_matrix, diags
-from scipy.sparse.linalg import eigs
 
 from .metal_surface_impedance import canonical_metal_name, good_conductor_surface_impedance
 from .impedance_1d import (
@@ -778,13 +778,13 @@ class _ModeSolver1D:
         Omega = Omega[free_mask, :][:, free_mask]
         if Omega.shape[0] <= self.num_modes:
             raise ValueError(f"Not enough unconstrained DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes.")
-        eigenvalues, eigenvectors_reduced = eigs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
+        eigenvalues, eigenvectors_reduced = solve_eigenpairs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
         order = np.argsort(np.real(eigenvalues))
         eigenvalues = eigenvalues[order]
         eigenvectors_reduced = eigenvectors_reduced[:, order]
         eigenvectors = np.zeros((full_size, self.num_modes), dtype=complex)
         eigenvectors[free_mask, :] = eigenvectors_reduced
-        return eigenvalues, eigenvectors
+        return eigenvalues, eigenvectors, eigenpair_residuals(Omega, eigenvalues, eigenvectors_reduced)
 
     def _zero_constrained_fields(self, pec_xx_mask, pec_yy_mask, pec_zz_mask, pmc_xx_mask, pmc_yy_mask, pmc_zz_mask):
         self.Ex[pec_xx_mask, :] = 0.0
@@ -834,10 +834,10 @@ class _ModeSolver1D:
         Omega_TE = -mu_xx_diag @ (D_h_to_e @ mu_zz_inv @ D_e_to_h + eps_yy_diag)
         Omega_TM = -eps_xx_diag @ (D_e_to_h @ eps_zz_inv @ D_h_to_e + mu_yy_diag)
 
-        self.eigenvalues_TE, self.eigenvectors_TE = self._solve_reduced(
+        self.eigenvalues_TE, self.eigenvectors_TE, self.residuals_TE = self._solve_reduced(
             Omega_TE, ~pec_yy_mask, self.Nx + 1, sigma
         )
-        self.eigenvalues_TM, self.eigenvectors_TM = self._solve_reduced(
+        self.eigenvalues_TM, self.eigenvectors_TM, self.residuals_TM = self._solve_reduced(
             Omega_TM, ~pmc_yy_mask, self.Nx, sigma
         )
 
@@ -874,6 +874,15 @@ class _ModeSolver1D:
             pmc_zz_mask,
         )
         self._rotate_modes_to_most_real()
+
+        te_rows = ~pec_yy_mask
+        tm_rows = ~pmc_yy_mask
+        self.field_residuals_TE = equation_residual(
+            (D_h_to_e @ self.Hz)[te_rows], (eps_yy_diag @ self.Ey)[te_rows],
+            (1j*self.neff_TE*self.Hx)[te_rows])
+        self.field_residuals_TM = equation_residual(
+            (D_e_to_h @ self.Ez)[tm_rows], (mu_yy_diag @ self.Hy)[tm_rows],
+            (1j*self.neff_TM*self.Ex)[tm_rows])
 
     def _has_lossy_material(self):
         for values in (

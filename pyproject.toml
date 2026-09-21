@@ -19,6 +19,7 @@ license-files = ["LICENSE"]
 dependencies = [
   "numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4",
   "h5py>=3.15,<4", "scikit-fem>=12,<13", "gmsh>=4.13,<5", "meshio>=5.3,<6",
+  "tqdm>=4.66,<5",
 ]
 
 [project.urls]
@@ -34,7 +35,6 @@ dev = [
   "docutils",
   "delocate>=0.13,<1; sys_platform == 'darwin'",
   "pandas",
-  "tqdm",
 ]
 
 [project.scripts]
@@ -73,6 +73,7 @@ wheel.packages = [
   "solvers/fdfd/periodic_modes/src/fdfd_periodic_modes",
   "solvers/fdfd/scattering/src/fdfd_scattering",
   "solvers/fdfd/waveguide_modes/src/fdfd_waveguide_modes",
+  "solvers/fdfd/mode_tracking/src/fdfd_mode_tracking",
   "solvers/fem/electrostatics/src/fem_electrostatics",
   "solvers/fem/periodic_modes/src/fem_periodic_modes",
   "solvers/fem/waveguide_modes/src/fem_waveguide_modes",
