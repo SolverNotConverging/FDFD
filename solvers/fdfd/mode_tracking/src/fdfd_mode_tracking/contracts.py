@@ -46,7 +46,6 @@ class TrackingConfig:
     max_depth: int = 8
     max_solves: int = 200
     min_relative_step: float = 1e-5
-    neural_weight: float = 0.05
 
     def __post_init__(self):
         for name in ('num_candidates', 'max_candidates', 'max_solves'):
@@ -62,7 +61,7 @@ class TrackingConfig:
             if not np.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
                 raise ValueError(f'{name} must be finite and positive.')
         for name in ('overlap_min', 'assignment_margin', 'verification_overlap',
-                     'edge_fraction_max', 'neural_weight', 'eigensolver_tolerance'):
+                     'edge_fraction_max', 'eigensolver_tolerance'):
             if not np.isfinite(getattr(self, name)) or not 0 <= getattr(self, name) <= 1:
                 raise ValueError(f'{name} must be in [0, 1].')
         if self.polarization not in ('both', 'TE', 'TM'):

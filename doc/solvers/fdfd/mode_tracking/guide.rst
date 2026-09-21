@@ -196,8 +196,8 @@ For a superposition, compute total power from the summed complex E/H fields.
 Adding the individual terms' powers omits interference; paired evanescent fields
 can transfer real power even when each separate lossless term has zero real power.
 
-Persistence and optional neural scoring
-----------------------------------------
+Persistence
+-----------
 
 ``load_sweep(path)`` restores the versioned ``cem-fdfd-tracking`` HDF5 record.
 It includes raw candidates, coordinates, normalization, residuals, physical scene
@@ -207,21 +207,11 @@ no-PML provenance are unsuitable for certified tracking/export.
 
 The `mathematical reference <mathematics.rst>`_ gives the implemented equations,
 assignment costs, normalization, subspace transport, cutoff rules, confinement
-tests and neural objective, including current limitations.
+tests, including current limitations.
 
-``fdfd_mode_tracking.neural`` provides ``reference_pairs``, ``PairDataset``,
-``train_scorer`` and ``load_scorer``. Positive training pairs require independently
-verified bound candidates; their zero power is not a negative label. Unknown
-reference labels are excluded. Training, temperature calibration and testing use
-disjoint geometry IDs, with all frequency/mesh variants of a geometry kept together.
-The small NumPy/SciPy MLP has no additional runtime dependency.
-
-Pass a loaded scorer as ``track_modes(..., scorer=model)`` to opt in. Its bounded
-cost contribution cannot override exclusions or export checks. Unsupported
-features, nonfinite probabilities and out-of-distribution inputs record a baseline
-fallback event. No scorer is enabled by default. The analytical example generates
-a narrow demonstrator dataset/model; general neural superiority has not been
-established and requires broader held-out geometries and matched-budget evaluation.
+New sweep archives use schema 1.1 and store only conventional tracking controls.
+Schema 1.0 sweeps remain readable: the retired scoring-weight field is ignored,
+while historical events and computed results are retained without recomputation.
 
 See the `runnable examples <../../../../examples/fdfd/mode_tracking/README.rst>`_
 and `development plan <../../../../solvers/fdfd/mode_tracking/PLAN.md>`_.

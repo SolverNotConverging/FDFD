@@ -193,7 +193,7 @@ def test_assignment_crossing_phase_and_missing_candidate():
     cfg = config(assignment_margin=.01)
     old = np.eye(3, dtype=complex)
     new = old[:, [1, 0]]*np.exp(1j*np.array([.7, 2.]))
-    indices, overlap, _, _ = assign_modes(old, new, np.array([1., 2., 3.]), np.array([.9, 2.1]), cfg)
+    indices, overlap, _ = assign_modes(old, new, np.array([1., 2., 3.]), np.array([.9, 2.1]), cfg)
     np.testing.assert_array_equal(indices, [1, 0, -1])
     np.testing.assert_allclose(overlap[:2].max(axis=1), 1.)
     forbidden = np.zeros((3, 2), bool)
@@ -213,14 +213,68 @@ def test_complex_subspace_rotation_and_rank_loss():
     assert orthonormal_basis(np.column_stack([q[:, 0], q[:, 0]]))[0].shape[1] == 1
 
 
-def test_invalid_neural_scores_fall_back():
-    class Broken:
-        def predict(self, features): return np.full(features.shape[:-1], np.nan)
+def test_conventional_assignment_is_repeatable():
     args = (np.eye(2), np.eye(2), np.array([1., 2.]), np.array([1., 2.]), config())
     base = assign_modes(*args)
-    broken = assign_modes(*args, scorer=Broken())
-    np.testing.assert_array_equal(base[0], broken[0])
-    assert broken[-1].startswith('baseline_fallback')
+    repeated = assign_modes(*args)
+    for actual, expected in zip(repeated, base):
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_tracking_public_api_has_no_learned_scoring():
+    import inspect
+    from dataclasses import fields
+    assert 'neural_weight' not in {field.name for field in fields(TrackingConfig)}
+    for function in (track_modes, ModeTracker1D.solve, ModeTracker2D.solve, assign_modes):
+        assert 'scorer' not in inspect.signature(function).parameters
+    with pytest.raises(TypeError):
+        TrackingConfig(neural_weight=0.)
+    with pytest.raises(TypeError):
+        track_modes(slab, [FC], scorer=object())
+
+
+def test_legacy_sweep_loads_without_retired_control(tmp_path):
+    import h5py
+    from cem_common.persistence import write_value
+    sweep = track_modes(slab, [.8*FC], port=PortSpec(boundary='enclosed'),
+                        config=config(polarization='TE'), progress=False)
+    # Preserve historical provenance, but never execute an old scoring model.
+    historical = {'type': 'neural_score', 'frequency': .8*FC, 'status': 'applied'}
+    sweep.events += (historical,)
+    path = tmp_path/'legacy.h5'
+    sweep.save(path)
+    with h5py.File(path, 'r+') as handle:
+        assert handle.attrs['schema'] == '1.1'
+        assert 'neural_weight' not in handle['sweep/config']
+        handle.attrs['schema'] = '1.0'
+        write_value(handle['sweep/config'], 'neural_weight', .05)
+    loaded = load_sweep(path)
+    assert not hasattr(loaded.config, 'neural_weight')
+    assert historical in loaded.events
+    for name, array in sweep.samples[0].candidates.fields.items():
+        np.testing.assert_array_equal(loaded.samples[0].candidates.fields[name], array)
+    np.testing.assert_array_equal(loaded.samples[0].candidate_indices, sweep.samples[0].candidate_indices)
+    np.testing.assert_allclose(loaded.export()[0].fields['Ey'], sweep.export()[0].fields['Ey'])
+    clean = tmp_path/'current.h5'
+    loaded.save(clean)
+    with h5py.File(clean, 'r') as handle:
+        assert handle.attrs['schema'] == '1.1'
+        assert 'neural_weight' not in handle['sweep/config']
+    assert load_sweep(clean).config == loaded.config
+
+
+def test_current_schema_does_not_ignore_unknown_controls(tmp_path):
+    import h5py
+    from cem_common.persistence import write_value
+    from cem_common.errors import PersistenceError
+    sweep = track_modes(slab, [.8*FC], port=PortSpec(boundary='enclosed'),
+                        config=config(polarization='TE'), progress=False)
+    path = tmp_path/'invalid.h5'
+    sweep.save(path)
+    with h5py.File(path, 'r+') as handle:
+        write_value(handle['sweep/config'], 'unknown_control', 1.)
+    with pytest.raises(PersistenceError):
+        load_sweep(path)
 
 
 def test_tm_cutoff_and_physical_maxwell_ratio():
@@ -304,7 +358,7 @@ def test_avoided_crossing_follows_rotating_eigenbranch():
     for angle in np.linspace(.05, np.pi/2, 25):
         basis = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]], complex)
         permutation = [1, 0]
-        indices, _, _, _ = assign_modes(previous, basis[:, permutation],
+        indices, _, _ = assign_modes(previous, basis[:, permutation],
             np.array([-1., 1.]), np.array([1., -1.]), cfg)
         np.testing.assert_array_equal(indices, [1, 0])
         previous = basis

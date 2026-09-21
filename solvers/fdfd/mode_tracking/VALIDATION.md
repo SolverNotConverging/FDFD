@@ -3,10 +3,10 @@
 Updated 2026-09-21. Validation concerns frequency-domain tracked modes and
 exported physical port fields. Actual FDTD execution is explicitly out of scope.
 
-The implementation validation run passed 150 tests and 110 subtests across
-the FDFD suites and curated API documentation tests. The documentation checker
-validated 53 maintained RST documents and relative links. The cutoff, open-guide,
-anisotropic-crossing, and degenerate-guide tracking examples completed successfully.
+Run the FDFD waveguide, mode-tracking and curated documentation tests to validate
+this implementation, then run `scripts/check_documentation.py` for RST and link
+checks. The cutoff, open-guide, anisotropic-crossing and degenerate-guide
+experiments below describe the exercised numerical cases.
 
 ## Automated numerical coverage
 
@@ -28,9 +28,7 @@ The tests under `tests/fdfd/mode_tracking/` cover:
 | Degenerate square guide and complex unitary rotations | Track the subspace, preserve physical excitation, require explicit subspace export |
 | Rank-deficient candidate span | Rank-revealing orthonormalization identifies lost rank |
 | Exhausted solve budget | Store unresolved events; missing-frequency export fails |
-| HDF5 round trip | Preserve complex fields, residual order, tracks and excluded intervals |
-| Invalid neural output or out-of-distribution input | Fall back to the conventional assignment |
-| Optional MLP | Disjoint geometry splits, held-out calibration, data-only model round trip |
+| HDF5 round trip | Preserve complex fields, residual order, tracks and excluded intervals; load legacy 1.0 sweeps and save conventional-only 1.1 configuration |
 | Material-first sweep API | 1D/2D geometry helpers, fixed-grid meshing, solve lifecycle, invalidation after edits |
 | Automatic complete-set tracking | Fixed num_modes count, scalar/diagonal/lossy material search guesses, later branch discovery, reacquisition after candidate-window gaps, arbitrary reference frequency, empty initial seed set and HDF5 round trip |
 | Interactive GUI | Every candidate gets a field panel; invalid x, degeneracy diamond and cutoff star markers; programmatic frequency selection |
@@ -44,13 +42,6 @@ public API and RST syntax.
 `examples/fdfd/mode_tracking/parallel_plate_cutoff.py` creates a verified sweep
 on both sides of the TE1 cutoff, writes `tracked_modes.h5`, and exports a
 port-profile table containing complex beta and real/reactive power.
-
-`examples/fdfd/mode_tracking/train_reference_scorer.py` constructs reference
-labels from the PEC-plate analytical dispersion relation, checks mesh-based
-eligibility, includes evanescent TE1/TE2 candidates, and saves the dataset,
-geometry manifest, calibrated scorer and report. Geometry groups are held out
-before training/calibration/testing. The corpus consists of closely related
-plate geometries and demonstrates plumbing rather than broad generalization.
 
 `tracked_parallel_plate_1d.py` exercises the material-first lifecycle and GUI
 through cutoff. `tracked_dielectric_waveguide_2d.py` exercises the equivalent 2D
@@ -104,8 +95,8 @@ single-mode power normalization.
   not arbitrary interior closed cavities.
 - Full independent divergence/interface diagnostics and exceptional-point
   conditioning analysis are not implemented.
-- Broader geometry families, lossy SIBC tracking experiments, and a matched-budget
-  baseline/hybrid ablation are needed before claiming general neural benefit.
+- Broader geometry families and lossy SIBC tracking experiments remain useful
+  for qualifying the conventional tracker beyond the current fixtures.
 - Continuous-spectrum interpolation and current/time-waveform synthesis are
   downstream work. Exports retain unresolved intervals to prevent accidental
   interpolation through cutoff.

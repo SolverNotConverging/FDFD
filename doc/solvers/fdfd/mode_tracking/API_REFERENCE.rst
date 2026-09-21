@@ -31,7 +31,7 @@ frequency and returns ``GridData``.
 
 ``ModeTracker1D.solve`` accepts keyword-only ``num_modes``, ``neff_guess``,
 ``polarization``, ``eigensolver_tolerance``,
-``reference_frequency``, ``tracking_config``, ``scorer`` and ``progress``. It returns a
+``reference_frequency``, ``tracking_config`` and ``progress``. It returns a
 ``TrackedSweep``. ``ModeTracker1D.show`` accepts keyword-only ``component``,
 ``quantity`` and ``block`` and opens the completed sweep viewer.
 
@@ -64,7 +64,7 @@ adding the second metre extent. ``ModeTracker2D.add_geometry`` accepts ``shape``
 ``resolution``, ``max_element_size`` and ``subpixels``. ``ModeTracker2D.solve``
 accepts ``num_modes``, ``neff_guess``, ``polarization``,
 ``eigensolver_tolerance``,
-``reference_frequency``, ``tracking_config``, ``scorer`` and ``progress``.
+``reference_frequency``, ``tracking_config`` and ``progress``.
 ``ModeTracker2D.show`` accepts ``component``, ``quantity`` and ``block``.
 
 Configuration
@@ -92,7 +92,6 @@ the factory must preserve the physical structure while applying it.
   ``verification_overlap`` (.999), ``edge_fraction_max`` (1e-3).
 * Work limits: ``max_depth`` (8), ``max_solves`` (200),
   ``min_relative_step`` (1e-5).
-* Optional neural correction: ``neural_weight`` (.05); inactive without a scorer.
 
 Tracking
 --------
@@ -102,16 +101,15 @@ Tracking
 .. code-block:: python
 
    track_modes(make_solver, frequencies, *, port=None, config=None,
-               seed_modes=(0,), reference_frequency=None, scorer=None, progress=True)
+               seed_modes=(0,), reference_frequency=None, progress=True)
 
 ``make_solver(frequency_hz, verification_spec)`` returns a newly configured,
 meshed waveguide solver. ``frequencies`` are positive, finite, unique hertz.
 ``seed_modes`` are candidate indices at ``reference_frequency`` (the lowest
 frequency by default). Proven bound cutoff candidates are valid identity seeds
 and continue into higher-frequency samples. Exact degenerate clusters expand the
-seed set. ``scorer``
-optionally supplies ``predict(features)``; the provided model is in the explicitly
-imported ``fdfd_mode_tracking.neural`` module.
+seed set. Matching uses complex field overlaps, eigenvalue prediction and
+one-to-one assignment with unmatched states; no model or training is required.
 
 Passing ``seed_modes=None`` enables automatic tracking of the complete solved
 set, births and reacquisition. With this choice, a missing ``neff_guess`` is
@@ -142,6 +140,8 @@ Persistence and export
 
 ``TrackedSweep.save`` accepts ``path`` and writes a versioned HDF5 archive
 atomically. ``load_sweep`` accepts ``path`` and returns its data without invoking the solver.
+New archives use schema 1.1. Schema 1.0 sweeps remain readable; their retired
+scoring-weight field is ignored and historical events are preserved as data.
 
 ``TrackedSweep.export`` accepts ``track=0``, keyword-only ``frequencies=None``
 and ``amplitude=1.0``. These parameter names are ``track``, ``frequencies`` and

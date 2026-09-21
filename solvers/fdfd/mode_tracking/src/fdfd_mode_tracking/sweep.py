@@ -15,7 +15,7 @@ class _BudgetExhausted(RuntimeError):
 
 
 def track_modes(make_solver, frequencies, *, port=None, config=None, seed_modes=(0,),
-                reference_frequency=None, scorer=None, progress=True):
+                reference_frequency=None, progress=True):
     """Track modes from a factory ``make_solver(frequency_hz, VerificationSpec)``.
 
     The factory returns a newly configured and meshed 1D/2D waveguide solver.
@@ -31,11 +31,11 @@ def track_modes(make_solver, frequencies, *, port=None, config=None, seed_modes=
               dynamic_ncols=True) as progress_bar:
         return _track_modes(make_solver, frequencies, port=port, config=config,
                             seed_modes=seed_modes, reference_frequency=reference_frequency,
-                            scorer=scorer, progress_bar=progress_bar)
+                            progress_bar=progress_bar)
 
 
 def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
-                 reference_frequency, scorer, progress_bar):
+                 reference_frequency, progress_bar):
     port, config = port or PortSpec(), config or TrackingConfig()
     requested = np.asarray(frequencies, float)
     if requested.ndim != 1 or not len(requested) or not np.isfinite(requested).all() or np.any(requested <= 0):
@@ -202,7 +202,6 @@ def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
                             'singular_values': cluster['singular_values'], 'kind': 'tracked_subspace'})
         active = np.flatnonzero(present & (indices < 0) & np.isfinite(ov).all(axis=0))
         remaining = np.array([j for j in new_finite if j not in occupied], int)
-        neural_status = 'disabled'
         if len(active) and len(remaining):
             allowed = np.broadcast_to(right.numerical_valid[remaining], (len(active), len(remaining))).copy()
             old_pol = left.candidates.result.metadata['polarizations']
@@ -210,10 +209,9 @@ def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
             for i, track in enumerate(active):
                 for j, candidate in enumerate(remaining):
                     allowed[i, j] &= old_pol[ids[track]] == new_pol[candidate]
-            assigned, overlap, _, neural_status = assign_modes(
+            assigned, overlap, _ = assign_modes(
                 ov[:, active], nv[:, remaining], old_values[active], right.eigenvalues[remaining], config,
-                prediction=prediction[active], allowed=allowed, scorer=scorer,
-                relative_step=abs(right.frequency-left.frequency)/left.frequency)
+                prediction=prediction[active], allowed=allowed)
             for k, j in enumerate(assigned):
                 if j < 0: continue
                 track, candidate = active[k], remaining[j]
@@ -266,8 +264,6 @@ def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
                 events.append({'type': 'cutoff_identity', 'frequency': right.frequency,
                                'track': track, 'candidate': candidate,
                                'cost': float(cost[ai, bj])})
-        if neural_status != 'disabled':
-            events.append({'type': 'neural_score', 'frequency': right.frequency, 'status': neural_status})
         return TrackingSample(right, indices, phases, overlaps, tuple(records))
 
     def crossing(left, right):

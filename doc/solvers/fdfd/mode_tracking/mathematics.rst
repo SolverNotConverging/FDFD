@@ -378,7 +378,7 @@ Equal-rank cluster matching uses
                         {\max(1,|\overline\lambda_o|)},\qquad
    C_{\rm sub}=1-O_{\rm sub}+0.1\min(d_{\rm sub}^2,4).
 
-It uses centroid drift, not the scalar secant predictor or neural correction.
+It uses centroid drift rather than the scalar secant predictor.
 The unmatched and global-margin rules also apply. Matched cluster members
 are reserved before ordinary scalar assignment.
 
@@ -685,102 +685,7 @@ phase/subspace transforms, reference plane, orientation, evidence and unresolved
 intervals. They do not represent a fitted continuous dispersion model or
 certification for a particular FDTD discretization.
 
-9. Optional bounded neural scorer
----------------------------------
-
-This optional component scores pairs; it is not a field solver or a substitute
-for confinement checks. It is disabled by default.
-
-Features and network
-~~~~~~~~~~~~~~~~~~~~
-
-The seven pair features are
-
-.. math::
-
-   x_{ij}=\left[O_{ij},\min(d_{ij},10),|\lambda_i|,|\lambda_j|,
-      \operatorname{Re}\lambda_j,\operatorname{Im}\lambda_j,
-      |f_{\rm new}-f_{\rm old}|/f_{\rm old}\right].
-
-No feature is power. The dataset helper uses the old eigenvalue as prediction;
-runtime can use a secant prediction. This feature-context difference matters
-when evaluating a trained model.
-
-Standardize with training statistics only:
-
-.. math::
-
-   z_\ell=(x_\ell-\mu_\ell)/s_\ell,\qquad
-   s_\ell=\max({\rm std}_{\rm train}(x_\ell),10^{-6}).
-
-The default hidden layer has 12 units:
-
-.. math::
-
-   h=\tanh(zW_1+b_1),\qquad
-   \ell=hW_2+b_2,\qquad p=(1+\exp(-\ell/T))^{-1}.
-
-Unsupported schemas, nonfinite standardized features or any
-:math:`|z_\ell|>8` cause baseline fallback.
-
-Training and calibration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Positive labels require equal independently supplied branch labels and eligible
-candidates at both endpoints. Unresolved labels are excluded; tracker IDs and
-eigenvalue order are not ground truth. Verified bound evanescent modes can be
-positive examples.
-
-Shuffle complete geometry IDs with the configured seed. For G groups,
-reserve :math:`\max(1,\lfloor G/5\rfloor)` each for test and calibration,
-and train on the remainder. At least three groups and both label classes
-in each split are required. All frequency/mesh variants of a geometry stay
-in the same split.
-
-L-BFGS-B minimizes regularized binary cross entropy:
-
-.. math::
-
-   L(\theta)=\frac{1}{N_{\rm train}}\sum_r
-      [\log(1+\exp(\ell_r))-y_r\ell_r]+10^{-4}\|\theta\|_2^2.
-
-The implementation uses ``logaddexp`` for stability. Set
-:math:`e_r=(\operatorname{sigmoid}(\ell_r)-y_r)/N_{\rm train}` and
-:math:`D_{r,:}=e_r W_2^\mathsf T\odot(1-h_r^2)`. Data gradients are
-
-.. math::
-
-   \nabla_{W_2}L=H^\mathsf T e,\quad \nabla_{b_2}L=\sum_r e_r,\quad
-   \nabla_{W_1}L=Z^\mathsf T D,\quad \nabla_{b_1}L=\sum_r D_{r,:}.
-
-Add :math:`2\cdot10^{-4}\theta` for regularization, including biases.
-After fitting weights, minimize unregularized calibration cross entropy
-over :math:`\log T\in[-3,3]`. Untouched test metrics are accuracy at
-threshold 0.5, the number of negative pairs with :math:`p\ge0.95`, and
-
-.. math::
-
-   {\rm Brier}=\frac{1}{N_{\rm test}}\sum_r(p_r-y_r)^2.
-
-These empirical metrics do not guarantee performance on new guide families.
-
-Bounded correction and fallback
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For ordinary scalar matching only, modify the cost to
-
-.. math::
-
-   C^{\rm neural}_{ij}=C_{ij}+w\,\operatorname{clip}
-      [-\log(p_{ij}+10^{-12}),0,2],\qquad w={\tt neural\_weight}.
-
-The correction lies in :math:`[0,2w]`, at most 0.1 with default w = 0.05.
-Hard masks, overlap exclusions, unmatched states, margins and eligibility
-checks still apply. Invalid probability shape/range and handled prediction
-errors produce a baseline-fallback event. Deterministic fallback means no
-neural correction, not bitwise reproducible ARPACK vectors at degeneracy.
-
-10. Defaults and source map
+9. Defaults and source map
 ---------------------------
 
 These are ``TrackingConfig`` defaults; examples may override them.
@@ -829,9 +734,6 @@ The material-first API sets both candidate counts from ``num_modes``.
    * - ``min_relative_step``
      - 1e-5
      - Relative interval refinement floor
-   * - ``neural_weight``
-     - 0.05
-     - Bounded optional pair-cost weight
 
 Verification solves count against the budget. Missing checks and unresolved
 intervals remain explicit; a larger budget does not itself improve a fixed
@@ -854,8 +756,6 @@ Authoritative implementation locations:
   reduced Maxwell operators and reconstruction.
 * `export.py <../../../../solvers/fdfd/mode_tracking/src/fdfd_mode_tracking/export.py>`_:
   orientation, eligibility enforcement and superposition terms.
-* `neural.py <../../../../solvers/fdfd/mode_tracking/src/fdfd_mode_tracking/neural.py>`_:
-  datasets, optimization, calibration and probabilities.
 * `contracts.py <../../../../solvers/fdfd/mode_tracking/src/fdfd_mode_tracking/contracts.py>`_
   and `visualization.py <../../../../solvers/fdfd/mode_tracking/src/fdfd_mode_tracking/visualization.py>`_:
   defaults, status storage and display semantics.

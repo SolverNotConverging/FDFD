@@ -17,8 +17,7 @@ and [API reference](../../../doc/solvers/fdfd/mode_tracking/API_REFERENCE.rst).
 - Return frequency-domain tracked modes suitable for downstream injection.
   Actual FDTD execution, current insertion and time-domain validation are outside
   this project scope, as clarified by the user.
-- Neural matching is optional, bounded, and disabled by default. Conventional
-  tracking remains independently usable.
+- Matching uses the conventional overlap/prediction and subspace algorithms only.
 
 ## Implemented data flow
 
@@ -113,37 +112,17 @@ refuses a cluster identity; explicit coefficients export raw eigenmode terms wit
 their separate beta values. This avoids presenting a near-degenerate mixture as
 one eigenmode. Exceptional-point continuation is not certified.
 
-## Optional neural workflow
-
-The seven-feature pair scorer uses phase-invariant overlap, eigenvalue prediction
-error, eigenvalue descriptors and relative frequency spacing. Its cost contribution
-is bounded; it does not override exclusions, verification or export decisions.
-Bad/unsupported/out-of-distribution scores record deterministic baseline fallback.
-
-The optional NumPy/SciPy MLP workflow accepts explicit independently verified
-reference labels, excludes unknowns, and splits by whole geometry IDs for
-training, temperature calibration and testing. Positive bound-evanescent examples
-are included. Neural model and dataset artifacts use safe data-only HDF5.
-
-The analytical training example generates TE1/TE2 plate data, an optional scorer,
-a split manifest and test metrics. This deliberately narrow demonstration is not
-evidence of improved performance on general geometries. A larger independent
-corpus and matched-budget baseline/hybrid study are still necessary before
-enabling neural scoring by default. A quality-prediction head and learned
-cluster scorer are future extensions.
-
 ## Files and use
 
 - Implementation: `src/fdfd_mode_tracking/` (contracts, metrics, adapter,
   assignment, sweep, export, persistence, material-first API, interactive
-  visualization, and optional neural module).
+  visualization).
 - Tests: [mode tracking tests](../../../tests/fdfd/mode_tracking/test_tracking.py)
-  and [neural tests](../../../tests/fdfd/mode_tracking/test_neural.py).
+  and [CPW example tests](../../../tests/fdfd/mode_tracking/test_coplanar_example.py).
 - Examples: [cutoff sweep](../../../examples/fdfd/mode_tracking/parallel_plate_cutoff.py),
-  [reference scorer](../../../examples/fdfd/mode_tracking/train_reference_scorer.py),
   [anisotropic crossing](../../../examples/fdfd/mode_tracking/anisotropic_pec_mode_crossing_1d.py),
   and [degenerate square guide](../../../examples/fdfd/mode_tracking/degenerate_square_waveguide_2d.py).
-- Generated datasets, models, sweeps and reports are under ignored `outputs/`.
+- Generated sweeps and reports are under ignored `outputs/`.
 
 The package is registered in the existing single-distribution build, pytest
 source discovery and curated public API documentation. See
@@ -171,8 +150,8 @@ Discovery runs at every accepted frequency, rather than only at the reference.
 Global track arrays are padded with -1 where a branch is absent, and historical
 field comparisons reacquire returning branches. New degenerate groups retain
 their basis transforms. Discovery origins and actual search shifts are archived.
-Spurious/non-bound samples and missing branches break the plotted lines; an
-unresolved identity is never joined merely to make a plot continuous. The
+Confidently tracked non-bound samples have dashed connections with x markers.
+Missing/numerically invalid samples and unresolved identity intervals break lines. The
 factory API retains explicit seeded tracking and enables automatic behavior
 with `seed_modes=None`.
 

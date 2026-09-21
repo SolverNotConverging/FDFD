@@ -11,9 +11,15 @@ REGISTRY = {cls.__name__: cls for cls in (GridData, ModeSet, PortSpec, TrackingC
             CandidateSet, TrackingSample, TrackedSweep, PortMode)}
 
 
+def _legacy_config(**values):
+    """Read pre-removal configuration without retaining the retired control."""
+    values.pop('neural_weight', None)
+    return TrackingConfig(**values)
+
+
 def save_sweep(sweep, path):
     with atomic_h5(path) as handle:
-        handle.attrs.update(format='cem-fdfd-tracking', schema='1.0',
+        handle.attrs.update(format='cem-fdfd-tracking', schema='1.1',
                             time_convention='exp(+i*omega*t)', units='SI')
         write_value(handle, 'sweep', sweep)
     return Path(path)
@@ -22,10 +28,13 @@ def save_sweep(sweep, path):
 def load_sweep(path):
     try:
         with h5py.File(path, 'r') as handle:
-            for key, expected in {'format': 'cem-fdfd-tracking', 'schema': '1.0',
+            for key, expected in {'format': 'cem-fdfd-tracking',
                                   'time_convention': 'exp(+i*omega*t)', 'units': 'SI'}.items():
                 if handle.attrs.get(key) != expected: raise ValueError(f'Invalid {key}.')
-            sweep = read_value(handle['sweep'], REGISTRY)
+            schema = handle.attrs.get('schema')
+            if schema not in ('1.0', '1.1'): raise ValueError('Invalid schema.')
+            registry = REGISTRY if schema == '1.1' else {**REGISTRY, 'TrackingConfig': _legacy_config}
+            sweep = read_value(handle['sweep'], registry)
             if not isinstance(sweep, TrackedSweep): raise ValueError('Expected TrackedSweep.')
             for sample in sweep.samples:
                 metadata = sample.candidates.result.metadata

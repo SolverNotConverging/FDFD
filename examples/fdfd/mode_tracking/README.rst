@@ -7,10 +7,6 @@ the degeneracy/crossing examples open an interactive Matplotlib viewer.
 
 * ``parallel_plate_cutoff.py`` tracks a physical PEC guide above and below
   cutoff, saves a complete HDF5 sweep, and exports a discrete port-profile table.
-* ``train_reference_scorer.py`` generates analytically labeled, mesh-verified
-  TE1/TE2 pairs, holds out whole plate geometries for calibration/testing, and
-  saves an optional scorer and evaluation report. This small plate-only dataset
-  is a workflow demonstration, not a qualification for other guide families.
 * ``tracked_parallel_plate_1d.py`` uses the material-first ``ModeTracker1D`` API,
   crosses cutoff, saves the sweep, and opens the interactive all-mode viewer.
 * ``tracked_dielectric_waveguide_2d.py`` uses ``ModeTracker2D`` for an open

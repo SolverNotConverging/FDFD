@@ -20,34 +20,12 @@ def eigen_clusters(values, gap):
     return groups
 
 
-def pair_features(overlaps, old_values, new_values, prediction, relative_step):
-    shape = overlaps.shape
-    scale = np.maximum(1., abs(old_values))[:, None]
-    return np.stack((overlaps, np.minimum(abs(new_values[None, :]-prediction[:, None])/scale, 10.),
-                     np.broadcast_to(abs(old_values)[:, None], shape),
-                     np.broadcast_to(abs(new_values)[None, :], shape),
-                     np.broadcast_to(new_values.real[None, :], shape),
-                     np.broadcast_to(new_values.imag[None, :], shape),
-                     np.full(shape, relative_step)), axis=-1)
-
-
 def assign_modes(old_vectors, new_vectors, old_values, new_values, config,
-                 *, prediction=None, allowed=None, scorer=None, relative_step=0.):
+                 *, prediction=None, allowed=None):
     overlap = np.clip(abs(old_vectors.conj().T @ new_vectors)**2, 0., 1.)
     prediction = old_values if prediction is None else prediction
     error = abs(new_values[None, :]-prediction[:, None])/np.maximum(1., abs(old_values))[:, None]
     cost = 1-overlap + .1*np.minimum(error**2, 4.)
-    neural_status = 'disabled'
-    if scorer is not None and config.neural_weight:
-        features = pair_features(overlap, old_values, new_values, prediction, relative_step)
-        try:
-            probability = np.asarray(scorer.predict(features))
-            if probability.shape != cost.shape or not np.isfinite(probability).all() or np.any((probability < 0) | (probability > 1)):
-                raise ValueError('invalid neural probabilities')
-            cost += config.neural_weight*np.clip(-np.log(probability+1e-12), 0, 2.)
-            neural_status = 'applied'
-        except (ValueError, TypeError, RuntimeError, AttributeError, FloatingPointError) as exc:
-            neural_status = 'baseline_fallback: '+str(exc)
     allowed = np.ones(cost.shape, bool) if allowed is None else np.asarray(allowed, bool)
     cost = np.where(allowed & (overlap >= config.overlap_min), cost, 1e6)
     count = len(old_values)
@@ -64,7 +42,7 @@ def assign_modes(old_vectors, new_vectors, old_values, new_values, config,
         margins[row] = float(alternative[ar, ac].sum()-best)
         if margins[row] >= config.assignment_margin:
             matches[row] = col
-    return matches, overlap, margins, neural_status
+    return matches, overlap, margins
 
 
 def match_clusters(old_vectors, new_vectors, old_values, new_values, config):
