@@ -8,7 +8,7 @@ plotting script for each view.
 
 FDFD remains the project's name, including its FEM solvers. Version 1.1.0 installs
 all eight solver families, shared libraries, and three native applications together
-from one Windows wheel. See the [release history](doc/development/release_history.md)
+from one wheel for Windows or macOS. See the [release history](doc/development/release_history.md)
 for changes since the earlier FDFD releases.
 
 [Installation](#installation) · [Quick start and GUI example](#quick-start) ·
@@ -43,24 +43,31 @@ outputs/      Ignored generated files
 
 ## Installation
 
-**Windows x64 with Python 3.12:** install the complete
+**Windows x64 or macOS 15+ on Apple silicon (arm64), with Python 3.12:** install the complete
 release wheel. It includes all solvers, the compiled periodic eigensolver, both
 native FEM viewers, and the Transmission Line Calculator, with their native
-libraries and Qt plugins. **Linux, macOS, and other Python
+libraries and Qt plugins. **Linux, other macOS architectures or versions, and other Python
 versions must [build from source](#build-from-source).**
 
 ### 1. Create the FDFD Python environment
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then create
-the project-local environment. FDFD pins Python 3.12 in `.python-version`, and uv
-downloads that interpreter when it is not already installed:
+the environment with Python 3.12. uv downloads that interpreter when it is not
+already installed. On Windows PowerShell:
 
 ```powershell
-uv venv
+uv venv --python 3.12
 .\.venv\Scripts\Activate.ps1
 ```
 
-Activation is optional when commands are prefixed with `uv run`.
+On macOS:
+
+```sh
+uv venv --python 3.12
+source .venv/bin/activate
+```
+
+Activate the environment before running the Python commands below.
 
 ### 2. Install everything with one command
 
@@ -70,10 +77,17 @@ Install the release into the FDFD environment. On Windows x64:
 uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.0/fdfd-1.1.0-cp312-cp312-win_amd64.whl"
 ```
 
-uv installs FDFD and its numerical Python dependencies. For the Windows wheel,
-no repository clone, compiler, Qt installer, vcpkg, or separate native-app installation is needed.
+On macOS 15+ with Apple silicon:
+
+```sh
+uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.0/fdfd-1.1.0-cp312-cp312-macosx_15_0_arm64.whl"
+```
+
+uv installs FDFD and its numerical Python dependencies. Both release wheels
+include the native runtimes, so no repository clone, compiler, Qt installer,
+or separate native-app installation is needed.
 The wheel is larger than the solver code because it includes the native runtimes.
-It is distributed through GitHub Releases; use the complete URL above.
+It is distributed through GitHub Releases; use the complete URL for your platform above.
 
 You can also download the wheel for your platform from the
 [FDFD v1.1.0 release](https://github.com/SolverNotConverging/FDFD/releases/tag/v1.1.0)
