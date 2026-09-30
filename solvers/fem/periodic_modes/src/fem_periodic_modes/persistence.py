@@ -1340,7 +1340,8 @@ def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
     build_roots = []
     if repository is not None:
         source_root = repository / "apps" / "fem_periodic_mode_viewer"
-        build_roots = [source_root / "build", *sorted(source_root.glob("build*")),
+        build_roots = [source_root / "build", source_root / "build" / "msvc-install",
+            *sorted(source_root.glob("build*")),
             *sorted(repository.glob("build*")), *sorted((repository / "outputs").glob("build*"))]
     configurations = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
     for build_root in build_roots:
@@ -1377,7 +1378,7 @@ def _viewer_candidates(executable_name: str) -> tuple[Path, ...]:
 
 
 def _build_runtime_environment(executable: Path) -> dict[str, str] | None:
-    """Return the MinGW DLL/plugin environment recorded by CMake."""
+    """Return the native DLL/plugin environment recorded by CMake."""
 
     bundled = bundled_environment(executable)
     if bundled is not None:

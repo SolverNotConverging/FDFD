@@ -1,4 +1,4 @@
-"""Fem Waveguide Modes. Public user API for version 1.0.0."""
+"""Fem Waveguide Modes. Public user API for version 1.1.0."""
 from .solver_1d import ModeSolver1D
 from .solver_2d import ModeSolver2D
 from .results import Mode
@@ -14,5 +14,5 @@ from .result_api import load_result
 from cem_common import NoResultError
 from cem_common import PersistenceError
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = ['ModeSolver1D', 'ModeSolver2D', 'Mode', 'ModeSet', 'SampledFields', 'BackendCapabilityError', 'ConfigurationError', 'FEMModeSolverError', 'GeometryError', 'MeshError', 'SolverError', 'load_result', 'NoResultError', 'PersistenceError']

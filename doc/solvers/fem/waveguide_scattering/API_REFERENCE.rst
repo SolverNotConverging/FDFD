@@ -1,7 +1,7 @@
 fem_waveguide_scattering user API
 =================================
 
-Version 1.0.0. This reference covers the deliberately supported user API.
+Version 1.1.0. This reference covers the deliberately supported user API.
 Implementation helpers are documented in their source modules.
 
 Workflow and units
@@ -42,6 +42,65 @@ Supported exports
 -----------------
 
 ``WaveguideScatteringSolver2D``, ``ScatteringResult``, ``FrequencySweepResult``, ``IncidentMode``, ``Mode``, ``ModeSet``, ``Diagnostic``, ``DiagnosticReport``, ``BackendCapabilityError``, ``ConfigurationError``, ``GeometryError``, ``MaterialError``, ``MeshError``, ``ModeProjectionError``, ``ModeSolverError``, ``SolverError``, ``ViewerError``, ``NoResultError``, ``PersistenceError``, ``load_result``.
+
+Radiation exports: ``ClosedContourFields``, ``LayeredExterior``, ``FarFieldResult``.
+
+Radiation and matched-port operations
+-----------------------------------------
+
+``WaveguideScatteringSolver2D.set_matched_ports`` with ``enabled=True`` selects matched
+modal maps on both z ends. ``enabled`` is a boolean; z PML and matched ports are
+mutually exclusive. Retained modes are matched; the remaining electric trace
+uses a local impedance approximation. The analytic incident mode excites the
+existing scattered-field source, with no duplicated port launch term.
+
+``WaveguideScatteringSolver2D.set_nf2ff_contour`` has keyword arguments
+``x_range=None``, ``z_range=None``, and ``exterior=None``. Bounds are increasing
+pairs of SI metres. Defaults are x/PML interfaces and modal monitor z planes.
+Call before meshing. All four sides must be complete and enclose perturbations.
+``exterior`` is a ``LayeredExterior`` or is inferred from the background geometry.
+An x side cannot coincide with a material interface or PEC sheet.
+
+``ScatteringResult.far_field(theta)`` returns a ``FarFieldResult`` from the saved
+``nf2ff`` contour. ``theta`` is a nonempty one-dimensional array of radians,
+measured from +x toward +z. Exact grazing angles raise ``ConfigurationError``.
+Exact internal layer critical angles are also rejected; offset those angles.
+An observation half-space with ``abs(ky) >= k`` has no propagating cylindrical
+far field and is rejected. Missing contour data raises ``ValueError``.
+
+``FarFieldResult`` contains ``theta``, complex Cartesian ``amplitude`` of shape
+``(3, N)``, complex ``s_amplitude`` and ``p_amplitude``, real ``power_density``
+(W/m/radian), and ``transverse_wavenumber`` (rad/m). The amplitude multiplies
+``exp(-i*q*rho-i*ky*y)/sqrt(rho)`` with SI ``rho``. Polarization s is perpendicular
+to the x-normal incidence plane; p is ``k_hat cross s``. At normal incidence,
+s is +y. ``integrated_power()`` uses periodic trapezoidal quadrature on an
+increasing, approximately uniform full-circle grid without a repeated endpoint.
+The high-level result also supplies ``directivity``, ``gain``, and
+``realized_gain`` arrays in linear 2D isotropic units, with
+``radiated_power``, ``accepted_power``, and ``incident_power`` denominators.
+For radiation intensity ``U=power_density`` in W/m/radian, these are
+``2*pi*U/P_radiated``, ``2*pi*U/(P_incident-P_reflected)``, and
+``2*pi*U/P_incident``. Partial-angle requests use a separate 720-angle
+full-circle transform to normalize directivity. The low-level contour result
+provides ``with_feed_powers(...)`` when feed powers are known. Zero radiation
+leaves directivity undefined (NaN); nonpositive accepted power leaves gain
+undefined (NaN). For dB use ``10*log10`` of positive ratios, with a 2D
+isotropic reference rather than a 3D spherical isotropic radiator.
+
+``LayeredExterior(interfaces, epsilon, mu, pec)`` stores N ordered x interfaces,
+N+1 isotropic relative material values, and N boolean PEC-sheet flags.
+The outer half-spaces are lossless positive-index materials; finite layers
+may be passive and lossy. ``ClosedContourFields`` stores the rectangular
+``x_range``, ``z_range``, ``coordinates`` and outward ``normals`` (2 by N),
+positive physical line ``weights`` (N), complex scattered ``E`` and ``H``
+(3 by N), ``frequency_hz``, ``ky``, and ``exterior``. It validates all four
+sides and provides ``far_field(theta)`` and scattered ``outward_power``.
+Its arrays and the exterior arrays are copied and read-only.
+
+The contour and kernel persist in the HDF5 result and in frequency-sweep cases.
+Saves with a contour also carry a 720-angle ``radiation_pattern`` group for
+the native viewer, including power density and all three ratios.
+Older archives without a contour remain loadable but cannot calculate a pattern.
 
 Solver construction and operations
 ----------------------------------

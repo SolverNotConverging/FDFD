@@ -1,6 +1,23 @@
 """Interactive dispersion and all-candidate field viewer."""
+from colorsys import hsv_to_rgb
+
 import numpy as np
 from .assignment import eigen_clusters
+
+
+def _track_colors(count):
+    """Deterministic, non-cycling colors indexed by global track ID."""
+    from matplotlib import colormaps
+
+    # Keep tab10's familiar colors, then use tab20's lighter variants.
+    base = colormaps['tab20'].colors
+    colors = [tuple(color) for color in (*base[::2], *base[1::2])][:count]
+    # Do not resample a discrete colormap: that repeats colors above 20.
+    # Golden-angle hues spread additional tracks around the color wheel;
+    # the palette prefix stays fixed when late branches increase the count.
+    colors.extend(hsv_to_rgb((i * .6180339887498949) % 1, .75, .8)
+                  for i in range(max(0, count-len(base))))
+    return tuple(colors)
 
 
 class ModeTrackingViewer:
@@ -19,6 +36,8 @@ class ModeTrackingViewer:
         self.quantity = quantity
         self.sample_index = 0
         self.frequencies = np.array([sample.frequency for sample in sweep.samples])
+        self.track_colors = _track_colors(max(len(sample.candidate_indices)
+                                              for sample in sweep.samples))
         max_modes = max(len(sample.candidates.result) for sample in sweep.samples)
         rows, columns = (1, max_modes) if max_modes <= 3 else (2, int(np.ceil(max_modes/2)))
         self.figure = plt.figure(figsize=(max(11, 3.1*columns), 5.2+2.5*rows))
@@ -109,7 +128,7 @@ class ModeTrackingViewer:
         return '*' if status['cutoff'] else ('D' if status['degenerate'] else 'o')
 
     def _draw_dispersion(self):
-        tracked_colors = [f'C{i%10}' for i in range(max(len(s.candidate_indices) for s in self.sweep.samples))]
+        tracked_colors = self.track_colors
         # Cutoff uncertainty concerns reconstruction, not necessarily identity.
         # Other unresolved intervals must not be bridged, including failed
         # primary solves that left no sample in the archive.
@@ -205,7 +224,8 @@ class ModeTrackingViewer:
             axis.set_visible(True)
             values, coordinates, label, shown_quantity = self._field_values(sample, candidate)
             if values.ndim == 1:
-                axis.plot(coordinates[0]*1e3, values, color=f'C{tracked.get(candidate, candidate)%10}')
+                color = self.track_colors[tracked[candidate]] if candidate in tracked else '.45'
+                axis.plot(coordinates[0]*1e3, values, color=color)
                 axis.set_xlabel(sample.candidates.result.mesh_data.axes[0]+' (mm)')
             else:
                 axis.pcolormesh(coordinates[0]*1e3, coordinates[1]*1e3, values.T,

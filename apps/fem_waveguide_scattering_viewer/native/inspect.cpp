@@ -21,11 +21,12 @@ int main(int argc, char* argv[]) {
         const auto resultMs = std::chrono::duration<double, std::milli>(loaded - indexed).count();
         std::cout << std::format(
             "kind={} results={} selected={} frequency_hz={:.12g}\n"
-            "samples={} modes={} s_parameters={} scene_triangles={}\n"
+            "samples={} modes={} s_parameters={} scene_triangles={} radiation_angles={}\n"
             "index_ms={:.3f} result_ms={:.3f} total_ms={:.3f}\n",
             index->kind, index->frequenciesHz.size(), resultIndex, result->frequencyHz,
             result->coordinates.columns, result->modes.size(), result->sParameters.size(),
             result->scene ? result->scene->triangles.columns : 0U,
+            result->radiation ? result->radiation->theta.size() : 0U,
             indexMs, resultMs, indexMs + resultMs);
         return 0;
     } catch (const std::exception& error) {

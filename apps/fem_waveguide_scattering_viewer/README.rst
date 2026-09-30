@@ -35,6 +35,13 @@ Features
 
 * Cached full-domain mesh view with material shading and saved boundary overlays.
 
+* Radiation tab for full-circle power density, directivity, gain, and realized
+  gain, shown in polar or Cartesian coordinates with linear or dB scales.
+  The angle is from +x toward +z. The gain ratios use a 2D isotropic line
+  radiator reference (``2*pi``), not 3D dBi. Gain uses incident minus reflected
+  power; realized gain uses incident power. Results without saved NF2FF data
+  show an explanatory empty state.
+
 * Physical plotting convention: z is the horizontal axis and x is the vertical axis.
 
 * Every nonzero vector arrow has the same screen length; viridis colour and a colorbar carry the original in-plane magnitude.
@@ -55,6 +62,10 @@ and ``time_convention=exp(+i*omega*t)``. The spatial field representation is
 retain the family-specific scene, mode, and S-parameter datasets. Old
 archives are rejected.
 
+The optional ``radiation_pattern`` subgroup holds 720 viewer-ready angles and
+metrics; the viewer loads it only for the selected result. Archives saved
+without that subgroup still open, but have no Radiation plot.
+
 Requirements
 ------------
 
@@ -71,38 +82,22 @@ Run standalone build and installer commands below from
 
 HDF5 2.x native-complex datasets are supported when building against HDF5 2.x. Builds against HDF5 1.x can read the older ``r``/``i`` compound-complex and real-valued datasets. Keep Qt and HDF5 built for the same compiler, architecture, and runtime as the viewer.
 
-Windows with MSVC and vcpkg
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Windows: MSVC and vcpkg
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
-for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
-deploying DLLs and Qt plugins, and connecting the native viewers to Python.
-The walkthrough's commands run from the repository root and install all three
-applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
-select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
-use the root walkthrough's CMake install/deployment commands for MSVC.
+Follow the `root Windows build instructions <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for MSVC, Ninja, and the ``x64-windows`` dependencies in ``C:\opt\vcpkg``.
+MinGW is not supported. The root build compiles all three apps.
 
-Windows with MinGW-w64 (MSYS2)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Install or update one consistent MinGW64 environment from PowerShell:
+To install just this app, run from the repository root:
 
 .. code-block:: powershell
 
-   & C:\msys64\usr\bin\pacman.exe -S --needed `
-     mingw-w64-x86_64-toolchain `
-     mingw-w64-x86_64-cmake `
-     mingw-w64-x86_64-ninja `
-     mingw-w64-x86_64-qt6-base `
-     mingw-w64-x86_64-hdf5
+   .\apps\fem_waveguide_scattering_viewer\scripts\install.ps1
 
-.. code-block:: powershell
-
-   $env:Path = "C:\msys64\mingw64\bin;$env:Path"
-   cmake --fresh -S . -B build -G Ninja `
-     -DCMAKE_BUILD_TYPE=Release `
-     -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
-   cmake --build build --parallel
+The installer initializes MSVC, builds in the app's ``build/msvc-install``
+directory, and deploys DLLs and Qt platform plugins. Pass ``-VcpkgRoot`` for a
+custom vcpkg installation or ``-Destination`` for a custom install location.
 
 macOS with AppleClang and Homebrew
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -147,10 +142,10 @@ The build creates:
 With a standalone build these are under ``build/`` (or a configuration subdirectory for Visual Studio). A repository-root build places them under ``outputs/build/apps/fem_waveguide_scattering_viewer/`` when using
 ``-B outputs/build`` at the root.
 
-Windows MinGW install
----------------------
+Windows MSVC install
+--------------------
 
-The provided PowerShell installer is specifically for the MSYS2 MinGW64 build. It builds Release binaries, deploys the Qt platform plugin, and copies the required MinGW/HDF5 runtime DLLs. The default location is ``%LOCALAPPDATA%\FEMWaveguideScatteringViewer``:
+The PowerShell installer builds with MSVC and vcpkg, then deploys Release DLLs and Qt platform plugins. The default location is ``%LOCALAPPDATA%\FEMWaveguideScatteringViewer``:
 
 .. code-block:: powershell
 
@@ -172,7 +167,7 @@ Open a file from the GUI:
 
    & "$env:LOCALAPPDATA\FEMWaveguideScatteringViewer\bin\fem-waveguide-scattering-viewer.exe"
 
-For an uninstalled build, use ``./build/fem-waveguide-scattering-viewer`` on Linux or ``open build/fem-waveguide-scattering-viewer.app`` on macOS. On Windows, run ``build\fem-waveguide-scattering-viewer.exe`` for MinGW or ``build-msvc\Release\fem-waveguide-scattering-viewer.exe`` for Visual Studio.
+For an uninstalled build, use ``./build/fem-waveguide-scattering-viewer`` on Linux or ``open build/fem-waveguide-scattering-viewer.app`` on macOS. On Windows, run ``build\msvc-install\fem-waveguide-scattering-viewer.exe`` after using the installer.
 
 Use **Open directory…** to choose a results folder. The **File** selector is then populated with every readable ``.h5`` and ``.hdf5`` file in that directory; selecting another entry loads it immediately. **Open HDF5…** remains available for choosing one file directly. A file supplied on the command line also populates the selector from its parent directory. Supplying a directory on the command line scans it and loads its first listed result.
 

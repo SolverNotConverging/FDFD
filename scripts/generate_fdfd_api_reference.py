@@ -52,7 +52,7 @@ def main():
         module=import_module(package)
         family=package.removeprefix('fdfd_')
         out=section(package+' user API','=')
-        out+='Version 1.0.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
+        out+='Version 1.1.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
         out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``cem_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nAll plotting and selection indices are zero-based.\n\n'
         for clsname,methods in solvers.items():

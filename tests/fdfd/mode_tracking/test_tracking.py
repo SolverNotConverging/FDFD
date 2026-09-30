@@ -712,6 +712,47 @@ def test_ineligible_tracks_are_dashed_and_keep_export_guard(display_sweep, confi
     assert _dispersion_edges(restored, style='--') == _dispersion_edges(viewer, style='--')
 
 
+@pytest.mark.parametrize('count', [0, 1, 12, 20, 32, 100])
+def test_track_palette_does_not_repeat_or_change_prefix(count):
+    from matplotlib.colors import is_color_like
+    from fdfd_mode_tracking.visualization import _track_colors
+
+    colors = _track_colors(count)
+    assert len(colors) == len(set(colors)) == count
+    assert all(is_color_like(color) for color in colors)
+    assert colors == _track_colors(count+10)[:count]
+
+
+def test_track_colors_follow_global_identity_and_survive_reload(display_sweep, tmp_path):
+    sweep = display_sweep
+    # One candidate at each frequency; a later branch has a high global ID.
+    # Missing IDs deliberately exercise palettes beyond tab10 and tab20.
+    tracks = [0, 0, 31, 31, 31]
+    for sample, track in zip(sweep.samples, tracks):
+        sample.candidate_indices = np.full(32, -1, dtype=int)
+        sample.candidate_indices[track] = 0
+        sample.phases = np.ones(32, dtype=complex)
+        sample.overlaps = np.ones(32)
+    sweep.samples[2].candidates.confinement = ('unresolved',)
+    viewer = sweep.plot(component='Ey')._mode_tracking_viewer
+    assert len(set(viewer.track_colors)) == 32
+    for axis in (viewer.phase_axis, viewer.decay_axis):
+        for track, color in enumerate(viewer.track_colors):
+            for label in (f'track {track}', f'track {track} (ineligible)'):
+                line = next(line for line in axis.lines if line.get_label() == label)
+                assert line.get_color() == color
+        markers = [line for line in axis.lines if line.get_picker() == 5]
+        assert [line.get_color() for line in markers] == [viewer.track_colors[t] for t in tracks]
+        warnings = [line for line in axis.lines if line.get_marker() == 'x']
+        assert len(warnings) == 1 and warnings[0].get_color() == 'red'
+    for si, track in enumerate(tracks):
+        viewer.select_frequency(si)
+        assert viewer.field_axes[0].lines[0].get_color() == viewer.track_colors[track]
+    sweep.save(tmp_path/'colors.h5')
+    restored = load_sweep(tmp_path/'colors.h5').plot(component='Ey')._mode_tracking_viewer
+    assert restored.track_colors == viewer.track_colors
+
+
 @pytest.mark.parametrize('gap_kind', ['numerical', 'absent', 'assignment', 'reverse', 'skipped_solve'])
 def test_diagnostic_lines_do_not_bridge_unreliable_identity(display_sweep, gap_kind):
     sweep = display_sweep

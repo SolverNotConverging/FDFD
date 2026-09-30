@@ -158,63 +158,29 @@ Optional 3D support requires VTK 9.2 or newer with ``GUISupportQt``, OpenGL2, an
 
 Standalone commands in the following sections run from the repository root.
 
-Windows: MSYS2 MinGW64
-----------------------
-
-Install one consistent MinGW64 toolchain. The extra header-only packages are dependencies of the current MSYS2 VTK package:
-
-.. code-block:: powershell
-
-   & C:\msys64\usr\bin\pacman.exe -S --needed `
-     mingw-w64-x86_64-toolchain `
-     mingw-w64-x86_64-cmake `
-     mingw-w64-x86_64-ninja `
-     mingw-w64-x86_64-qt6-base `
-     mingw-w64-x86_64-hdf5 `
-     mingw-w64-x86_64-vtk `
-     mingw-w64-x86_64-nlohmann-json `
-     mingw-w64-x86_64-fast_float `
-     mingw-w64-x86_64-utf8cpp `
-     mingw-w64-x86_64-exprtk
-
-Build and test from PowerShell:
-
-.. code-block:: powershell
-
-   $env:Path = "C:\msys64\mingw64\bin;$env:Path"
-   cmake --fresh -S apps/fem_periodic_mode_viewer -B outputs/build-periodic-mingw -G Ninja `
-     -DCMAKE_BUILD_TYPE=Release `
-     -DCMAKE_PREFIX_PATH=C:/msys64/mingw64 `
-     -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=AUTO
-   cmake --build outputs/build-periodic-mingw --parallel
-   ctest --test-dir outputs/build-periodic-mingw --output-on-failure
-
-The provided installer builds, installs, runs ``windeployqt``, and copies MinGW/HDF5/VTK runtime DLLs into ``%LOCALAPPDATA%\FEMPeriodicModeViewer``:
-
-.. code-block:: powershell
-
-   powershell -ExecutionPolicy Bypass -File .\apps\fem_periodic_mode_viewer\scripts\install.ps1
-
-This bundle is a local development convenience. Before redistributing it, review the licenses and deployment obligations of the bundled Qt, HDF5, VTK, and toolchain runtime libraries and include their required third-party notices.
-
-Pass ``-WithoutVtk`` for a 2D-only build or ``-Destination D:\Tools\FEMPeriodicModeViewer`` for another destination. Remove an installation with:
-
-.. code-block:: powershell
-
-   powershell -ExecutionPolicy Bypass -File .\apps\fem_periodic_mode_viewer\scripts\uninstall.ps1
-
-The uninstaller refuses to recursively remove a directory whose final name is not ``FEMPeriodicModeViewer``.
-
 Windows: MSVC and vcpkg
 -----------------------
 
-Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
-for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
-deploying DLLs and Qt plugins, and connecting the native viewers to Python.
-The walkthrough's commands run from the repository root and install all three
-applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
-select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
-use the root walkthrough's CMake install/deployment commands for MSVC.
+Follow the `root Windows build instructions <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for MSVC, Ninja, and the ``x64-windows`` dependencies in ``C:\opt\vcpkg``.
+MinGW is not supported. The root build compiles all three apps.
+
+To install just this app, run from the repository root:
+
+.. code-block:: powershell
+
+   .\apps\fem_periodic_mode_viewer\scripts\install.ps1
+
+The installer initializes MSVC, builds in the app's ``build/msvc-install``
+directory, and deploys DLLs and Qt platform plugins. Pass ``-VcpkgRoot`` for a
+custom vcpkg installation or ``-Destination`` for a custom install location.
+
+Pass ``-WithoutVtk`` for a 2D-only viewer.
+
+The default destination is ``%LOCALAPPDATA%\FEMPeriodicModeViewer``.
+Remove it with ``.\apps\fem_periodic_mode_viewer\scripts\uninstall.ps1``
+from the repository root. The uninstaller requires the destination's final
+directory name to be ``FEMPeriodicModeViewer``.
 
 macOS: AppleClang and Homebrew
 ------------------------------
@@ -332,4 +298,4 @@ Source layout
 
 * ``tests/`` — standalone HDF5 C-API fixtures and reader tests.
 
-* ``scripts/`` — MinGW64 install and guarded uninstall helpers.
+* ``scripts/`` — MSVC/vcpkg install and guarded uninstall helpers.

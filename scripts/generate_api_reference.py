@@ -111,7 +111,7 @@ def main():
     for package, spec in inventory.items():
         module = import_module(package)
         out = section(package+" user API", "=")
-        out += "Version 1.0.0. This reference covers the deliberately supported user API.\nImplementation helpers are documented in their source modules.\n\n"
+        out += "Version 1.1.0. This reference covers the deliberately supported user API.\nImplementation helpers are documented in their source modules.\n\n"
         out += section("Workflow and units")
         out += ("All lengths are in metres, frequencies in hertz, and constitutive values are relative.\n"
                 "Construction and configuration use keyword arguments. Call ``mesh()`` to build\n"

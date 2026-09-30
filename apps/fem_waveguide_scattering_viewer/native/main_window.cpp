@@ -136,6 +136,7 @@ void MainWindow::buildUi() {
     tabs_->addTab(buildVectorTab(FieldName::Electric, vector_[0]), QStringLiteral("2D Vector E"));
     tabs_->addTab(buildVectorTab(FieldName::Magnetic, vector_[1]), QStringLiteral("2D Vector H"));
     tabs_->addTab(buildMeshTab(), QStringLiteral("Mesh"));
+    tabs_->addTab(buildRadiationTab(), QStringLiteral("Radiation"));
     layout->addWidget(tabs_, 1);
     setCentralWidget(central);
 
@@ -250,6 +251,38 @@ QWidget* MainWindow::buildMeshTab() {
     auto* layout = new QVBoxLayout(tab);
     meshPlot_ = new PlotWidget(tab);
     layout->addWidget(meshPlot_, 1);
+    return tab;
+}
+
+QWidget* MainWindow::buildRadiationTab() {
+    auto* tab = new QWidget;
+    auto* layout = new QVBoxLayout(tab);
+    auto* row = new QHBoxLayout;
+    row->addWidget(new QLabel(QStringLiteral("Quantity:"), tab));
+    radiationMetric_ = new QComboBox(tab);
+    radiationMetric_->addItems({QStringLiteral("Power density"),
+        QStringLiteral("Directivity"), QStringLiteral("Gain"),
+        QStringLiteral("Realized gain")});
+    row->addWidget(radiationMetric_);
+    row->addWidget(new QLabel(QStringLiteral("Scale:"), tab));
+    radiationScale_ = new QComboBox(tab);
+    radiationScale_->addItems({QStringLiteral("Linear"), QStringLiteral("dB")});
+    row->addWidget(radiationScale_);
+    row->addWidget(new QLabel(QStringLiteral("View:"), tab));
+    radiationView_ = new QComboBox(tab);
+    radiationView_->addItems({QStringLiteral("Polar"), QStringLiteral("Cartesian")});
+    row->addWidget(radiationView_);
+    row->addStretch(1);
+    layout->addLayout(row);
+    radiationSummary_ = new QLabel(tab);
+    radiationSummary_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(radiationSummary_);
+    radiationPlot_ = new PlotWidget(tab);
+    layout->addWidget(radiationPlot_, 1);
+    const auto refresh = [this](int) { refreshRadiation(); };
+    connect(radiationMetric_, &QComboBox::currentIndexChanged, this, refresh);
+    connect(radiationScale_, &QComboBox::currentIndexChanged, this, refresh);
+    connect(radiationView_, &QComboBox::currentIndexChanged, this, refresh);
     return tab;
 }
 
@@ -372,6 +405,8 @@ void MainWindow::loadSelectedResult() {
             field == 0 ? QStringLiteral("2D Vector E") : QStringLiteral("2D Vector H"),
             QStringLiteral("Loading selected result…"));
     }
+    radiationPlot_->setEmpty(QStringLiteral("Radiation pattern"),
+                             QStringLiteral("Loading selected result…"));
     statusBar()->showMessage(QStringLiteral("Loading frequency %1…").arg(selected));
 
     auto* watcher = new QFutureWatcher<LoadOutcome>(this);
@@ -537,6 +572,78 @@ void MainWindow::refreshMesh() {
     meshPlot_->setMesh(result_);
 }
 
+void MainWindow::refreshRadiation() {
+    if (!result_ || !result_->radiation) {
+        radiationSummary_->setText(QString());
+        radiationPlot_->setEmpty(QStringLiteral("Radiation pattern"),
+            result_ ? QStringLiteral("No saved radiation pattern. Save a result with an NF2FF contour.")
+                    : QStringLiteral("Open an HDF5 result file"));
+        return;
+    }
+    const auto& pattern = *result_->radiation;
+    const int metric = radiationMetric_->currentIndex();
+    const std::vector<double>* source = &pattern.powerDensity;
+    QString label = QStringLiteral("Power density (W/m/rad)");
+    if (metric == 1) {
+        source = &pattern.directivity;
+        label = QStringLiteral("Directivity (2D isotropic reference)");
+    } else if (metric == 2) {
+        source = &pattern.gain;
+        label = QStringLiteral("Gain (2D isotropic reference)");
+    } else if (metric == 3) {
+        source = &pattern.realizedGain;
+        label = QStringLiteral("Realized gain (2D isotropic reference)");
+    }
+    const bool decibels = radiationScale_->currentIndex() == 1;
+    PlotSeries series;
+    series.label = radiationMetric_->currentText();
+    series.x = pattern.theta;
+    series.y.reserve(source->size());
+    double peak = 0.0;
+    for (const auto value : *source) {
+        if (std::isfinite(value)) {
+            peak = std::max(peak, value);
+        }
+    }
+    if (peak <= 0.0) {
+        radiationSummary_->setText(QStringLiteral("This quantity is undefined or has no radiated power."));
+        radiationPlot_->setEmpty(QStringLiteral("Radiation pattern"),
+                                 QStringLiteral("No defined radiation values"));
+        return;
+    }
+    if (decibels) {
+        const double floor = std::max(peak * 1e-6, 1e-300);
+        for (const double value : *source) {
+            series.y.push_back(std::isfinite(value)
+                ? 10.0 * std::log10(std::max(value, floor))
+                : std::numeric_limits<double>::quiet_NaN());
+        }
+        label = metric == 0 ? QStringLiteral("Power density (dB re 1 W/m/rad)")
+            : QStringLiteral("dB relative to 2D isotropic radiator");
+    } else {
+        series.y = *source;
+    }
+    const auto title = QStringLiteral("%1 · peak %2%3")
+        .arg(radiationMetric_->currentText())
+        .arg(peak, 0, 'g', 5)
+        .arg(metric == 0 ? QStringLiteral(" W/m/rad") : QString());
+    radiationSummary_->setText(
+        QStringLiteral("P radiated %1 W/m   ·   P accepted %2 W/m   ·   P incident %3 W/m   ·   peak %4 dB")
+            .arg(pattern.radiatedPower, 0, 'g', 5)
+            .arg(pattern.acceptedPower, 0, 'g', 5)
+            .arg(pattern.incidentPower, 0, 'g', 5)
+            .arg(10.0 * std::log10(peak), 0, 'f', 2));
+    if (radiationView_->currentIndex() == 0) {
+        radiationPlot_->setPolar(std::move(series), title, label, decibels);
+    } else {
+        for (auto& theta : series.x) {
+            theta *= 180.0 / std::numbers::pi;
+        }
+        radiationPlot_->setLines({std::move(series)}, title,
+            QStringLiteral("Angle from +x toward +z (degrees)"), label);
+    }
+}
+
 void MainWindow::setResultControlsEnabled(bool enabled) {
     for (auto& controls : modal_) {
         controls.mode->setEnabled(enabled);
@@ -547,6 +654,9 @@ void MainWindow::setResultControlsEnabled(bool enabled) {
         controls.part->setEnabled(enabled);
         controls.quantity->setEnabled(enabled);
     }
+    radiationMetric_->setEnabled(enabled);
+    radiationScale_->setEnabled(enabled);
+    radiationView_->setEnabled(enabled);
 }
 
 void MainWindow::refreshCurrentTab() {
@@ -568,6 +678,9 @@ void MainWindow::refreshCurrentTab() {
         break;
     case 5:
         refreshMesh();
+        break;
+    case 6:
+        refreshRadiation();
         break;
     default:
         break;

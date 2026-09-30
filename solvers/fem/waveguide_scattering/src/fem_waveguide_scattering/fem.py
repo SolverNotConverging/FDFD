@@ -118,6 +118,9 @@ class MixedFEMSystem:
         default_factory=lambda: np.empty(0, dtype=np.int64)
     )
     quadrature_order: int = 4
+    port_facets: NDArray[np.int64] = field(
+        default_factory=lambda: np.empty(0, dtype=np.int64)
+    )
 
     def __post_init__(self) -> None:
         try:
@@ -140,6 +143,12 @@ class MixedFEMSystem:
         if facets.size and np.any(self.basis.mesh.f2t[1, facets] < 0):
             raise ValueError("internal_pec_facets must contain interior mesh facets only.")
         object.__setattr__(self, "internal_pec_facets", facets)
+        ports = np.asarray(self.port_facets)
+        if ports.ndim != 1 or (ports.size and ports.dtype.kind not in "iu"):
+            raise ValueError("port_facets must be a one-dimensional integer array.")
+        if ports.size and not np.isin(ports, self.basis.mesh.boundary_facets()).all():
+            raise ValueError("port_facets must contain outer boundary facets only.")
+        object.__setattr__(self, "port_facets", np.unique(ports).astype(np.int64))
 
     @property
     def ndofs(self) -> int:
@@ -151,7 +160,9 @@ class MixedFEMSystem:
     def pec_dofs(self) -> NDArray[np.integer]:
         """Outer and internal DOFs imposing zero tangential electric field."""
 
-        outer = np.asarray(self.basis.get_dofs().all(), dtype=np.int64)
+        # Keep corner constraints belonging to the remaining PEC walls.
+        facets = np.setdiff1d(self.basis.mesh.boundary_facets(), self.port_facets)
+        outer = np.asarray(self.basis.get_dofs(facets=facets).all(), dtype=np.int64)
         if not self.internal_pec_facets.size:
             return outer
         internal = np.asarray(

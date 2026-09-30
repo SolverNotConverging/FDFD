@@ -16,6 +16,8 @@ from numpy.typing import ArrayLike, NDArray
 
 from .modes import Mode
 from .scene import Scene2D
+from .farfield import ClosedContourFields, FarFieldResult
+from .exceptions import ConfigurationError
 
 
 ComplexArray = NDArray[np.complex128]
@@ -155,8 +157,29 @@ class ScatteringResult(ResultMixin):
     modes: tuple[Mode, ...] = field(default_factory=tuple)
     h5_path: Path | None = None
     scene: Scene2D | None = None
+    nf2ff: ClosedContourFields | None = None
+
+    def far_field(self, theta: ArrayLike) -> FarFieldResult:
+        """Closed-contour radiation and 2D antenna patterns at angles in radians.
+
+        A complete angular grid supplies its own directivity normalization.
+        Partial-angle requests use a separate 720-point full-circle transform.
+        """
+        if self.nf2ff is None:
+            raise ValueError("No NF2FF contour was saved; call solver.set_nf2ff_contour() before meshing.")
+        field = self.nf2ff.far_field(theta)
+        try:
+            radiated = field.integrated_power()
+        except ConfigurationError:
+            samples = 720
+            complete = (np.arange(samples) + .5) * 2*np.pi/samples
+            radiated = self.nf2ff.far_field(complete).integrated_power()
+        return field.with_feed_powers(radiated_power=radiated,
+            incident_power=self.incident_power, reflected_power=self.reflected_power)
 
     def __post_init__(self) -> None:
+        if self.nf2ff is not None and not isinstance(self.nf2ff, ClosedContourFields):
+            raise ValueError("nf2ff must be ClosedContourFields or None.")
         if self.scene is not None and not isinstance(self.scene, Scene2D):
             raise ValueError("scene must be a Scene2D instance or None.")
         raw_coordinates = np.asarray(self.coordinates)
@@ -291,6 +314,11 @@ class ScatteringResult(ResultMixin):
             object.__setattr__(self, "frequency_hz", frequency_hz)
         if self.ky is not None:
             object.__setattr__(self, "ky", _finite_real_scalar(self.ky, "ky"))
+        if self.nf2ff is not None:
+            if self.frequency_hz is None or not np.isclose(self.frequency_hz, self.nf2ff.frequency_hz, rtol=1e-12, atol=0):
+                raise ValueError("NF2FF contour frequency must match the scattering result.")
+            if self.ky is None or not np.isclose(self.ky, self.nf2ff.ky, rtol=1e-12, atol=0):
+                raise ValueError("NF2FF contour ky must match the scattering result.")
 
         try:
             modes = tuple(self.modes)

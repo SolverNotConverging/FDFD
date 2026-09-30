@@ -400,6 +400,39 @@ SceneData readScene(hid_t resultGroup) {
             std::move(lines)};
 }
 
+RadiationPattern readRadiationPattern(hid_t resultGroup) {
+    auto group = openGroup(resultGroup, "radiation_pattern");
+    if (readStringAttribute(group.get(), "definition") != "2d-isotropic-2pi") {
+        fail("Unsupported radiation-pattern normalization.");
+    }
+    RadiationPattern pattern;
+    pattern.theta = readDoubles(group.get(), "theta");
+    pattern.powerDensity = readDoubles(group.get(), "power_density");
+    pattern.directivity = readDoubles(group.get(), "directivity");
+    pattern.gain = readDoubles(group.get(), "gain");
+    pattern.realizedGain = readDoubles(group.get(), "realized_gain");
+    pattern.radiatedPower = readDoubleAttribute(group.get(), "radiated_power");
+    pattern.acceptedPower = readDoubleAttribute(group.get(), "accepted_power");
+    pattern.incidentPower = readDoubleAttribute(group.get(), "incident_power");
+    const auto count = pattern.theta.size();
+    if (count < 4 || pattern.powerDensity.size() != count
+        || pattern.directivity.size() != count || pattern.gain.size() != count
+        || pattern.realizedGain.size() != count || !(pattern.incidentPower > 0)
+        || !std::isfinite(pattern.radiatedPower) || !std::isfinite(pattern.acceptedPower)
+        || !std::isfinite(pattern.incidentPower)) {
+        fail("Radiation-pattern arrays or powers are inconsistent.");
+    }
+    for (std::size_t sample = 0; sample < count; ++sample) {
+        if (!std::isfinite(pattern.theta[sample])
+            || !std::isfinite(pattern.powerDensity[sample])
+            || pattern.powerDensity[sample] < 0
+            || (sample > 0 && !(pattern.theta[sample] > pattern.theta[sample - 1]))) {
+            fail("Radiation pattern contains invalid angles or power density.");
+        }
+    }
+    return pattern;
+}
+
 std::string resultName(std::size_t index) {
     return std::format("{:06d}", index);
 }
@@ -481,6 +514,10 @@ std::shared_ptr<ResultData> H5Reader::loadResult(const FileIndex& index,
     if (hasLink(group.get(), "scene")) {
         scene = readScene(group.get());
     }
+    std::optional<RadiationPattern> radiation;
+    if (hasLink(group.get(), "radiation_pattern")) {
+        radiation = readRadiationPattern(group.get());
+    }
     std::optional<double> ky;
     if (hasAttribute(group.get(), "ky")) {
         ky = readDoubleAttribute(group.get(), "ky");
@@ -493,6 +530,7 @@ std::shared_ptr<ResultData> H5Reader::loadResult(const FileIndex& index,
     result->sParameters = index.sParameters[resultIndex];
     result->modes = std::move(modes);
     result->scene = std::move(scene);
+    result->radiation = std::move(radiation);
     return result;
 }
 

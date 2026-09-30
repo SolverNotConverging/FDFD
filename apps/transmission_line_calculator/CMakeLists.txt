@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(TransmissionLineCalculator VERSION 1.0.0 LANGUAGES CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/WindowsToolchain.cmake")
+
+project(TransmissionLineCalculator VERSION 1.1.0 LANGUAGES CXX)
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NativeRuntime.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -14,35 +16,6 @@ if(DEFINED Eigen3_VERSION AND Eigen3_VERSION VERSION_LESS 3.4)
     message(FATAL_ERROR "Transmission Line Calculator requires Eigen 3.4 or newer")
 endif()
 
-# MSYS2's MinGW64 Gmsh 4.15.2-2 export references a DLL in lib/ even
-# though the package installs it in bin/, and its interface contains paths
-# from the package build machine. Predeclaring the one expected imported
-# target makes gmshConfig.cmake accept it without loading that broken export.
-# Keep the find_package call so a missing package/configuration still fails
-# normally, and remove this compatibility block once the package is fixed.
-if(MINGW)
-    find_path(TL_GMSH_INCLUDE_DIR NAMES gmsh.h REQUIRED)
-    find_library(TL_GMSH_IMPORT_LIBRARY NAMES gmsh libgmsh REQUIRED)
-    find_file(TL_GMSH_RUNTIME_LIBRARY NAMES libgmsh.dll PATH_SUFFIXES bin REQUIRED)
-    foreach(gmsh_artifact IN ITEMS
-        TL_GMSH_INCLUDE_DIR
-        TL_GMSH_IMPORT_LIBRARY
-        TL_GMSH_RUNTIME_LIBRARY
-    )
-        if(NOT EXISTS "${${gmsh_artifact}}")
-            message(FATAL_ERROR "Required Gmsh artifact is missing: ${${gmsh_artifact}}")
-        endif()
-    endforeach()
-    if(NOT TARGET gmsh::shared)
-        add_library(gmsh::shared SHARED IMPORTED GLOBAL)
-        set_target_properties(gmsh::shared PROPERTIES
-            IMPORTED_IMPLIB "${TL_GMSH_IMPORT_LIBRARY}"
-            IMPORTED_LOCATION "${TL_GMSH_RUNTIME_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${TL_GMSH_INCLUDE_DIR}"
-        )
-    endif()
-endif()
-
 # Gmsh packages do not all export the same CMake target name. Prefer their
 # package configuration, then fall back to the library and header installed by
 # system package managers and the official SDK. Homebrew's exported target can
@@ -51,6 +24,11 @@ endif()
 # runtime dependencies itself.
 if(NOT APPLE)
     find_package(gmsh CONFIG QUIET)
+    if(WIN32 AND NOT EXISTS "${gmsh_DIR}/fdfd-meshing-enabled.txt")
+        message(FATAL_ERROR
+            "The calculator requires Gmsh with meshing enabled. Install gmsh[occ] "
+            "with --overlay-ports=<FDFD>/vcpkg-ports; see the root README.")
+    endif()
     foreach(gmsh_candidate IN ITEMS gmsh::shared gmsh::lib gmsh::gmsh gmsh)
         if(TARGET "${gmsh_candidate}")
             set(TL_GMSH_TARGET "${gmsh_candidate}")
@@ -145,7 +123,7 @@ if(BUILD_TESTING)
     if(TL_BUILD_EXAMPLES)
         add_test(NAME tl-line-comparison-gui COMMAND tl-line-comparison --smoke-test)
         set_tests_properties(tl-line-comparison-gui PROPERTIES
-            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
             TIMEOUT 120
         )
     endif()
@@ -174,7 +152,7 @@ if(BUILD_TESTING)
         COMMAND transmission-line-calculator --smoke-test
     )
     set_tests_properties(tl-gui-smoke PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 30
     )
 
@@ -183,7 +161,7 @@ if(BUILD_TESTING)
         COMMAND transmission-line-calculator --calculate-smoke-test
     )
     set_tests_properties(tl-gui-calculate-smoke PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 120
     )
 

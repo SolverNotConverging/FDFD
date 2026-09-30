@@ -19,7 +19,7 @@ from delocate.wheeltools import InWheel
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WHEEL_NAME = "fdfd-1.0.0-cp312-cp312-macosx_15_0_arm64.whl"
+WHEEL_NAME = "fdfd-1.1.0-cp312-cp312-macosx_15_0_arm64.whl"
 APPLICATIONS = (
     "transmission-line-calculator",
     "fem-periodic-mode-viewer",

@@ -24,7 +24,7 @@ DESIGN_FREQUENCY_HZ = 20.0e9
 CORE_EPS_R = 10.2
 
 
-def build_simulation(frequency_hz: float = DESIGN_FREQUENCY_HZ) -> scattering.WaveguideScatteringSolver2D:
+def build_simulation(frequency_hz: float = DESIGN_FREQUENCY_HZ, *, matched_ports: bool = False) -> scattering.WaveguideScatteringSolver2D:
     """Return the grounded-slab slot configuration at one frequency."""
 
     substrate = Material(name="grounded slab", epsilon=CORE_EPS_R)
@@ -33,7 +33,10 @@ def build_simulation(frequency_hz: float = DESIGN_FREQUENCY_HZ) -> scattering.Wa
     ground = simulation.add_geometry(background=True, name='ground_plane', shape=shapes.Segment(start=(0.0, simulation.z_range[0]), end=(0.0, simulation.z_range[1])), material=materials.PEC)
     simulation.add_slot(name='ground_slot', geometry=ground, z_range=(-1.0 * MM, 1.0 * MM))
     simulation.add_pml(target_reflection=1e-08, thickness=4.0 * MM, direction='x')
-    simulation.add_pml(target_reflection=1e-08, thickness=6.0 * MM, direction='z')
+    if matched_ports:
+        simulation.set_matched_ports()
+    else:
+        simulation.add_pml(target_reflection=1e-08, thickness=6.0 * MM, direction='z')
     simulation.set_monitors(left=-20.0 * MM, right=20.0 * MM)
     return simulation
 

@@ -1,4 +1,4 @@
-"""Check Python-written 1.0 archives with native inspectors and offscreen viewers."""
+"""Check Python-written archives with native inspectors and offscreen viewers."""
 from cem_common import Material, SurfaceImpedance, materials, shapes
 import argparse
 import os
@@ -20,7 +20,7 @@ def main():
         matches=[path for path in args.build.resolve().rglob(name) if path.is_file()]
         if len(matches)!=1:raise RuntimeError(f'Expected one {name} in {args.build}; found {len(matches)}.')
         from fem_periodic_modes.persistence import _build_runtime_environment
-        environment=dict(_build_runtime_environment(matches[0]) or os.environ, QT_QPA_PLATFORM='offscreen')
+        environment=dict(_build_runtime_environment(matches[0]) or os.environ, QT_QPA_PLATFORM='minimal' if os.name=='nt' else 'offscreen')
         subprocess.run([str(matches[0]),*map(str,arguments)],env=environment,check=True,timeout=45,
             **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {}))
     from fem_periodic_modes import PeriodicModeSolver2D,PeriodicModeSolver3D,PeriodicSweepResult

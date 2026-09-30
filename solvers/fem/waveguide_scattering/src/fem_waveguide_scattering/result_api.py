@@ -30,7 +30,7 @@ def _load_case(path, index, frequency):
         result = ScatteringResult(coordinates=data.coordinates, E_incident=data.E_incident,
             E_scattered=data.E_scattered, H_incident=data.H_incident, H_scattered=data.H_scattered,
             s_parameters=data.s_parameters, **data.powers, **{key: data.metadata[key] for key in names},
-            frequency_hz=data.frequency_hz, ky=data.ky, modes=tuple(modes), scene=data.scene)
+            frequency_hz=data.frequency_hz, ky=data.ky, modes=tuple(modes), scene=data.scene, nf2ff=data.nf2ff)
         object.__setattr__(result, "_mesh_snapshot", read_value(group["mesh_snapshot"], {"MeshSnapshot": MeshSnapshot}))
         return result
 

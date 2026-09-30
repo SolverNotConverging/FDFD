@@ -56,6 +56,11 @@ The two dispersion panels show ``Re(neff)`` and ``-Im(neff)`` so valid evanescen
 modes remain visible below cutoff. ``E`` and ``H`` display cell-centred vector
 magnitudes; Cartesian components support magnitude, real, imaginary, and phase.
 
+Each global track ID has a distinct, deterministic color shared by both
+dispersion panels, its candidate markers, and its 1D field curves. Colors do not
+repeat after ten or twenty tracks, or change with frequency or eligibility.
+Untracked candidates remain gray; 2D field maps retain their scalar colormap.
+
 ``plot()`` creates the same interactive figure without calling ``pyplot.show``.
 Loaded sweeps retain everything needed by the viewer. Branches first returned at
 a later frequency receive new track IDs. An absent mode has candidate index -1;

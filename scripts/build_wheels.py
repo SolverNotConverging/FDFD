@@ -17,10 +17,10 @@ SOURCE_ROOTS = (
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/dist")
-    parser.add_argument("--native-bundle", type=Path, default=ROOT / "outputs/native-release-1.0.0/FDFD-1.0.0-windows-x64")
+    parser.add_argument("--native-bundle", type=Path, default=ROOT / "outputs/native-release-1.1.0/FDFD-1.1.0-windows-x64")
     args = parser.parse_args()
     if sys.platform != "win32" or sys.version_info[:2] != (3, 12):
-        parser.error("The complete 1.0.0 release wheel targets Windows x64 / CPython 3.12.")
+        parser.error("The complete 1.1.0 release wheel targets Windows x64 / CPython 3.12.")
     if sys.maxsize <= 2**32:
         parser.error("A 64-bit interpreter is required.")
     output = args.output.resolve()
@@ -38,14 +38,14 @@ def main():
         check=True,
     )
     wheels = list(output.glob("*.whl"))
-    if len(wheels) != 1 or wheels[0].name != "fdfd-1.0.0-cp312-cp312-win_amd64.whl":
+    if len(wheels) != 1 or wheels[0].name != "fdfd-1.1.0-cp312-cp312-win_amd64.whl":
         raise SystemExit(f"Unexpected release artifacts: {wheels}")
     with zipfile.ZipFile(wheels[0]) as archive:
         members = set(archive.namelist())
         expected = set()
         for source in SOURCE_ROOTS:
             expected.update(path.relative_to(source).as_posix() for path in source.rglob("*.py"))
-        packaged = {name for name in members if name.endswith(".py")}
+        packaged = {name for name in members if name.endswith(".py") and not name.startswith("fdfd/native/")}
         if packaged != expected:
             raise SystemExit(f"Wheel source mismatch: {packaged ^ expected}")
         if not any(name.startswith("periodic_eigensolver/_cython_kernels") and name.endswith(".pyd") for name in members):

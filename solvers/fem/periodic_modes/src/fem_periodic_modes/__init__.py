@@ -1,4 +1,4 @@
-"""Fem Periodic Modes. Public user API for version 1.0.0."""
+"""Fem Periodic Modes. Public user API for version 1.1.0."""
 from .solver_2d import PeriodicModeSolver2D
 from .solver_3d import PeriodicModeSolver3D
 from .results import PeriodicMode
@@ -15,5 +15,5 @@ from cem_common.errors import SolverError
 from .result_api import load_result
 from cem_common import NoResultError
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = ['PeriodicModeSolver2D', 'PeriodicModeSolver3D', 'PeriodicMode', 'PeriodicModeSet', 'PeriodicSampledFields', 'PeriodicSweepResult', 'BackendCapabilityError', 'ConfigurationError', 'FEMPeriodicSolverError', 'GeometryError', 'MeshError', 'PersistenceError', 'SolverError', 'load_result', 'NoResultError']

@@ -25,7 +25,7 @@ packages = ('cem_common', 'fem_adaptivity', 'periodic_eigensolver',
     'fem_waveguide_modes', 'fem_periodic_modes', 'fem_waveguide_scattering', 'fem_electrostatics')
 for name in packages:
     module = import_module(name)
-    assert module.__version__ == '1.0.0', name
+    assert module.__version__ == '1.1.0', name
     assert Path(module.__file__).is_relative_to(Path(sys.prefix)), module.__file__
 
 from periodic_eigensolver import native_backend_available, solve_generalized
@@ -156,7 +156,7 @@ for name, arguments in (
     else:
         env['PATH'] = str(exe.parent) + os.pathsep + '/usr/bin:/bin'
         creationflags = 0
-    env['QT_QPA_PLATFORM'] = 'offscreen'
+    env['QT_QPA_PLATFORM'] = 'minimal' if os.name == 'nt' else 'offscreen'
     subprocess.run([str(exe), *arguments], env=env, check=True, timeout=90,
                    creationflags=creationflags)
 subprocess.run([sys.executable, '-I', '-m', 'fdfd', 'info'], check=True)
@@ -175,9 +175,9 @@ def main():
     args = parser.parse_args()
     wheels = sorted(args.dist.resolve().glob('*.whl'))
     if sys.platform == 'win32' and platform.machine().lower() in ('amd64', 'x86_64'):
-        expected = 'fdfd-1.0.0-cp312-cp312-win_amd64.whl'
+        expected = 'fdfd-1.1.0-cp312-cp312-win_amd64.whl'
     elif sys.platform == 'darwin' and platform.machine() == 'arm64':
-        expected = 'fdfd-1.0.0-cp312-cp312-macosx_15_0_arm64.whl'
+        expected = 'fdfd-1.1.0-cp312-cp312-macosx_15_0_arm64.whl'
     else:
         raise SystemExit('Wheel qualification supports Windows x64 and macOS Apple silicon.')
     if len(wheels) != 1 or wheels[0].name != expected:

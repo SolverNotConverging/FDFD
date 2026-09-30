@@ -39,7 +39,7 @@ def _cmake_cache_candidates(executable: Path) -> tuple[Path, ...]:
 
 
 def _build_runtime_environment(executable: Path) -> dict[str, str] | None:
-    """Return the MinGW runtime environment recorded by the build tree."""
+    """Return the native runtime environment recorded by the build tree."""
 
     bundled = bundled_environment(executable)
     if bundled is not None:
@@ -105,7 +105,8 @@ def _build_candidates(repository: Path) -> list[Path]:
     for directory in sorted(viewer_source.glob("build*")):
         if directory.is_dir():
             build_directories.append(directory)
-    for directory in sorted(repository.glob("build*")):
+    for directory in (*sorted(repository.glob("build*")),
+                      *sorted((repository / "outputs").glob("build*"))):
         if not directory.is_dir():
             continue
         # A root CMake build places this target in its subproject directory.
@@ -116,7 +117,7 @@ def _build_candidates(repository: Path) -> list[Path]:
     build_directories.extend(
         (
             viewer_source / "build",
-            viewer_source / "build-mingw",
+            viewer_source / "build" / "msvc-install",
             viewer_source / "build-msvc",
             viewer_source / "build-linux",
             viewer_source / "build-macos",

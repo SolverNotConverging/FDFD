@@ -1,7 +1,7 @@
 fem_periodic_modes user API
 ===========================
 
-Version 1.0.0. This reference covers the deliberately supported user API.
+Version 1.1.0. This reference covers the deliberately supported user API.
 Implementation helpers are documented in their source modules.
 
 Workflow and units

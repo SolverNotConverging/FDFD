@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FEMPeriodicModeViewer VERSION 1.0.0 LANGUAGES C CXX)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/WindowsToolchain.cmake")
+
+project(FEMPeriodicModeViewer VERSION 1.1.0 LANGUAGES C CXX)
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NativeRuntime.cmake")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -286,7 +288,7 @@ if(BUILD_TESTING)
         COMMAND fem-periodic-mode-viewer --smoke-test "${FEM_PERIODIC_BAD_LINKS_FILE}")
     set_tests_properties(fem-periodic-gui-reject-bad-links PROPERTIES
         FIXTURES_REQUIRED periodic_bad_links_fixture
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 20
         WILL_FAIL TRUE)
 
@@ -294,7 +296,7 @@ if(BUILD_TESTING)
         COMMAND fem-periodic-mode-viewer --smoke-test "${FEM_PERIODIC_TEST_FILE}")
     set_tests_properties(fem-periodic-gui-offscreen PROPERTIES
         FIXTURES_REQUIRED periodic_fixture
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 20
     )
 
@@ -321,7 +323,7 @@ if(BUILD_TESTING)
         COMMAND fem-periodic-mode-viewer --smoke-test "${FEM_PERIODIC_DIRECTORY_SMOKE_DIR}")
     set_tests_properties(fem-periodic-gui-directory-offscreen PROPERTIES
         FIXTURES_REQUIRED periodic_directory_smoke_fixture
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 20)
 
     add_test(NAME fem-periodic-copy-remove-on-exit-fixture
@@ -335,7 +337,7 @@ if(BUILD_TESTING)
             "${FEM_PERIODIC_REMOVE_ON_EXIT_FILE}")
     set_tests_properties(fem-periodic-gui-remove-source-on-exit PROPERTIES
         FIXTURES_REQUIRED periodic_remove_on_exit_fixture
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 20)
     add_test(NAME fem-periodic-copy-immediate-remove-fixture
         COMMAND ${CMAKE_COMMAND} -E copy
@@ -348,7 +350,7 @@ if(BUILD_TESTING)
             "${FEM_PERIODIC_IMMEDIATE_REMOVE_FILE}")
     set_tests_properties(fem-periodic-gui-immediate-close-removes-source PROPERTIES
         FIXTURES_REQUIRED periodic_immediate_remove_fixture
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
         TIMEOUT 20)
 
     add_test(NAME fem-periodic-create-3d-fixture
@@ -420,14 +422,14 @@ if(BUILD_TESTING)
             COMMAND fem-periodic-mode-viewer --smoke-test "${FEM_PERIODIC_3D_FILE}")
         set_tests_properties(fem-periodic-gui-vtk-offscreen PROPERTIES
             FIXTURES_REQUIRED periodic_3d_fixture
-            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
             TIMEOUT 20
         )
         add_test(NAME fem-periodic-gui-vtk-slice-offscreen
             COMMAND fem-periodic-mode-viewer --smoke-test-slice "${FEM_PERIODIC_3D_FILE}")
         set_tests_properties(fem-periodic-gui-vtk-slice-offscreen PROPERTIES
             FIXTURES_REQUIRED periodic_3d_fixture
-            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            ENVIRONMENT "${FDFD_QT_TEST_ENVIRONMENT}"
             TIMEOUT 20
         )
     endif()

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FDFD VERSION 1.0.0 LANGUAGES C CXX)
+include(cmake/WindowsToolchain.cmake)
+
+project(FDFD VERSION 1.1.0 LANGUAGES C CXX)
 
 # A Command Line Tools upgrade can leave an obsolete, incomplete libc++ header
 # directory beside the compiler. Apple Clang prefers that directory over the
@@ -79,17 +81,6 @@ else()
     set(FDFD_NATIVE_LICENSE_INSTALL_DIR "share/licenses")
 endif()
 
-if(SKBUILD AND MINGW)
-    get_filename_component(FDFD_NATIVE_RUNTIME_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-    file(GENERATE
-        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fdfd-native-runtime.txt"
-        CONTENT "${FDFD_NATIVE_RUNTIME_DIR}\n"
-    )
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fdfd-native-runtime.txt"
-        DESTINATION "${FDFD_NATIVE_INSTALL_DIR}"
-    )
-endif()
-
 include(cmake/NativeRuntime.cmake)
 
 # Release builds may reuse an already qualified, self-contained runtime bundle.
@@ -107,6 +98,17 @@ option(CEM_BUILD_FEM_PERIODIC_MODE_VIEWER
 if(FDFD_NATIVE_BUNDLE)
     if(NOT EXISTS "${FDFD_NATIVE_BUNDLE}/bin")
         message(FATAL_ERROR "FDFD_NATIVE_BUNDLE is incomplete: ${FDFD_NATIVE_BUNDLE}")
+    endif()
+    if(WIN32)
+        if(NOT EXISTS "${FDFD_NATIVE_BUNDLE}/build-manifest.json")
+            message(FATAL_ERROR "Windows native bundles require an MSVC build-manifest.json. Repackage the native apps.")
+        endif()
+        file(READ "${FDFD_NATIVE_BUNDLE}/build-manifest.json" FDFD_BUNDLE_MANIFEST)
+        string(JSON FDFD_BUNDLE_TOOLCHAIN ERROR_VARIABLE FDFD_BUNDLE_ERROR
+            GET "${FDFD_BUNDLE_MANIFEST}" toolchain)
+        if(FDFD_BUNDLE_ERROR OR NOT FDFD_BUNDLE_TOOLCHAIN MATCHES "^MSVC")
+            message(FATAL_ERROR "Windows native bundles must use MSVC. MinGW bundles are not supported; rebuild and repackage the apps.")
+        endif()
     endif()
     install(DIRECTORY "${FDFD_NATIVE_BUNDLE}/"
         DESTINATION "fdfd/native"

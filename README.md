@@ -1,12 +1,12 @@
-# FDFD v1.0.0
+# FDFD v1.1.0
 
-FDFD v1.0.0 intentionally uses simplified Python syntax to make
+FDFD v1.1.0 intentionally uses simplified Python syntax to make
 electromagnetic calculations easier to set up and explore. Define a solver, define
 reusable materials, add geometry, mesh, solve, and inspect the results in a GUI.
 You can change field components, modes, and display options without writing a new
 plotting script for each view.
 
-FDFD remains the project's name, including its FEM solvers. Version 1.0.0 installs
+FDFD remains the project's name, including its FEM solvers. Version 1.1.0 installs
 all eight solver families, shared libraries, and three native applications together
 from one Windows wheel. See the [release history](doc/development/release_history.md)
 for changes since the earlier FDFD releases.
@@ -43,10 +43,10 @@ outputs/      Ignored generated files
 
 ## Installation
 
-**Windows x64 or Apple-silicon macOS 15+ with Python 3.12:** install the complete
+**Windows x64 with Python 3.12:** install the complete
 release wheel. It includes all solvers, the compiled periodic eigensolver, both
 native FEM viewers, and the Transmission Line Calculator, with their native
-libraries and Qt plugins. **Linux, Intel Mac, earlier macOS, and other Python
+libraries and Qt plugins. **Linux, macOS, and other Python
 versions must [build from source](#build-from-source).**
 
 ### 1. Create the FDFD Python environment
@@ -67,23 +67,17 @@ Activation is optional when commands are prefixed with `uv run`.
 Install the release into the FDFD environment. On Windows x64:
 
 ```sh
-uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-win_amd64.whl"
+uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.0/fdfd-1.1.0-cp312-cp312-win_amd64.whl"
 ```
 
-On Apple-silicon macOS 15 or later:
-
-```sh
-uv pip install "https://github.com/SolverNotConverging/FDFD/releases/download/v1.0.0/fdfd-1.0.0-cp312-cp312-macosx_15_0_arm64.whl"
-```
-
-uv installs FDFD and its numerical Python dependencies. No repository clone,
-compiler, Qt installer, vcpkg, or separate native-app installation is needed.
+uv installs FDFD and its numerical Python dependencies. For the Windows wheel,
+no repository clone, compiler, Qt installer, vcpkg, or separate native-app installation is needed.
 The wheel is larger than the solver code because it includes the native runtimes.
 It is distributed through GitHub Releases; use the complete URL above.
 
 You can also download the wheel for your platform from the
-[FDFD v1.0.0 release](https://github.com/SolverNotConverging/FDFD/releases/tag/v1.0.0)
-and install the local file with `uv pip install path/to/fdfd-1.0.0-….whl`.
+[FDFD v1.1.0 release](https://github.com/SolverNotConverging/FDFD/releases/tag/v1.1.0)
+and install the local file with `uv pip install path/to/fdfd-1.1.0-….whl`.
 Use a fresh environment if you previously installed the separate internal packages,
 so multiple distributions do not own the same Python files.
 
@@ -239,11 +233,11 @@ is needed. The checkout defaults to Python 3.12; source builds support 3.11–3.
 
 ### Native prerequisites
 
-Use a C++20 compiler and standard library supporting `std::format`: MinGW or MSVC
+Use a C++20 compiler and standard library supporting `std::format`: MSVC
 on Windows, Apple Clang on macOS, or GCC/Clang on Linux. Install CMake 3.24+ and
 a suitable build tool (Ninja, Make, or Visual Studio), plus the libraries and
 development headers below. All native dependencies must match the compiler and
-architecture; MSVC and MinGW libraries cannot be mixed.
+architecture. Windows builds require x64 MSVC and vcpkg; MinGW is not supported.
 
 | Library | Required components |
 |---|---|
@@ -258,39 +252,73 @@ Install these through your platform's package manager or SDK installer. The
 Python `gmsh` and `h5py` packages do not replace the native development libraries.
 Without a compatible VTK installation, the periodic viewer builds with 2D support.
 
-For MSVC, use an **x64 Visual Studio Developer PowerShell** and a
-[vcpkg installation](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started).
-Install the dependencies once, then point the build at that installation:
+### Windows: MSVC and vcpkg (step by step)
+
+Install Visual Studio or Build Tools with **Desktop development with C++**, the
+Windows SDK, and **C++ CMake tools for Windows** (CMake and Ninja). Windows builds
+default to MSVC and `C:\opt\vcpkg` with the `x64-windows` triplet. **MinGW/MSYS2
+builds are not supported**, including standalone app builds.
+
+If vcpkg is not installed yet, run once from PowerShell:
 
 ```powershell
-$vcpkgRoot = "C:\dev\vcpkg"
-& "$vcpkgRoot/vcpkg.exe" install "qtbase[concurrent,widgets,opengl]" hdf5 eigen3 "gmsh[occ]" ftxui "vtk[qt,opengl]" --triplet x64-windows
-$env:CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows"
-uv sync
+git clone https://github.com/microsoft/vcpkg.git C:\opt\vcpkg
+& C:\opt\vcpkg\bootstrap-vcpkg.bat
 ```
 
-For an MSYS2 MinGW64 checkout on Windows, use the repository helper before the
-first `uv` build. It selects Ninja/GCC, exposes the matching dependency prefix,
-checks the Gmsh import library and runtime DLL, and archives a stale MSVC CMake
-cache rather than attempting to reuse it:
+Install the native dependencies (including the periodic viewer's 3D support):
 
 ```powershell
-. .\scripts\setup_mingw_windows.ps1
+& C:\opt\vcpkg\vcpkg.exe install "qtbase[core,concurrent,widgets,opengl,png]" "hdf5[core,hl,zlib]" eigen3 "gmsh[occ]" ftxui "vtk[core,qt,opengl]" --triplet x64-windows --overlay-ports=./vcpkg-ports
+```
+
+Run that command from the repository root: the Gmsh overlay enables mesh
+generation, which the upstream vcpkg port disables. Keep the overlay when updating
+dependencies. The selected HDF5 features support uncompressed and gzip archives;
+optional SZIP compression is not included.
+
+From the repository root, initialize the build shell and install everything:
+
+```powershell
+. .\scripts\setup_msvc_windows.ps1
 uv sync --reinstall-package fdfd
+uv run python -m fdfd info
 ```
 
-Use `.\scripts\setup_mingw_windows.ps1 -PersistUser` once, then restart PyCharm,
-when IDE-created processes should inherit the same MinGW settings. The helper
-defaults to `C:\msys64`; pass `-MsysRoot` for another installation. On macOS or
-Linux, make the compiler and dependency installation discoverable in the build
-shell and set `CMAKE_PREFIX_PATH` when libraries are outside the usual search
-paths. Platform-specific prerequisite details are in
-the [periodic viewer](apps/fem_periodic_mode_viewer/README.rst),
+The helper imports the x64 Visual Studio environment, selects MSVC/Ninja, and
+replaces inherited MinGW compiler, prefix, and CMake arguments for this shell.
+It does not change persistent user settings. Run it in each new build terminal;
+launch your IDE from that shell if the IDE runs builds. Use `-VcpkgRoot D:\vcpkg`
+for another installation. Python builds use a new `build/msvc/` cache, so old
+MinGW caches are not reused.
+
+To build and test all native apps without rebuilding Python:
+
+```powershell
+. .\scripts\setup_msvc_windows.ps1
+cmake -S . -B outputs/build-msvc -G Ninja -DCMAKE_BUILD_TYPE=Release -DFEM_PERIODIC_MODE_VIEWER_WITH_VTK=ON
+cmake --build outputs/build-msvc --parallel
+ctest --test-dir outputs/build-msvc -C Release --output-on-failure
+cmake --install outputs/build-msvc --config Release --prefix "$env:LOCALAPPDATA/FDFD"
+```
+
+CMake installs the runtime DLLs, MSVC runtime, and Qt platform plugins alongside
+the apps. The per-app `scripts/install.ps1` helpers also use MSVC/vcpkg and accept
+`-VcpkgRoot`; see the app guides for their destinations. When configuring without
+the helper, use an x64 Developer PowerShell and explicitly set
+`-DCMAKE_TOOLCHAIN_FILE=.../scripts/buildsystems/vcpkg.cmake` for a custom vcpkg root.
+Always start a fresh build directory when changing compiler or dependency triplet.
+
+On macOS or Linux, make the compiler and dependency installation discoverable in
+the build shell and set `CMAKE_PREFIX_PATH` for nonstandard library locations.
+Platform-specific details are in the
+[periodic viewer](apps/fem_periodic_mode_viewer/README.rst),
 [scattering viewer](apps/fem_waveguide_scattering_viewer/README.rst), and
 [calculator](apps/transmission_line_calculator/README.rst) guides.
 
-Keep the native libraries installed: a local source build uses their runtime
-files. If changing compilers in the same checkout, use a fresh build directory,
+Keep the dependency installation for future builds and tests. Windows app
+installs include their runtime DLLs; other platforms use the selected native
+library installation. If changing compilers in the same checkout, use a fresh build directory,
 for example `uv sync --reinstall-package fdfd --config-setting build-dir=build/new-toolchain`.
 To rebuild after native source changes, use `uv sync --reinstall-package fdfd`
 with the same toolchain settings.
@@ -321,22 +349,24 @@ Python tests, or select a family such as `python -m pytest tests/fem/electrostat
 Native C++ tests remain with their CMake applications.
 
 On the Windows release build machine, build/test C++ first, then prepare the
-runtimes and build the single complete wheel:
+runtimes and build the single complete wheel. Keep vcpkg's `downloads` cache:
+the packaging finish step verifies and preserves its exact source archives,
+along with the installed SPDX records, licenses, and matching port recipes.
+The v1.1.0 Windows bundle includes its own dependency source index.
 
-```sh
-python scripts/qualify_native.py
-python scripts/package_native_windows.py --phase stage
+```powershell
+. .\scripts\setup_msvc_windows.ps1
+python scripts/qualify_native.py --build build/msvc/apps
+python scripts/package_native_windows.py --phase stage --build build/msvc/apps
 python scripts/package_native_windows.py --phase finish
 uv run python scripts/build_wheels.py
 python scripts/qualify_wheels.py --fresh
 python scripts/check_documentation.py
 python scripts/qualify_examples.py
-python scripts/qualify_native.py
 ```
 
-On Apple-silicon macOS 15+, `uv sync` installs `delocate`; build the complete
-wheel with its Qt plugins and relocated native libraries, then qualify it in a
-clean environment:
+On Apple-silicon macOS 15+, source builders can use `delocate` to build a
+complete wheel with Qt plugins and relocated native libraries, then qualify it:
 
 ```sh
 uv run python scripts/build_macos_wheel.py
@@ -347,8 +377,9 @@ Wheel qualification installs the platform wheel outside the checkout and checks 
 
 The [documentation index](doc/README.rst) contains all Python solver and library
 guides and API references. Solver and library READMEs are short navigation pages.
-Native dependency licenses, source archives, and build recipes are recorded in
-the [source index](doc/development/native_dependency_sources.md) and inside the wheel.
+The [Windows native dependency guide](doc/development/native_dependency_sources.md)
+explains source and recipe provenance. Release bundles include exact licenses,
+source archives, recipe hashes, and a source index.
 
 Shared library guides: [materials, shapes, and errors](doc/libraries/cem_common/guide.rst),
 [FEM adaptivity](doc/libraries/fem_adaptivity/guide.rst), and

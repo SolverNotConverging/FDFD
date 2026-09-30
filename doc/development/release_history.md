@@ -4,7 +4,14 @@ Changes to [FDFD](https://github.com/SolverNotConverging/FDFD),
 the project name retained as the collection expands to include FEM. Historical entries summarize
 the [published releases](https://github.com/SolverNotConverging/FDFD/releases)
 and their tagged commits. Examples in older release notes use the API of that
-release; use the root README and current solver guides for 1.0 syntax.
+release; use the root README and current solver guides for current syntax.
+
+## 1.1.0 — Radiation calculations and MSVC Windows builds — 2026-09-30
+
+- Adds near-to-far-field radiation calculations for the FEM waveguide scattering solver, including closed-contour far fields, matched ports, saved result data, and radiation views in the native scattering viewer.
+- Improves mode tracking visualization and periodic-mode result persistence.
+- Switches all three Windows native applications to x64 MSVC with vcpkg at `C:\opt\vcpkg`. MinGW builds are no longer supported. Windows release packaging includes the qualified native runtimes and dependency source provenance.
+- Provides a complete Windows x64 / CPython 3.12 wheel. Linux and macOS users build this version from source; the macOS wheel attached to v1.0.0 remains available for that historical release.
 
 ## 1.0.0 — FDFD — 2026-09-06
 

@@ -1,0 +1,30 @@
+if(POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)
+endif()
+set(plugins @deploy_plugins@)
+set(destination "${CMAKE_INSTALL_PREFIX}/@FDFD_NATIVE_INSTALL_DIR@")
+file(GET_RUNTIME_DEPENDENCIES
+    EXECUTABLES "@deploy_executable@"
+    LIBRARIES ${plugins}
+    DIRECTORIES "@deploy_bin@"
+    RESOLVED_DEPENDENCIES_VAR resolved
+    UNRESOLVED_DEPENDENCIES_VAR unresolved
+    CONFLICTING_DEPENDENCIES_PREFIX conflicts
+    PRE_EXCLUDE_REGEXES "api-ms-.*" "ext-ms-.*"
+    POST_EXCLUDE_REGEXES ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\\\][Ss][Yy][Ss][Tt][Ee][Mm]32[/\\\\].*")
+foreach(name IN LISTS conflicts_FILENAMES)
+    set(paths_var "conflicts_${name}")
+    set(paths "${${paths_var}}")
+    # vcpkg's app-local deployment copies the same DLL beside the build-tree
+    # executable. Either copy is suitable for this install; take the first.
+    list(GET paths 0 selected)
+    list(APPEND resolved "${selected}")
+endforeach()
+if(unresolved)
+    message(FATAL_ERROR "Unresolved runtime dependencies: ${unresolved}")
+endif()
+file(INSTALL ${resolved} DESTINATION "${destination}" TYPE SHARED_LIBRARY)
+if(plugins)
+    file(INSTALL ${plugins} DESTINATION "${destination}/platforms" TYPE SHARED_LIBRARY)
+    file(WRITE "${destination}/qt.conf" "[Paths]\nPrefix=.\nPlugins=.\n")
+endif()

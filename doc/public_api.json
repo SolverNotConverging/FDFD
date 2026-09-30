@@ -21,11 +21,11 @@
   },
   "fem_waveguide_scattering": {
     "path": "solvers/fem/waveguide_scattering",
-    "exports": ["WaveguideScatteringSolver2D", "ScatteringResult", "FrequencySweepResult", "IncidentMode", "Mode", "ModeSet", "Diagnostic", "DiagnosticReport", "BackendCapabilityError", "ConfigurationError", "GeometryError", "MaterialError", "MeshError", "ModeProjectionError", "ModeSolverError", "SolverError", "ViewerError", "NoResultError", "PersistenceError", "load_result"],
+    "exports": ["WaveguideScatteringSolver2D", "ScatteringResult", "FrequencySweepResult", "IncidentMode", "Mode", "ModeSet", "Diagnostic", "DiagnosticReport", "BackendCapabilityError", "ConfigurationError", "GeometryError", "MaterialError", "MeshError", "ModeProjectionError", "ModeSolverError", "SolverError", "ViewerError", "NoResultError", "PersistenceError", "load_result", "ClosedContourFields", "LayeredExterior", "FarFieldResult"],
     "solvers": {
-      "WaveguideScatteringSolver2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "add_slot", "set_material", "set_shape", "set_material_field", "set_boundary", "add_pml", "set_monitors", "remove", "mesh", "solve_modes", "set_incident_mode", "solve", "sweep", "show"]
+      "WaveguideScatteringSolver2D": ["__init__", "add_geometry", "add_rectangle", "add_circle", "add_polygon", "add_slot", "set_material", "set_shape", "set_material_field", "set_boundary", "add_pml", "set_monitors", "set_matched_ports", "set_nf2ff_contour", "remove", "mesh", "solve_modes", "set_incident_mode", "solve", "sweep", "show"]
     },
-    "results": {"ScatteringResult": ["plot", "show", "save", "S", "check", "deembed"], "FrequencySweepResult": ["plot", "show", "save", "S"]},
+    "results": {"ScatteringResult": ["plot", "show", "save", "S", "check", "deembed", "far_field"], "FrequencySweepResult": ["plot", "show", "save", "S"]},
     "documentation": "doc/solvers/fem/waveguide_scattering"
   },
   "fem_electrostatics": {

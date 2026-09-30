@@ -200,6 +200,8 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
         self._mesh_size: float | None = None
         self._material_actual: MaterialFunction | None = None
         self._material_background: MaterialFunction | None = None
+        self._matched_ports = False
+        self._nf2ff_request = None
 
 
     @classmethod
@@ -284,7 +286,37 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
         clone.pml = self.pml
         clone.left_monitor = self.left_monitor
         clone.right_monitor = self.right_monitor
+        clone._matched_ports = self._matched_ports
+        clone._nf2ff_request = self._nf2ff_request
         return clone
+
+    def set_matched_ports(self, enabled: bool = True) -> None:
+        """Use outgoing modal maps at both z ends instead of longitudinal PML.
+
+        Retained modes are matched; unrepresented traces use a local impedance
+        complement. The transverse x PML remains necessary for open guides.
+        Configure this before meshing; omit the z PML when enabled.
+        """
+        if not isinstance(enabled, bool):
+            raise ConfigurationError("enabled must be a boolean.")
+        self._matched_ports = enabled
+        self._result = None
+
+    def set_nf2ff_contour(self, *, x_range=None, z_range=None, exterior=None) -> None:
+        """Capture a closed rectangular scattered-field Huygens contour.
+
+        All four sides are included, including waveguide crossings. Defaults
+        are the physical x/PML interfaces and the two modal monitor planes.
+        The layered exterior is inferred from geometry, or supplied explicitly
+        as a LayeredExterior for callback materials. Call before mesh().
+        """
+        from .farfield import LayeredExterior
+        if exterior is not None and not isinstance(exterior, LayeredExterior):
+            raise ConfigurationError("exterior must be a LayeredExterior.")
+        xr = None if x_range is None else bounds(x_range, "NF2FF x_range")
+        zr = None if z_range is None else bounds(z_range, "NF2FF z_range")
+        self._nf2ff_request = (xr, zr, exterior)
+        self._invalidate()
 
 
     def _invalidate(self) -> None:
@@ -791,6 +823,12 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
                 )
         x_partitions, z_partitions = self.pml.interfaces(self.x_span, self.z_span)
         z_partitions = tuple((*z_partitions, self.left_monitor, self.right_monitor))
+        from .nf2ff import validate_contour
+        contour = validate_contour(self)
+        if contour is not None:
+            exterior_cuts = [x for x in contour[2].interfaces if self.x_span[0] < x < self.x_span[1]]
+            x_partitions = tuple(sorted(set((*x_partitions, *contour[0], *exterior_cuts))))
+            z_partitions = tuple(sorted(set((*z_partitions, *contour[1]))))
         self.mesh_data = generate_mesh(
             self.geometry,
             max_element_size=selected,
@@ -1303,8 +1341,10 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
             raise ConfigurationError("solve_modes() and set_incident_mode() are required before solve().")
         if self.incident.side != "left":
             raise NotImplementedError("The initial integrated scattering solve supports left incidence.")
-        if self.pml.z is None:
-            raise ConfigurationError("Outgoing scattering requires add_pml(z=...).")
+        if self.pml.z is None and not self._matched_ports:
+            raise ConfigurationError("Outgoing scattering requires z PML or set_matched_ports().")
+        if self.pml.z is not None and self._matched_ports:
+            raise ConfigurationError("Matched z ports and longitudinal z PML are mutually exclusive.")
         self._choose_monitors()
         assert self.left_monitor is not None and self.right_monitor is not None
 
@@ -1323,6 +1363,11 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
             internal_pec_facets=self.mesh_data.actual_pec_facets,
             element_order=self._solver_options.element_order,
         )
+        port_info = {"port_boundary": "pml"}
+        if self._matched_ports:
+            from .ports import apply_matched_ports
+            system, port_info = apply_matched_ports(system, tuple(self.modes),
+                condition_limit=self._solver_options.projection_condition_limit)
         scattered = solve_scattered_pec(
             system,
             eps_background=self._eps_background,
@@ -1334,6 +1379,8 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
             residual_tolerance=self._solver_options.tolerance,
         )
         coefficients = scattered.field.coefficients
+        from .nf2ff import capture_contour
+        nf2ff = capture_contour(self, system, coefficients)
         self._adaptive_system = system
         self._adaptive_coefficients = coefficients
 
@@ -1553,6 +1600,7 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
             ndofs=system.ndofs,
             solve_info={
                 **dict(scattered.field.solve_info),
+                **port_info,
                 "angle_degrees": self.angle,
                 "ky": self.ky,
                 "length_scale": length_scale,
@@ -1595,6 +1643,7 @@ class WaveguideScatteringSolver2D(ScatteringSceneMixin, ElectromagneticSolverMix
             ky=self.ky,
             modes=forward_modes,
             scene=self._visualization_scene(),
+            nf2ff=nf2ff,
         )
         return result
 

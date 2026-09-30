@@ -117,7 +117,7 @@ def test_launch_viewer_passes_build_runtime_environment(
     assert captured == [([str(executable), str(tmp_path.resolve())], environment)]
 
 
-@pytest.mark.skipif(viewer.os.name != "nt", reason="MinGW runtime is Windows-only")
+@pytest.mark.skipif(viewer.os.name != "nt", reason="Windows native runtime is Windows-only")
 def test_build_runtime_environment_uses_cmake_toolchain(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -162,7 +162,7 @@ def test_build_runtime_environment_uses_cmake_toolchain(
     assert environment["QT_QPA_PLATFORM_PLUGIN_PATH"] == str(platform_plugins)
 
 
-@pytest.mark.skipif(viewer.os.name != "nt", reason="MinGW runtime is Windows-only")
+@pytest.mark.skipif(viewer.os.name != "nt", reason="Windows native runtime is Windows-only")
 def test_build_runtime_environment_finds_editable_build_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

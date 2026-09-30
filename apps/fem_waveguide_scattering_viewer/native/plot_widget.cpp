@@ -122,6 +122,35 @@ void PlotWidget::setLines(std::vector<PlotSeries> series, QString title, QString
     update();
 }
 
+void PlotWidget::setPolar(PlotSeries series, QString title, QString radialLabel,
+                          bool decibels) {
+    double maximum = -std::numeric_limits<double>::infinity();
+    double minimum = std::numeric_limits<double>::infinity();
+    for (const double value : series.y) {
+        if (std::isfinite(value)) {
+            maximum = std::max(maximum, value);
+            minimum = std::min(minimum, value);
+        }
+    }
+    if (!std::isfinite(maximum)) {
+        setEmpty(std::move(title), QStringLiteral("No defined radiation values"));
+        return;
+    }
+    kind_ = PlotKind::Polar;
+    series_ = {std::move(series)};
+    title_ = std::move(title);
+    yLabel_ = std::move(radialLabel);
+    radialMax_ = maximum > 0.0 || decibels ? maximum : 1.0;
+    radialMin_ = decibels ? std::max(minimum, maximum - 40.0) : 0.0;
+    if (!(radialMax_ > radialMin_)) {
+        radialMax_ = radialMin_ + 1.0;
+    }
+    selectedX_.reset();
+    result_.reset();
+    arrows_.clear();
+    update();
+}
+
 void PlotWidget::setModal(const ModeData& mode, FieldName field, int component,
                           ScalarQuantity quantity) {
     const auto& matrix = field == FieldName::Electric ? mode.electric : mode.magnetic;
@@ -396,6 +425,76 @@ void PlotWidget::drawLines(QPainter& painter, const QRectF& area) const {
     }
 }
 
+void PlotWidget::drawPolar(QPainter& painter, const QRectF& area) const {
+    if (series_.empty()) {
+        return;
+    }
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    const auto center = area.center();
+    const double radius = 0.43 * std::min(area.width(), area.height());
+    painter.setPen(QPen(QColor(210, 210, 210), 1));
+    for (int tick = 1; tick <= 4; ++tick) {
+        const double r = radius * static_cast<double>(tick) / 4.0;
+        painter.drawEllipse(center, r, r);
+        const double value = radialMin_ + (radialMax_ - radialMin_) * tick / 4.0;
+        painter.drawText(QPointF(center.x() + 6.0, center.y() - r - 3.0),
+                         numberLabel(value));
+    }
+    for (int angle = 0; angle < 360; angle += 45) {
+        const double radians = angle * std::numbers::pi / 180.0;
+        const QPointF endpoint(center.x() + radius * std::cos(radians),
+                               center.y() - radius * std::sin(radians));
+        painter.drawLine(center, endpoint);
+    }
+    painter.setPen(QColor(45, 45, 45));
+    painter.drawText(QPointF(center.x() + radius + 9.0, center.y() + 5.0), QStringLiteral("0°"));
+    painter.drawText(QPointF(center.x() - radius - 34.0, center.y() + 5.0), QStringLiteral("180°"));
+    painter.drawText(QPointF(center.x() - 12.0, center.y() - radius - 10.0), QStringLiteral("+90°"));
+    painter.drawText(QPointF(center.x() - 12.0, center.y() + radius + 19.0), QStringLiteral("−90°"));
+
+    const auto& data = series_.front();
+    const auto count = std::min(data.x.size(), data.y.size());
+    QPainterPath path;
+    bool started = false;
+    QPointF first;
+    for (std::size_t index = 0; index < count; ++index) {
+        if (!std::isfinite(data.x[index]) || !std::isfinite(data.y[index])) {
+            started = false;
+            continue;
+        }
+        const double normalized = std::clamp((data.y[index] - radialMin_)
+            / (radialMax_ - radialMin_), 0.0, 1.0);
+        const QPointF point(center.x() + radius * normalized * std::cos(data.x[index]),
+                            center.y() - radius * normalized * std::sin(data.x[index]));
+        if (!started) {
+            path.moveTo(point);
+            if (index == 0) {
+                first = point;
+            }
+            started = true;
+        } else {
+            path.lineTo(point);
+        }
+    }
+    if (count > 1 && data.x.back() - data.x.front() > 5.9
+        && std::isfinite(data.y.front()) && std::isfinite(data.y.back())) {
+        path.lineTo(first);
+    }
+    painter.setPen(QPen(seriesColors[0], 2.3));
+    painter.drawPath(path);
+    QFont titleFont = painter.font();
+    titleFont.setBold(true);
+    painter.setFont(titleFont);
+    painter.setPen(QColor(35, 35, 35));
+    painter.drawText(QRectF(area.left(), 8.0, area.width(), 26.0),
+                     Qt::AlignCenter, title_);
+    painter.setFont(font());
+    painter.drawText(QRectF(area.left(), height() - 38.0, area.width(), 30.0),
+                     Qt::AlignCenter, yLabel_);
+    painter.restore();
+}
+
 void PlotWidget::rebuildSceneCache(const QRectF& area) {
     sceneCache_ = QImage(size() * devicePixelRatioF(), QImage::Format_ARGB32_Premultiplied);
     sceneCache_.setDevicePixelRatio(devicePixelRatioF());
@@ -525,6 +624,10 @@ void PlotWidget::paintEvent(QPaintEvent*) {
         return;
     }
     const auto area = plotRect();
+    if (kind_ == PlotKind::Polar) {
+        drawPolar(painter, area);
+        return;
+    }
     drawAxes(painter, area, kind_ == PlotKind::Vector);
     if (kind_ == PlotKind::Lines) {
         drawLines(painter, area);
@@ -541,7 +644,8 @@ void PlotWidget::resizeEvent(QResizeEvent* event) {
 }
 
 void PlotWidget::wheelEvent(QWheelEvent* event) {
-    if (!plotRect().contains(event->position()) || kind_ == PlotKind::Empty) {
+    if (!plotRect().contains(event->position()) || kind_ == PlotKind::Empty
+        || kind_ == PlotKind::Polar) {
         QWidget::wheelEvent(event);
         return;
     }
@@ -557,7 +661,8 @@ void PlotWidget::wheelEvent(QWheelEvent* event) {
 }
 
 void PlotWidget::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton && plotRect().contains(event->position())) {
+    if (kind_ != PlotKind::Polar && event->button() == Qt::LeftButton
+        && plotRect().contains(event->position())) {
         dragging_ = true;
         dragStart_ = event->position().toPoint();
         dragStartRange_ = viewRange_;

@@ -10,7 +10,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "fdfd"
-version = "1.0.0"
+version = "1.1.0"
 description = "FDFD: electromagnetic solvers and interactive native applications"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -81,3 +81,9 @@ wheel.packages = [
 ]
 wheel.exclude = ["**/*.pyx", "**/__pycache__/**"]
 sdist.exclude = [".idea", "outputs", "**/__pycache__", "**/build"]
+
+# Keep Windows caches separate from the former MinGW build directory.
+[[tool.scikit-build.overrides]]
+if.platform-system = "^win32$"
+build-dir = "build/msvc/{wheel_tag}"
+cmake.args = ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"]

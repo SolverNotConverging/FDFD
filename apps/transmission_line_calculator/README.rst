@@ -86,41 +86,22 @@ The build requires:
 
 Keep every dependency built for the same compiler, architecture, and runtime as the application. For example, an MSVC build cannot link to MinGW libraries.
 
-Windows with MSVC and vcpkg
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Windows: MSVC and vcpkg
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Follow the `root Windows installation walkthrough <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
-for downloading MSVC and vcpkg, installing dependencies, compiling, testing,
-deploying DLLs and Qt plugins, and connecting the native viewers to Python.
-The walkthrough's commands run from the repository root and install all three
-applications under ``%LOCALAPPDATA%\FDFD``. Its CMake options also allow you to
-select individual apps. The bundled ``scripts/install.ps1`` is for MSYS2/MinGW;
-use the root walkthrough's CMake install/deployment commands for MSVC.
+Follow the `root Windows build instructions <../../README.md#windows-msvc-and-vcpkg-step-by-step>`_
+for MSVC, Ninja, and the ``x64-windows`` dependencies in ``C:\opt\vcpkg``.
+MinGW is not supported. The root build compiles all three apps.
 
-Windows with MinGW-w64 (MSYS2)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Install or update one consistent MinGW64 environment from PowerShell:
+To install just this app, run from the repository root:
 
 .. code-block:: powershell
 
-   & C:\msys64\usr\bin\pacman.exe -S --needed `
-     mingw-w64-x86_64-toolchain `
-     mingw-w64-x86_64-cmake `
-     mingw-w64-x86_64-ninja `
-     mingw-w64-x86_64-qt6-base `
-     mingw-w64-x86_64-eigen3 `
-     mingw-w64-x86_64-gmsh `
-     mingw-w64-x86_64-ftxui
+   .\apps\transmission_line_calculator\scripts\install.ps1
 
-.. code-block:: powershell
-
-   $env:Path = "C:\msys64\mingw64\bin;$env:Path"
-   cmake --fresh -S . -B build -G Ninja `
-     -DCMAKE_BUILD_TYPE=Release `
-     -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
-   cmake --build build --parallel
-   ctest --test-dir build --output-on-failure
+The installer initializes MSVC, builds in the app's ``build/msvc-install``
+directory, and deploys DLLs and Qt platform plugins. Pass ``-VcpkgRoot`` for a
+custom vcpkg installation or ``-Destination`` for a custom install location.
 
 macOS with AppleClang and Homebrew
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -182,7 +163,7 @@ Launch the desktop calculator:
 
 .. code-block:: powershell
 
-   .\build\transmission-line-calculator.exe
+   .\build\msvc-install\transmission-line-calculator.exe
 
 On Linux use ``./build/transmission-line-calculator``; on macOS use ``open build/transmission-line-calculator.app``. Add ``Release/`` after the build directory for a Visual Studio build.
 
@@ -195,7 +176,7 @@ Run the terminal calculator with no arguments from a real terminal:
 
 .. code-block:: powershell
 
-   .\build\transmission-line-calculator-cli.exe
+   .\build\msvc-install\transmission-line-calculator-cli.exe
 
 This opens the interactive FTXUI interface. It presents Microstrip, CPW, Stripline, and Coaxial choices, editable engineering-unit fields for the selected geometry, solve status, timings, and extracted results. The **Setup** and **Results** workspace tabs keep the interface usable in an 80-column terminal.
 
@@ -229,8 +210,8 @@ This is a breaking replacement for the former command-line solver despite retain
 
 .. code-block:: powershell
 
-   .\build\transmission-line-calculator-cli.exe --help
-   .\build\transmission-line-calculator-cli.exe --version
+   .\build\msvc-install\transmission-line-calculator-cli.exe --help
+   .\build\msvc-install\transmission-line-calculator-cli.exe --version
 
 The results panels present node/triangle counts; mesh, assembly, factorization, and solve timings; ``n_eff``, ``beta``, ``Zc``, and wave impedance; R/L/G/C and vacuum capacitance; and power. Switch back to **Setup** to edit the next case.
 
@@ -315,16 +296,16 @@ Licensing note
 
 This application's MIT-licensed source links to Gmsh, which is distributed under GPL-2.0-or-later. The source licenses are compatible, but anyone who redistributes a combined application binary or the Gmsh runtime must also comply with Gmsh's GPL terms and provide the corresponding notices and source offer required by that license.
 
-Windows MinGW install and uninstall
------------------------------------
+Windows MSVC install and uninstall
+----------------------------------
 
-The provided PowerShell installer is specifically for the MSYS2 MinGW64 build. It configures and builds Release binaries, runs CTest, installs both front ends to ``%LOCALAPPDATA%\TransmissionLineCalculator``, deploys Qt's platform plugin, and copies Gmsh, FTXUI, and the required MinGW runtime DLLs:
+The PowerShell installer uses MSVC and vcpkg. It configures and builds Release binaries, runs CTest, installs both front ends to ``%LOCALAPPDATA%\TransmissionLineCalculator``, deploys Qt's platform plugin, and copies Gmsh, FTXUI, and the required MSVC runtime DLLs:
 
 .. code-block:: powershell
 
    powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
-Use ``-SkipTests`` only when the same build has already passed CTest. A custom MSYS2 prefix or installation directory can be supplied with ``-MsysPrefix`` and ``-Destination``.
+Use ``-SkipTests`` only when the same build has already passed CTest. A custom vcpkg root or installation directory can be supplied with ``-VcpkgRoot`` and ``-Destination``.
 
 Launch the installed GUI or interactive terminal calculator with:
 

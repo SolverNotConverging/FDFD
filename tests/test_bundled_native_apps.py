@@ -7,6 +7,38 @@ import pytest
 from cem_common import _native
 
 
+def test_local_windows_install_uses_its_own_plugins(tmp_path, monkeypatch):
+    binary = tmp_path / "bin/viewer.exe"
+    platforms = binary.parent / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "qwindows.dll").touch()
+    (binary.parent / "qt.conf").write_text("[Paths]\nPlugins=.\n")
+    monkeypatch.setenv("QT_PLUGIN_PATH", "removed-vcpkg/plugins")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    environment = _native.bundled_environment(binary)
+    assert "QT_PLUGIN_PATH" not in environment
+    assert environment["QT_QPA_PLATFORM"] == "offscreen"
+    assert environment["PATH"].split(_native.os.pathsep)[0] == str(binary.parent)
+
+
+@pytest.mark.parametrize("family", ["periodic", "scattering"])
+@pytest.mark.parametrize("layout", ["root", "installer"])
+def test_msvc_build_directories_are_discovered(tmp_path, monkeypatch, family, layout):
+    app = "fem_periodic_mode_viewer" if family == "periodic" else "fem_waveguide_scattering_viewer"
+    build = (tmp_path / "outputs/build-msvc/apps" / app if layout == "root"
+             else tmp_path / "apps" / app / "build/msvc-install")
+    build.mkdir(parents=True)
+    if family == "periodic":
+        from fem_periodic_modes import persistence
+        monkeypatch.setattr(persistence, "_repository_root", lambda: tmp_path)
+        candidates = persistence._viewer_candidates("fem-periodic-mode-viewer.exe")
+        assert build / "fem-periodic-mode-viewer.exe" in candidates
+    else:
+        from fem_waveguide_scattering import viewer
+        candidates = viewer._build_candidates(tmp_path)
+        assert build / viewer._executable_names()[0] in candidates
+
+
 @pytest.mark.skipif(_native.os.name != "nt", reason="Windows runtime paths")
 @pytest.mark.parametrize("configuration", ["Release", "Debug"])
 def test_msvc_runtime_uses_recorded_dependencies(tmp_path, monkeypatch, configuration):

@@ -1,7 +1,7 @@
 Periodic eigensolver user API
 =============================
 
-Version 1.0.0. This is a numerical library for applications that already
+Version 1.1.0. This is a numerical library for applications that already
 have a generalized pencil. Solver-family users normally configure the
 eigensolver through their FEM or FDFD solve method.
 

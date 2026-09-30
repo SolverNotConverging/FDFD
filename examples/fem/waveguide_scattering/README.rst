@@ -21,6 +21,7 @@ substantially longer. 3D cases also require more memory.
 3. `dielectric_insert_2d_frequency_sweep.py <dielectric_insert_2d_frequency_sweep.py>`_ — A frequency sweep saved as a multi-case HDF5 archive. Frequency sweep.
 4. `slab_waveguide_2d_oblique_incidence.py <slab_waveguide_2d_oblique_incidence.py>`_ — Oblique incidence with nonzero invariant-direction wavenumber. Single solve.
 5. `grounded_slab_slot_2d.py <grounded_slab_slot_2d.py>`_ — A PEC slot in a grounded slab. Single solve.
+6. `closed_contour_farfield_2d.py <closed_contour_farfield_2d.py>`_ — Matched modal ports and a closed four-sided NF2FF contour through the layered guide. Saves a complex radiation pattern, polar PNG, and reloadable HDF5 contour without opening a window.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use

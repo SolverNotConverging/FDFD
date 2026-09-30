@@ -72,6 +72,17 @@ struct SceneData {
     std::vector<SceneLine> lines;
 };
 
+struct RadiationPattern {
+    std::vector<double> theta;
+    std::vector<double> powerDensity;
+    std::vector<double> directivity;
+    std::vector<double> gain;
+    std::vector<double> realizedGain;
+    double radiatedPower{};
+    double acceptedPower{};
+    double incidentPower{};
+};
+
 enum class FieldPart { Total, Incident, Scattered };
 enum class FieldName { Electric, Magnetic };
 enum class ScalarQuantity { Absolute, Real, Imaginary };
@@ -84,6 +95,7 @@ struct ResultData {
     std::vector<SParameter> sParameters;
     std::vector<ModeData> modes;
     std::optional<SceneData> scene;
+    std::optional<RadiationPattern> radiation;
 
     [[nodiscard]] const ComplexMatrix& field(FieldName name, FieldPart part) const {
         const auto base = name == FieldName::Electric ? 0U : 3U;

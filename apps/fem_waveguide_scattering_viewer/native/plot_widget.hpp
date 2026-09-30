@@ -24,6 +24,7 @@ public:
     void setEmpty(QString title, QString message);
     void setLines(std::vector<PlotSeries> series, QString title, QString xLabel,
                   QString yLabel, std::optional<double> selectedX = std::nullopt);
+    void setPolar(PlotSeries series, QString title, QString radialLabel, bool decibels);
     void setModal(const ModeData& mode, FieldName field, int component,
                   ScalarQuantity quantity);
     void setVector(ResultPtr result, FieldName field, FieldPart part,
@@ -41,7 +42,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
-    enum class PlotKind { Empty, Lines, Vector, Mesh };
+    enum class PlotKind { Empty, Lines, Polar, Vector, Mesh };
 
     struct Arrow {
         double x{};
@@ -57,6 +58,7 @@ private:
     void setDataRange(double xMin, double xMax, double yMin, double yMax);
     void drawAxes(QPainter& painter, const QRectF& area, bool reserveColorbar) const;
     void drawLines(QPainter& painter, const QRectF& area) const;
+    void drawPolar(QPainter& painter, const QRectF& area) const;
     void drawVector(QPainter& painter, const QRectF& area);
     void drawMesh(QPainter& painter, const QRectF& area);
     void rebuildSceneCache(const QRectF& area);
@@ -69,6 +71,8 @@ private:
     QString yLabel_;
     std::vector<PlotSeries> series_;
     std::optional<double> selectedX_;
+    double radialMin_{};
+    double radialMax_{1.0};
     ResultPtr result_;
     std::vector<Arrow> arrows_;
     double magnitudeMin_{};

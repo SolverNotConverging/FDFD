@@ -419,7 +419,7 @@ def test_launch_viewer_passes_build_runtime_environment(
 
 
 @pytest.mark.skipif(
-    persistence.os.name != "nt", reason="MinGW runtime is Windows-only"
+    persistence.os.name != "nt", reason="Windows native runtime is Windows-only"
 )
 def test_build_runtime_environment_uses_cmake_toolchain(
     tmp_path, monkeypatch
@@ -468,7 +468,7 @@ def test_build_runtime_environment_uses_cmake_toolchain(
 
 
 @pytest.mark.skipif(
-    persistence.os.name != "nt", reason="MinGW runtime is Windows-only"
+    persistence.os.name != "nt", reason="Windows native runtime is Windows-only"
 )
 def test_build_runtime_environment_finds_editable_build_cache(
     tmp_path, monkeypatch

@@ -29,7 +29,11 @@ def bundled_environment(executable: Path) -> dict[str, str] | None:
     manifest = executable.parent.parent / "build-manifest.json"
     app_contents = executable.parent.parent
     macos_bundle = app_contents.name == "Contents" and app_contents.parent.suffix == ".app"
-    if not manifest.is_file() and not macos_bundle:
+    windows_install = (
+        (executable.parent / "qt.conf").is_file()
+        and (executable.parent / "platforms" / "qwindows.dll").is_file()
+    )
+    if not manifest.is_file() and not macos_bundle and not windows_install:
         return None
     environment = {key: value for key, value in os.environ.items()
                    if not key.upper().startswith(("QT_", "QML"))}

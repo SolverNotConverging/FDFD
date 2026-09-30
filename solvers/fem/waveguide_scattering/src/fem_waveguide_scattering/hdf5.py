@@ -10,7 +10,8 @@ overlays; older schema-v1 files without that subgroup remain valid.
 
 from __future__ import annotations
 
-from cem_common.persistence import write_envelope, validate_envelope, write_value
+from cem_common.persistence import write_envelope, validate_envelope, write_value, read_value
+from .farfield import ClosedContourFields, LayeredExterior
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -123,6 +124,7 @@ class H5ResultData:
     modes: tuple[H5ModeData, ...]
     metadata: Mapping[str, Any]
     scene: Scene2D | None = None
+    nf2ff: ClosedContourFields | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +163,7 @@ class _PreparedResult:
     metadata: Mapping[str, Any]
     scene: Scene2D | None
     mesh_data: object = None
+    nf2ff: ClosedContourFields | None = None
 
 
 def _require_h5py() -> Any:
@@ -546,6 +549,7 @@ def _prepare_result(
         modes=mode_data,
         metadata=_result_metadata(result),
         scene=_prepare_scene(result),
+        nf2ff=getattr(result, "nf2ff", None),
         mesh_data=getattr(result, "mesh_data", None),
     )
 
@@ -715,6 +719,23 @@ def _write_scene(group: Any, scene: Scene2D) -> None:
 
 
 def _write_result(group: Any, result: _PreparedResult, index: int) -> None:
+    write_value(group, "nf2ff", result.nf2ff)
+    if result.nf2ff is not None:
+        # A compact, viewer-ready full-circle pattern accompanies the editable
+        # contour. The native Qt viewer reads these arrays without FEM/NumPy.
+        count = 720
+        angles = (np.arange(count) + 0.5) * (2*np.pi/count)
+        field = result.nf2ff.far_field(angles)
+        field = field.with_feed_powers(radiated_power=field.integrated_power(),
+            incident_power=result.powers["incident_power"],
+            reflected_power=result.powers["reflected_power"])
+        pattern = group.create_group("radiation_pattern")
+        pattern.attrs["definition"] = "2d-isotropic-2pi"
+        pattern.attrs["radiated_power"] = field.radiated_power
+        pattern.attrs["accepted_power"] = field.accepted_power
+        pattern.attrs["incident_power"] = field.incident_power
+        for name in ("theta", "power_density", "directivity", "gain", "realized_gain"):
+            _write_array(pattern, name, np.asarray(getattr(field, name), dtype=np.float64))
     write_value(group, "mesh_snapshot", result.mesh_data)
     group.attrs["index"] = index
     if result.frequency_hz is not None:
@@ -1259,6 +1280,8 @@ def _load_result(group: Any, root_frequency: float) -> H5ResultData:
         modes=tuple(modes),
         metadata=_metadata_attribute(group),
         scene=_load_scene(group["scene"]) if "scene" in group else None,
+        nf2ff=read_value(group["nf2ff"], {"ClosedContourFields": ClosedContourFields,
+            "LayeredExterior": LayeredExterior}) if "nf2ff" in group else None,
     )
 
 
