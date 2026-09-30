@@ -52,12 +52,18 @@ default-groups = ["dev"]
 cache-keys = [
   { file = "pyproject.toml" },
   { file = "CMakeLists.txt" },
-  { file = "cmake/**" },
+  { file = "cmake/**/*.cmake" },
+  { file = "cmake/**/*.in" },
   { file = "apps/**/CMakeLists.txt" },
-  { file = "apps/**/native/**" },
-  { file = "libraries/**/src/**" },
-  { file = "solvers/**/src/**" },
-  { file = "src/**" },
+  { file = "apps/**/native/**/*.cpp" },
+  { file = "apps/**/native/**/*.hpp" },
+  { file = "apps/**/native/**/*.c" },
+  { file = "apps/**/native/**/*.h" },
+  { file = "libraries/**/src/**/*.py" },
+  { file = "libraries/**/src/**/*.pyx" },
+  { file = "libraries/**/src/**/*.pxd" },
+  { file = "solvers/**/src/**/*.py" },
+  { file = "src/**/*.py" },
 ]
 
 [tool.scikit-build]
@@ -80,7 +86,7 @@ wheel.packages = [
   "solvers/fem/waveguide_scattering/src/fem_waveguide_scattering",
 ]
 wheel.exclude = ["**/*.pyx", "**/__pycache__/**"]
-sdist.exclude = [".idea", "outputs", "**/__pycache__", "**/build"]
+sdist.exclude = [".idea", "outputs", "examples", "**/__pycache__", "**/build"]
 
 # Keep Windows caches separate from the former MinGW build directory.
 [[tool.scikit-build.overrides]]
