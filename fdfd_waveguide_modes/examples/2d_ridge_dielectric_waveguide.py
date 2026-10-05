@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_waveguide_modes import Material, materials, ModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/ridge_dielectric_waveguide_2d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/2d_ridge_dielectric_waveguide"
 
 solver = ModeSolver2D(frequency=50e9, x_range=24e-3, y_range=16e-3, background_material=materials.vacuum)
 slab = Material(name="anisotropic slab", epsilon=(3., 4., 5.))

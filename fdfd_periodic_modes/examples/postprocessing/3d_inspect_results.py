@@ -9,7 +9,7 @@ sys.path.insert(0, str(_ROOT))
 import argparse
 from fdfd_periodic_modes import load_result
 
-DEFAULT_INPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/image_guide_leaky_wave_antenna_3d/modes.h5"
+DEFAULT_INPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/3d_image_guide_leaky_wave_antenna/modes.h5"
 
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument("path",nargs="?",type=Path,default=DEFAULT_INPUT)

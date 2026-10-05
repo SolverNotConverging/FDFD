@@ -68,8 +68,8 @@ sweep. Use ``show=False`` to return the figure for saving without opening it.
 Examples and API
 ----------------
 
-Run `surface_wave_antenna_2d.py <../examples/surface_wave_antenna_2d.py>`_
-or the `3D image-guide example <../examples/image_guide_leaky_wave_antenna_3d.py>`_.
+Run `2d_surface_wave_antenna.py <../examples/2d_surface_wave_antenna.py>`_
+or the `3D image-guide example <../examples/3d_image_guide_leaky_wave_antenna.py>`_.
 The `family example index <../examples/README.rst>`_
 lists dispersion and postprocessing scripts. See
 `API_REFERENCE.rst <API_REFERENCE.rst>`_ for the curated user surface.

@@ -1,4 +1,4 @@
-"""Plot the CSV produced by dielectric_waveguide_2d_dispersion."""
+"""Plot the CSV produced by 2d_dielectric_waveguide_dispersion."""
 
 from pathlib import Path
 import sys
@@ -10,7 +10,7 @@ import argparse
 import csv
 from fdfd_waveguide_modes import plot_dispersion
 
-DEFAULT_INPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/dielectric_waveguide_2d_dispersion/dispersion.csv"
+DEFAULT_INPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/2d_dielectric_waveguide_dispersion/dispersion.csv"
 
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument("path",nargs="?",type=Path,default=DEFAULT_INPUT)

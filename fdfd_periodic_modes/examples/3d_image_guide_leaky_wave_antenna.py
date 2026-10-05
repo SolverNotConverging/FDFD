@@ -11,7 +11,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_periodic_modes import Material, materials, PeriodicModeSolver3D
 
-OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/image_guide_leaky_wave_antenna_3d"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/3d_image_guide_leaky_wave_antenna"
 
 frequency = 30e9
 dielectric = Material(name="guide dielectric", epsilon=4.)

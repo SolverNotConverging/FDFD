@@ -19,8 +19,8 @@ Runtime depends on hardware and mesh size. Single solves are the starting point;
 dispersion and band-structure scripts perform many eigenproblems and can take
 substantially longer. 3D cases also require more memory.
 
-1. `square_lattice_2d.py <square_lattice_2d.py>`_ — TE/TM bands along a square-lattice Bloch path. Bloch-path sweep.
-2. `rectangular_unit_cell_2d.py <rectangular_unit_cell_2d.py>`_ — Bands of a rectangular unit cell. Bloch-path sweep.
+1. `2d_square_lattice.py <2d_square_lattice.py>`_ — TE/TM bands along a square-lattice Bloch path. Bloch-path sweep.
+2. `2d_rectangular_unit_cell.py <2d_rectangular_unit_cell.py>`_ — Bands of a rectangular unit cell. Bloch-path sweep.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use

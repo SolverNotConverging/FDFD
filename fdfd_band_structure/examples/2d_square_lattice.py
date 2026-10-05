@@ -10,7 +10,7 @@ import numpy as np
 
 from fdfd_band_structure import Material, BandStructureSolver2D
 
-OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/square_lattice_2d"
+OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/2d_square_lattice"
 
 a, b = 10e-3, 10e-3
 rod = Material(name="dielectric rod", epsilon=8.9)

@@ -1,4 +1,4 @@
-"""Plot the CSV produced by surface_wave_antenna_2d_dispersion."""
+"""Plot the CSV produced by 1d_layered_waveguide_dispersion."""
 
 from pathlib import Path
 import sys
@@ -8,9 +8,9 @@ sys.path.insert(0, str(_ROOT))
 
 import argparse
 import csv
-from fdfd_periodic_modes import plot_dispersion
+from fdfd_waveguide_modes import plot_dispersion
 
-DEFAULT_INPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d_dispersion/dispersion.csv"
+DEFAULT_INPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/1d_layered_waveguide_dispersion/dispersion.csv"
 
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument("path",nargs="?",type=Path,default=DEFAULT_INPUT)

@@ -29,7 +29,7 @@ Install the required Python packages and run an example:
 
 ```sh
 python -m pip install -r requirements.txt
-python fdfd_waveguide_modes/examples/parallel_plate_waveguide_1d.py
+python fdfd_waveguide_modes/examples/1d_parallel_plate_waveguide.py
 ```
 
 The examples import the solver source directly. **Installing FDFD itself is not required.** Choose other examples from the table above.

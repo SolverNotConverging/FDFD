@@ -50,6 +50,6 @@ geometry and a magnitude/real/imaginary/phase control. There is no mode selector
 Examples and API
 ----------------
 
-The runnable `dielectric-cylinder example <../examples/dielectric_cylinder_2d.py>`_
+The runnable `dielectric-cylinder example <../examples/2d_dielectric_cylinder.py>`_
 shows the complete workflow. See `API_REFERENCE.rst <API_REFERENCE.rst>`_ for
 supported signatures, defaults, and errors.

@@ -11,7 +11,7 @@ import numpy as np
 from fdfd_waveguide_modes import ModeSolver1D
 from fdfd_mode_tracking import materials, PortSpec, TrackingConfig, track_modes
 
-OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/parallel_plate_cutoff'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/1d_parallel_plate_cutoff'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
 width, cells = 22.86e-3, 128

@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_waveguide_modes import Material, materials, ModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/microstrip_2d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/2d_microstrip"
 
 solver = ModeSolver2D(frequency=50e9, x_range=12e-3, y_range=10e-3, background_material=materials.vacuum)
 substrate = Material(name="lossy substrate", epsilon=4.-1j)

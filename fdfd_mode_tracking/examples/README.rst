@@ -6,13 +6,13 @@ The scripts run directly from top to bottom and import shared materials from
 the solver package. Installing FDFD itself is optional. The ``tracked_*`` examples and
 the degeneracy/crossing examples open an interactive Matplotlib viewer.
 
-* ``parallel_plate_cutoff.py`` tracks a physical PEC guide above and below
+* ``1d_parallel_plate_cutoff.py`` tracks a physical PEC guide above and below
   cutoff, saves a complete HDF5 sweep, and exports a discrete port-profile table.
-* ``tracked_parallel_plate_1d.py`` uses the material-first ``ModeTracker1D`` API,
+* ``1d_tracked_parallel_plate.py`` uses the material-first ``ModeTracker1D`` API,
   crosses cutoff, saves the sweep, and opens the interactive all-mode viewer.
-* ``tracked_dielectric_waveguide_2d.py`` uses ``ModeTracker2D`` for an open
+* ``2d_tracked_dielectric_waveguide.py`` uses ``ModeTracker2D`` for an open
   dielectric guide and displays all returned vector modes at each frequency.
-* ``tracked_coplanar_waveguide_2d.py`` sweeps an open, finite-board CPW
+* ``2d_tracked_coplanar_waveguide.py`` sweeps an open, finite-board CPW
   from 6 to 30 GHz. A 1.2 mm centre strip and two 0.6 mm slots sit on a 1.2 mm,
   epsilon-r = 4 substrate, 12 mm wide. There is no backing ground or housing.
   Vacuum extends 4 mm beyond the board/metal bounding box on every side,
@@ -22,11 +22,11 @@ the degeneracy/crossing examples open an interactive Matplotlib viewer.
   Edit ``frequencies``, ``air_padding``, and ``cell_size`` near the top of the
   script to change the sweep or refine the grid. Inspect the saved candidate
   evidence when assessing confinement.
-* ``degenerate_square_waveguide_2d.py`` follows the two-dimensional
+* ``2d_degenerate_square_waveguide.py`` follows the two-dimensional
   TE10/TE01 eigenspace of a square PEC guide. The GUI marks both members as a
   degenerate subspace instead of assigning physical meaning to an arbitrary
   eigensolver basis rotation.
-* ``anisotropic_pec_mode_crossing_1d.py`` uses a diagonal anisotropic dielectric to
+* ``1d_anisotropic_pec_mode_crossing.py`` uses a diagonal anisotropic dielectric to
   create a true TE1/TM1 crossing. The distinct polarizations remain separate
   tracked branches as their propagation constants exchange order.
 

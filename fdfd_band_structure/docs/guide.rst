@@ -46,6 +46,6 @@ in GHz or normalized ``fa/c``.
 Examples and API
 ----------------
 
-Run the `square-lattice example <../examples/square_lattice_2d.py>`_
+Run the `square-lattice example <../examples/2d_square_lattice.py>`_
 and see the `family example index <../examples/README.rst>`_.
 The curated signatures are in `API_REFERENCE.rst <API_REFERENCE.rst>`_.

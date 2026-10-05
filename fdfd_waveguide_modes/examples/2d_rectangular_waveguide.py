@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_waveguide_modes import materials, shapes, ModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/rectangular_waveguide_2d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/2d_rectangular_waveguide"
 
 solver = ModeSolver2D(frequency=100e9, x_range=12e-3, y_range=10e-3, background_material=materials.vacuum)
 copper = materials.copper

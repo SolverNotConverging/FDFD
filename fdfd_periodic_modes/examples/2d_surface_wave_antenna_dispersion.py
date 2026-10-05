@@ -10,7 +10,7 @@ import csv
 import numpy as np
 from fdfd_periodic_modes import plot_dispersion, Material, materials, PeriodicModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d_dispersion"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/2d_surface_wave_antenna_dispersion"
 
 frequencies = np.linspace(25e9, 35e9, 3)
 neff_sweep = []

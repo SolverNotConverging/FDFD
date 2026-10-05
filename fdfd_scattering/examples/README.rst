@@ -19,7 +19,7 @@ Runtime depends on hardware and mesh size. Single solves are the starting point;
 dispersion and band-structure scripts perform many eigenproblems and can take
 substantially longer. 3D cases also require more memory.
 
-1. `dielectric_cylinder_2d.py <dielectric_cylinder_2d.py>`_ — Scattering from a dielectric cylinder. Single solve.
+1. `2d_dielectric_cylinder.py <2d_dielectric_cylinder.py>`_ — Scattering from a dielectric cylinder. Single solve.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use

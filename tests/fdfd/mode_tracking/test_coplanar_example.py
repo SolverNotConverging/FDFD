@@ -10,7 +10,7 @@ from fdfd_mode_tracking import TrackingConfig, VerificationSpec, load_sweep
 def example_tracker(*, frequencies=None, air_padding=8e-3, cell_size=.1e-3):
     """Run the example geometry before its demonstration sweep, with a smoke mesh."""
     root = Path(__file__).resolve().parents[3]
-    path = root / 'fdfd_mode_tracking/examples/tracked_coplanar_waveguide_2d.py'
+    path = root / 'fdfd_mode_tracking/examples/2d_tracked_coplanar_waveguide.py'
     tree = ast.parse(path.read_text())
     settings = {'frequencies', 'air_padding', 'cell_size'}
     prefix = []

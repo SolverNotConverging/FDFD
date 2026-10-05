@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_scattering import Material, ScatteringSolver2D
 
-OUTPUT = _ROOT / "fdfd_scattering/outputs/examples/dielectric_cylinder_2d"
+OUTPUT = _ROOT / "fdfd_scattering/outputs/examples/2d_dielectric_cylinder"
 
 dielectric = Material(name="cylinder", epsilon=4.)
 solver = ScatteringSolver2D(frequency=3e9, x_range=(-150e-3,150e-3), y_range=(-150e-3,150e-3), polarization="TM")

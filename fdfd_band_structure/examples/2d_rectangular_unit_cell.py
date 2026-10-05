@@ -10,7 +10,7 @@ import numpy as np
 
 from fdfd_band_structure import Material, BandStructureSolver2D
 
-OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/rectangular_unit_cell_2d"
+OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/2d_rectangular_unit_cell"
 
 a, b = 10e-3, 7e-3
 rod = Material(name="dielectric rod", epsilon=8.9)

@@ -11,7 +11,7 @@ import numpy as np
 from fdfd_mode_tracking import Material, materials, ModeTracker1D, PortSpec, TrackingConfig
 
 OUTPUT = (_ROOT
-          / 'fdfd_mode_tracking/outputs/examples/anisotropic_mode_crossing_1d')
+          / 'fdfd_mode_tracking/outputs/examples/1d_anisotropic_pec_mode_crossing')
 C0 = 1 / np.sqrt(8.854187817e-12 * 4e-7 * np.pi)
 
 width, cells = 22.86e-3, 120

@@ -11,7 +11,7 @@ import numpy as np
 from fdfd_mode_tracking import materials, ModeTracker2D, PortSpec, TrackingConfig
 
 OUTPUT = (_ROOT
-          / 'fdfd_mode_tracking/outputs/examples/degenerate_square_waveguide_2d')
+          / 'fdfd_mode_tracking/outputs/examples/2d_degenerate_square_waveguide')
 
 width, cells = 20e-3, 28
 dx = width / cells

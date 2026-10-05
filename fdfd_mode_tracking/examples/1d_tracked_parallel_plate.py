@@ -10,7 +10,7 @@ import numpy as np
 
 from fdfd_mode_tracking import materials, ModeTracker1D, PortSpec, TrackingConfig
 
-OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/tracked_parallel_plate_1d'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/1d_tracked_parallel_plate'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
 width, cells = 22.86e-3, 96

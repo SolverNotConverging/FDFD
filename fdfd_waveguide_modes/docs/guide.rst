@@ -88,7 +88,7 @@ Metadata records the magnetic impedance scale and explicit boundary/PML
 provenance. At singular 2D cutoff the eigenpair is retained, with NaN fields
 marked invalid instead of dividing by beta.
 
-Start with `rectangular_waveguide_2d.py <../examples/rectangular_waveguide_2d.py>`_.
+Start with `2d_rectangular_waveguide.py <../examples/2d_rectangular_waveguide.py>`_.
 The `family example index <../examples/README.rst>`_
 then covers slab, microstrip, dielectric, dispersion, and postprocessing cases.
 The `rectangular-waveguide benchmark <../../benchmarks/analytical/rectangular_waveguide_modes.py>`_

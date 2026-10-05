@@ -11,7 +11,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_periodic_modes import Material, materials, PeriodicModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/2d_surface_wave_antenna"
 
 frequency = 25e9
 dielectric = Material(name="guide dielectric", epsilon=4.)

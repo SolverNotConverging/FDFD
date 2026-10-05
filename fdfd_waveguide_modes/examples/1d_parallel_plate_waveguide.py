@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_waveguide_modes import Material, materials, ModeSolver1D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/parallel_plate_waveguide_1d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/1d_parallel_plate_waveguide"
 
 solver = ModeSolver1D(frequency=100e9, x_range=8e-3, background_material=materials.vacuum)
 dielectric = Material(name="anisotropic fill", epsilon=(4., 5., 6.))

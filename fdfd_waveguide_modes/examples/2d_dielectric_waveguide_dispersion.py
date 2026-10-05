@@ -11,7 +11,7 @@ import numpy as np
 
 from fdfd_waveguide_modes import plot_dispersion, Material, ModeSolver2D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/dielectric_waveguide_2d_dispersion"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/2d_dielectric_waveguide_dispersion"
 
 core = Material(name="dielectric core", epsilon=4.)
 frequencies = np.linspace(20e9, 60e9, 5)

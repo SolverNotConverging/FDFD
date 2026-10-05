@@ -10,7 +10,7 @@ import numpy as np
 
 from fdfd_mode_tracking import Material, ModeTracker2D, PortSpec, TrackingConfig
 
-OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/tracked_dielectric_waveguide_2d'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/2d_tracked_dielectric_waveguide'
 
 core = Material(name='dielectric core', epsilon=4.)
 tracker = ModeTracker2D(

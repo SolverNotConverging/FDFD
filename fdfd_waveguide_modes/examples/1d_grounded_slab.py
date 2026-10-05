@@ -8,7 +8,7 @@ sys.path.insert(0, str(_ROOT))
 
 from fdfd_waveguide_modes import Material, materials, ModeSolver1D
 
-OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/grounded_slab_1d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/1d_grounded_slab"
 
 solver = ModeSolver1D(frequency=30e9, x_range=10e-3, background_material=materials.vacuum)
 slab = Material(name="slab", epsilon=10.2)

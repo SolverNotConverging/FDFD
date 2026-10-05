@@ -18,7 +18,7 @@ import numpy as np
 from fdfd_mode_tracking import Material, materials, ModeTracker2D, PortSpec, TrackingConfig
 
 OUTPUT = (_ROOT
-          / 'fdfd_mode_tracking/outputs/examples/tracked_coplanar_waveguide_2d')
+          / 'fdfd_mode_tracking/outputs/examples/2d_tracked_coplanar_waveguide')
 
 frequencies = np.linspace(6e9, 30e9, 7)
 air_padding = 4e-3

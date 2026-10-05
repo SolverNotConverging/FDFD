@@ -19,10 +19,10 @@ Runtime depends on hardware and mesh size. Single solves are the starting point;
 dispersion and band-structure scripts perform many eigenproblems and can take
 substantially longer. 3D cases also require more memory.
 
-1. `surface_wave_antenna_2d.py <surface_wave_antenna_2d.py>`_ — A dielectric-loaded periodic surface-wave cell. Single solve.
-2. `image_guide_leaky_wave_antenna_3d.py <image_guide_leaky_wave_antenna_3d.py>`_ — A 3D image-guide cell with an outgoing PML. Single solve.
-3. `surface_wave_antenna_2d_dispersion.py <surface_wave_antenna_2d_dispersion.py>`_ — A 2D periodic frequency sweep. Frequency sweep.
-4. `image_guide_leaky_wave_antenna_3d_dispersion.py <image_guide_leaky_wave_antenna_3d_dispersion.py>`_ — A 3D periodic frequency sweep. Frequency sweep.
+1. `2d_surface_wave_antenna.py <2d_surface_wave_antenna.py>`_ — A dielectric-loaded periodic surface-wave cell. Single solve.
+2. `3d_image_guide_leaky_wave_antenna.py <3d_image_guide_leaky_wave_antenna.py>`_ — A 3D image-guide cell with an outgoing PML. Single solve.
+3. `2d_surface_wave_antenna_dispersion.py <2d_surface_wave_antenna_dispersion.py>`_ — A 2D periodic frequency sweep. Frequency sweep.
+4. `3d_image_guide_leaky_wave_antenna_dispersion.py <3d_image_guide_leaky_wave_antenna_dispersion.py>`_ — A 3D periodic frequency sweep. Frequency sweep.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use
@@ -35,5 +35,5 @@ Run the producing example first. These scripts accept an optional input path
 and otherwise load from its standard output directory; use ``--help`` for usage.
 Plots are saved beside their source data.
 
-* `inspect_results_3d.py <postprocessing/inspect_results_3d.py>`_
-* `plot_dispersion_2d.py <postprocessing/plot_dispersion_2d.py>`_
+* `3d_inspect_results.py <postprocessing/3d_inspect_results.py>`_
+* `2d_plot_dispersion.py <postprocessing/2d_plot_dispersion.py>`_
