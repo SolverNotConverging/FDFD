@@ -1,5 +1,9 @@
 # FDFD
 
+This repository provides finite-difference frequency-domain (FDFD) solvers for electromagnetic problems, including waveguide modes, periodic eigenmodes, photonic band structures, scattering, and mode tracking. Each solver family includes its source code, documentation, and runnable examples.
+
+You can run examples directly from the downloaded source after installing the required Python packages, or optionally install FDFD to use the solvers from any folder in the same environment.
+
 ## Choose a solver
 
 | Solver | Import | Documentation | Examples |
