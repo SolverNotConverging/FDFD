@@ -10,12 +10,12 @@ from fdfd_waveguide_modes import Material, materials, ModeSolver2D
 
 OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/ridge_dielectric_waveguide_2d"
 
-solver = ModeSolver2D(frequency=50e9, x_range=.024, y_range=.016, background_material=materials.vacuum)
+solver = ModeSolver2D(frequency=50e9, x_range=24e-3, y_range=16e-3, background_material=materials.vacuum)
 slab = Material(name="anisotropic slab", epsilon=(3., 4., 5.))
 ridge = Material(name="ridge", epsilon=6.)
-solver.add_rectangle(x_range=(0., .024), y_range=(.006, .008), material=slab)
-solver.add_rectangle(x_range=(.010, .014), y_range=(.008, .010), material=ridge)
-solver.add_pml(thickness=.003, direction="x", sigma_max=1.)
+solver.add_rectangle(x_range=(0., 24e-3), y_range=(6e-3, 8e-3), material=slab)
+solver.add_rectangle(x_range=(10e-3, 14e-3), y_range=(8e-3, 10e-3), material=ridge)
+solver.add_pml(thickness=3e-3, direction="x", sigma_max=1.)
 solver.mesh(resolution=(80, 56))
 result = solver.solve(num_modes=4, neff_guess=2.)
 print("Effective indices:", result.neff)

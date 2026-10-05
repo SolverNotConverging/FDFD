@@ -12,7 +12,7 @@ from fdfd_band_structure import Material, BandStructureSolver2D
 
 OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/square_lattice_2d"
 
-a, b = .01, .01
+a, b = 10e-3, 10e-3
 rod = Material(name="dielectric rod", epsilon=8.9)
 solver = BandStructureSolver2D(x_range=(-a/2, a/2), y_range=(-b/2, b/2))
 solver.add_circle(center=(0., 0.), radius=.2*min(a,b), material=rod)

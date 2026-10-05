@@ -10,12 +10,12 @@ from fdfd_waveguide_modes import materials, shapes, ModeSolver2D
 
 OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/rectangular_waveguide_2d"
 
-solver = ModeSolver2D(frequency=100e9, x_range=.012, y_range=.010, background_material=materials.vacuum)
+solver = ModeSolver2D(frequency=100e9, x_range=12e-3, y_range=10e-3, background_material=materials.vacuum)
 copper = materials.copper
 # One Boolean frame avoids overlapping conductor assignments at the corners.
 wall = shapes.Difference(
-    shape=shapes.Rectangle(bounds=((.0019, .0101), (.0019, .0081))),
-    tool=shapes.Rectangle(bounds=((.002, .010), (.002, .008))),
+    shape=shapes.Rectangle(bounds=((1.9e-3, 10.1e-3), (1.9e-3, 8.1e-3))),
+    tool=shapes.Rectangle(bounds=((2e-3, 10e-3), (2e-3, 8e-3))),
 )
 solver.add_geometry(shape=wall, material=copper, name="copper wall")
 solver.mesh(resolution=(120, 100))

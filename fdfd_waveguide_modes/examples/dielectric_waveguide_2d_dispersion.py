@@ -16,8 +16,8 @@ OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/dielectric_waveguide_2d_
 core = Material(name="dielectric core", epsilon=4.)
 rows = []
 for frequency in np.linspace(20e9, 60e9, 5):
-    solver = ModeSolver2D(frequency=frequency, x_range=.01, y_range=.01)
-    solver.add_circle(center=(.005, .005), radius=.002, material=core)
+    solver = ModeSolver2D(frequency=frequency, x_range=10e-3, y_range=10e-3)
+    solver.add_circle(center=(5e-3, 5e-3), radius=2e-3, material=core)
     solver.mesh(resolution=(40, 40))
     result = solver.solve(num_modes=3, neff_guess=1.8)
     OUTPUT.mkdir(parents=True, exist_ok=True)

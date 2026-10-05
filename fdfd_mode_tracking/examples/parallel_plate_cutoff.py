@@ -14,7 +14,7 @@ from fdfd_mode_tracking import materials, PortSpec, TrackingConfig, track_modes
 OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/parallel_plate_cutoff'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
-width, cells = .02286, 128
+width, cells = 22.86e-3, 128
 dx = width / cells
 
 # track_modes calls this for each frequency and verification mesh.

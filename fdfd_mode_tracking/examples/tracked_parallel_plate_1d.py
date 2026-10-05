@@ -13,7 +13,7 @@ from fdfd_mode_tracking import materials, ModeTracker1D, PortSpec, TrackingConfi
 OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/tracked_parallel_plate_1d'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
-width, cells = .02286, 96
+width, cells = 22.86e-3, 96
 dx = width/cells
 cutoff = C/(2*width)
 tracker = ModeTracker1D(

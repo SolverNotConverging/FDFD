@@ -22,11 +22,11 @@ OUTPUT = (_ROOT
 
 frequencies = np.linspace(6e9, 30e9, 7)
 air_padding = 4e-3
-cell_size = .2e-3
+cell_size = 0.2e-3
 
 half_width = 6e-3
 substrate_height = 1.2e-3
-strip_width, gap, metal_thickness = 1.2e-3, .6e-3, .2e-3
+strip_width, gap, metal_thickness = 1.2e-3, 0.6e-3, 0.2e-3
 x_range = (-half_width-air_padding, half_width+air_padding)
 y_range = (-air_padding, substrate_height+metal_thickness+air_padding)
 tracker = ModeTracker2D(

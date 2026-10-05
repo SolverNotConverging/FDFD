@@ -16,8 +16,8 @@ OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/layered_waveguide_1d_dis
 core = Material(name="dielectric core", epsilon=4.)
 rows = []
 for frequency in np.linspace(20e9, 60e9, 5):
-    solver = ModeSolver1D(frequency=frequency, x_range=.01)
-    solver.add_layer(x_range=(.003, .007), material=core)
+    solver = ModeSolver1D(frequency=frequency, x_range=10e-3)
+    solver.add_layer(x_range=(3e-3, 7e-3), material=core)
     solver.mesh(resolution=200)
     result = solver.solve(num_modes=3, neff_guess=1.8)
     OUTPUT.mkdir(parents=True, exist_ok=True)

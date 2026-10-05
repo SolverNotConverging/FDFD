@@ -16,15 +16,15 @@ Material-first workflow
    dielectric = Material(name="cylinder", epsilon=4.0)
    solver = ScatteringSolver2D(
        frequency=10e9,
-       x_range=(-0.05, 0.05),
-       y_range=(-0.05, 0.05),
+       x_range=(-50e-3, 50e-3),
+       y_range=(-50e-3, 50e-3),
        polarization="TE",
    )
-   solver.add_circle(center=(0.0, 0.0), radius=0.01, material=dielectric)
-   solver.add_pml(thickness=0.01, direction="all")
+   solver.add_circle(center=(0.0, 0.0), radius=10e-3, material=dielectric)
+   solver.add_pml(thickness=10e-3, direction="all")
    solver.mesh(max_element_size=2.5e-3)
    solver.add_source(kind="plane_wave", angle=0.0)
-   solver.set_source_region(inset=0.015)
+   solver.set_source_region(inset=15e-3)
    result = solver.solve()
    result.save("fdfd_scattering/outputs/fdfd_scattering.h5")
    loaded = load_result("fdfd_scattering/outputs/fdfd_scattering.h5")

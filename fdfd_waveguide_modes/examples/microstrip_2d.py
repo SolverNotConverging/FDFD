@@ -10,12 +10,12 @@ from fdfd_waveguide_modes import Material, materials, ModeSolver2D
 
 OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/microstrip_2d"
 
-solver = ModeSolver2D(frequency=50e9, x_range=.012, y_range=.010, background_material=materials.vacuum)
+solver = ModeSolver2D(frequency=50e9, x_range=12e-3, y_range=10e-3, background_material=materials.vacuum)
 substrate = Material(name="lossy substrate", epsilon=4.-1j)
 copper = materials.copper
-solver.add_rectangle(x_range=(.002, .010), y_range=(.004, .005), material=substrate)
-solver.add_rectangle(x_range=(.005, .007), y_range=(.005, .0051), material=copper, name="strip")
-solver.add_rectangle(x_range=(.0005, .0115), y_range=(.0039, .004), material=copper, name="ground")
+solver.add_rectangle(x_range=(2e-3, 10e-3), y_range=(4e-3, 5e-3), material=substrate)
+solver.add_rectangle(x_range=(5e-3, 7e-3), y_range=(5e-3, 5.1e-3), material=copper, name="strip")
+solver.add_rectangle(x_range=(500e-6, 11.5e-3), y_range=(3.9e-3, 4e-3), material=copper, name="ground")
 solver.mesh(resolution=(120, 100))
 result = solver.solve(num_modes=4, neff_guess=1.7)
 print("Effective indices:", result.neff)

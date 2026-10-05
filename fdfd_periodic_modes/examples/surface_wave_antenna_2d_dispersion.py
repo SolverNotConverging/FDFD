@@ -15,11 +15,11 @@ OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d_d
 rows=[]
 for frequency in np.linspace(25e9,35e9,3):
     dielectric = Material(name="guide dielectric", epsilon=4.)
-    solver = PeriodicModeSolver2D(frequency=frequency, x_range=.01, z_range=.006, polarization="TM")
-    solver.add_rectangle(x_range=(0., .002), z_range=(0., .006), material=dielectric, name="slab")
-    solver.add_rectangle(x_range=(0., .0005), z_range=(0., .006), material=materials.PEC, name="ground")
-    solver.add_rectangle(x_range=(.002, .0025), z_range=(.0015, .003), material=materials.PEC, name="loading tooth")
-    solver.add_pml(thickness=.0015, direction="x", sigma_max=1.)
+    solver = PeriodicModeSolver2D(frequency=frequency, x_range=10e-3, z_range=6e-3, polarization="TM")
+    solver.add_rectangle(x_range=(0., 2e-3), z_range=(0., 6e-3), material=dielectric, name="slab")
+    solver.add_rectangle(x_range=(0., 500e-6), z_range=(0., 6e-3), material=materials.PEC, name="ground")
+    solver.add_rectangle(x_range=(2e-3, 2.5e-3), z_range=(1.5e-3, 3e-3), material=materials.PEC, name="loading tooth")
+    solver.add_pml(thickness=1.5e-3, direction="x", sigma_max=1.)
     solver.mesh(resolution=(24, 16))
     result=solver.solve(num_modes=2,neff_guess=1.5,eigensolver="eigs")
     OUTPUT.mkdir(parents=True,exist_ok=True)

@@ -10,13 +10,13 @@ from fdfd_waveguide_modes import Material, materials, ModeSolver1D
 
 OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/parallel_plate_waveguide_1d"
 
-solver = ModeSolver1D(frequency=100e9, x_range=.008, background_material=materials.vacuum)
+solver = ModeSolver1D(frequency=100e9, x_range=8e-3, background_material=materials.vacuum)
 dielectric = Material(name="anisotropic fill", epsilon=(4., 5., 6.))
 wall = materials.PMC
-solver.add_layer(x_range=(.003, .0045), material=dielectric)
-solver.add_layer(x_range=(.0029, .003), material=wall)
-solver.add_layer(x_range=(.0045, .0046), material=wall)
-solver.add_pml(thickness=.0008, sigma_max=10.)
+solver.add_layer(x_range=(3e-3, 4.5e-3), material=dielectric)
+solver.add_layer(x_range=(2.9e-3, 3e-3), material=wall)
+solver.add_layer(x_range=(4.5e-3, 4.6e-3), material=wall)
+solver.add_pml(thickness=800e-6, sigma_max=10.)
 solver.mesh(resolution=800)
 result = solver.solve(num_modes=4, neff_guess=2.)
 print("Effective indices:", result.neff)
