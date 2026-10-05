@@ -91,6 +91,26 @@ def test_mode_dropdown_closes_when_clicking_elsewhere(monkeypatch):
         plt.close(figure)
 
 
+def test_closed_dropdown_leaves_no_radio_markers_on_canvas():
+    from fdfd_common.viewer_controls import ModeDropdown
+    figure = plt.figure(figsize=(5, 4))
+    try:
+        dropdown = ModeDropdown(figure, (.2, .1, .3, .05), 3, lambda mode: None)
+        figure.canvas.draw()
+        bounds = dropdown.menu_axis.get_window_extent()
+        height = figure.canvas.get_width_height()[1]
+        region = (slice(height-int(bounds.y1), height-int(bounds.y0)),
+                  slice(int(bounds.x0), int(bounds.x1)))
+        before = np.asarray(figure.canvas.buffer_rgba())[region].copy()
+        dropdown._toggle(None)
+        dropdown.options.set_active(1)
+        after = np.asarray(figure.canvas.buffer_rgba())[region].copy()
+        assert not dropdown.menu_axis.get_visible()
+        np.testing.assert_array_equal(after, before)
+    finally:
+        plt.close(figure)
+
+
 def test_periodic_2d_plot_uses_z_horizontal_and_x_vertical():
     result = result_for(PeriodicModeSet, 'fdfd_periodic_modes', ('x', 'z'), [1.5-.02j])
     figure = result.plot(component='Ex')

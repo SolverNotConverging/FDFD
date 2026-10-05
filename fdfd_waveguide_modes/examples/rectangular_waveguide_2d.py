@@ -19,7 +19,7 @@ wall = shapes.Difference(
 )
 solver.add_geometry(shape=wall, material=copper, name="copper wall")
 solver.mesh(resolution=(120, 100))
-result = solver.solve(num_modes=4, neff_guess=.99)
+result = solver.solve(num_modes=4)
 print("Effective indices:", result.neff)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "modes.h5")

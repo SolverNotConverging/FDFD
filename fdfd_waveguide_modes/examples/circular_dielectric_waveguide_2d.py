@@ -14,7 +14,7 @@ solver = ModeSolver2D(frequency=100e9, x_range=10e-3, y_range=10e-3, background_
 core = Material(name="dielectric core", epsilon=6.)
 solver.add_circle(center=(5e-3, 5e-3), radius=3e-3, material=core, name="core")
 solver.mesh(resolution=(50, 50))
-result = solver.solve(num_modes=4, neff_guess=3.)
+result = solver.solve(num_modes=4)
 print("Effective indices:", result.neff)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "modes.h5")

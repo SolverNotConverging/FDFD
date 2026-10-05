@@ -16,7 +16,9 @@ class ModeDropdown:
         # Open upwards so the menu stays inside the figure.
         self.menu_axis = figure.add_axes((left, bottom+height, width, menu_height),
                                          zorder=100, facecolor='white')
-        self.options = RadioButtons(self.menu_axis, [f'Mode {i}' for i in range(1, count+1)])
+        # Blitting can redraw the radio markers after the dropdown axes are hidden.
+        self.options = RadioButtons(self.menu_axis, [f'Mode {i}' for i in range(1, count+1)],
+                                    useblit=False)
         self.options.on_clicked(self._select)
         self.menu_axis.set_visible(False)
         self.outside_click = figure.canvas.mpl_connect('button_press_event', self._close_outside)

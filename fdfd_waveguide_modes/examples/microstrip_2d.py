@@ -17,7 +17,7 @@ solver.add_rectangle(x_range=(2e-3, 10e-3), y_range=(4e-3, 5e-3), material=subst
 solver.add_rectangle(x_range=(5e-3, 7e-3), y_range=(5e-3, 5.1e-3), material=copper, name="strip")
 solver.add_rectangle(x_range=(500e-6, 11.5e-3), y_range=(3.9e-3, 4e-3), material=copper, name="ground")
 solver.mesh(resolution=(120, 100))
-result = solver.solve(num_modes=4, neff_guess=1.7)
+result = solver.solve(num_modes=4)
 print("Effective indices:", result.neff)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "modes.h5")

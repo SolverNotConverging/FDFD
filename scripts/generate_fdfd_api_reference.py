@@ -72,6 +72,9 @@ def main():
     for package,solvers in INVENTORY.items():
         module=import_module(package)
         family=package.removeprefix('fdfd_')
+        DESCRIPTIONS['neff_guess'] = (
+            'Optional upper search value; lower values are raised to 1% above the largest assigned bulk-material index magnitude.'
+            if family == 'waveguide_modes' else 'Dimensionless complex effective-index search target.')
         out=section(package+' user API','=')
         out+='Version 1.1.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')

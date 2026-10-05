@@ -21,7 +21,7 @@ for frequency in frequencies:
     solver = ModeSolver2D(frequency=frequency, x_range=10e-3, y_range=10e-3)
     solver.add_circle(center=(5e-3, 5e-3), radius=2e-3, material=core)
     solver.mesh(resolution=(40, 40))
-    result = solver.solve(num_modes=3, neff_guess=1.8)
+    result = solver.solve(num_modes=3)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"modes_{frequency/1e9:.0f}GHz.h5")
     neff_sweep.append(result.neff)

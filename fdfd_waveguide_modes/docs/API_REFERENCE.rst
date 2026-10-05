@@ -319,7 +319,7 @@ Return num_modes total modes; select TE, TM, or both polarizations.
      - ``array-like or scalar``
      - Optional
      - ``None``
-     - Dimensionless complex effective-index search target.
+     - Optional upper search value; lower values are raised to 1% above the largest assigned bulk-material index magnitude.
    * - ``polarization``
      - ``str``
      - Optional
@@ -752,7 +752,7 @@ Returns: the initial GridData stored on solver.mesh_data.
      - ``array-like or scalar``
      - Optional
      - ``None``
-     - Dimensionless complex effective-index search target.
+     - Optional upper search value; lower values are raised to 1% above the largest assigned bulk-material index magnitude.
    * - ``eigensolver_tolerance``
      - ``float``
      - Optional

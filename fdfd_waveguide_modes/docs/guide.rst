@@ -21,6 +21,13 @@ The figure shows real and imaginary ``neff`` on two panels, with one trace per
 mode on each panel. Each column follows the returned mode order through the
 sweep. Use ``show=False`` to return the figure for saving without opening it.
 
+The waveguide solver automatically searches 1% above the largest refractive
+index magnitude of the assigned bulk materials, including the background.
+It accounts for both permittivity and permeability and all diagonal tensor
+components. Lower ``neff_guess`` values are raised to this search value;
+higher values are retained. Modes are ordered by decreasing real ``neff``,
+so Mode 1 is the fundamental mode rather than a mode near a lower search guess.
+
 Define reusable material and shape objects before assigning geometry. The
 following slab example uses an explicit mesh and saves a result without opening
 a window:
@@ -42,7 +49,7 @@ a window:
        name="left wall",
    )
    solver.mesh(max_element_size=0.25e-3)
-   result = solver.solve(num_modes=2, neff_guess=1.2)
+   result = solver.solve(num_modes=2)
    result.save("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
    loaded = load_result("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
    figure = loaded.plot(component="Ey", quantity="magnitude", mode=1)

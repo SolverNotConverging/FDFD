@@ -29,7 +29,26 @@ class _WaveguideAPI(GridSceneMixin):
         apply_pml(self, backend, resolution, spec)
     def add_pml(self, *, thickness, direction='all', order=3, sigma_max=5.):
         self._record_pml(thickness=thickness, direction=direction, order=order, sigma_max=sigma_max)
+    def _resolve_neff_guess(self, requested):
+        media = [self.background_material]
+        media.extend(record.material for record, _ in self._objects.values()
+                     if isinstance(record.material, materials.Material))
+        bound = 0.
+        for material in media:
+            epsilon, mu = materials.bulk_values(material)
+            products = np.asarray(epsilon).reshape(-1, 1)*np.asarray(mu).reshape(1, -1)
+            bound = max(bound, float(np.sqrt(np.abs(products)).max()))
+        self._neff_search_guess = max(1.01*bound, 0. if requested is None else abs(complex(requested)))
+        return self._neff_search_guess
     def _result_from_fields(self, fields, neff, polarizations, residuals, source_indices, field_residuals):
+        neff = np.asarray(neff)
+        order = np.lexsort((np.abs(neff.imag), -neff.real))
+        neff = neff[order]
+        fields = {name: values[..., order] for name, values in fields.items()}
+        polarizations = [polarizations[i] for i in order]
+        source_indices = [source_indices[i] for i in order]
+        residuals = np.asarray(residuals)[order]
+        field_residuals = np.asarray(field_residuals)[order]
         metadata = {'k0': self._backend.k_0, 'material_background': material_background(self),
                     'field_representation': 'staggered-fields; exp(-i*beta*z)',
                     'field_normalization': 'native eigenvector normalization; H_num=-i*eta0*H',
@@ -39,6 +58,7 @@ class _WaveguideAPI(GridSceneMixin):
                     'boundaries': boundary_provenance(self._backend),
                     'source_indices': tuple(source_indices),
                     'solve_info': {'eigensolver_tolerance': self._backend._eigensolver_tolerance,
+                                   'neff_guess': self._neff_search_guess,
                                    'residuals': np.asarray(residuals),
                                    'field_residuals': np.asarray(field_residuals),
                                    'eigenvalues': -np.asarray(neff)**2,
@@ -72,11 +92,10 @@ class ModeSolver1D(_WaveguideAPI):
         backend.num_modes = int(num_modes)
         backend._eigensolver_tolerance = eigensolver_tolerance
         self._result = None
-        backend.solve(sigma=None if neff_guess is None else -complex(neff_guess)**2)
+        backend.solve(sigma=-self._resolve_neff_guess(neff_guess)**2)
         candidates = [(pol, i, getattr(backend, 'neff_'+pol)[i]) for pol in ('TE', 'TM')
                       if polarization in ('both', pol) for i in range(num_modes)]
-        target = neff_guess if neff_guess is not None else max(abs(v[2]) for v in candidates)
-        candidates.sort(key=lambda item: abs(item[2]-target))
+        candidates.sort(key=lambda item: (-item[2].real, abs(item[2].imag)))
         selected = candidates[:num_modes]
         fields = {}
         for component in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'):
@@ -110,7 +129,7 @@ class ModeSolver2D(_WaveguideAPI):
         self._backend.num_modes = int(num_modes)
         self._backend._eigensolver_tolerance = eigensolver_tolerance
         self._result = None
-        self._backend.solve(sigma=None if neff_guess is None else -complex(neff_guess)**2)
+        self._backend.solve(sigma=-self._resolve_neff_guess(neff_guess)**2)
         fields = {name: np.array(getattr(self._backend, name), copy=True) for name in ('Ex','Ey','Ez','Hx','Hy','Hz')}
         return self._result_from_fields(fields, self._backend.neff, ['vector']*num_modes,
                                         self._backend.residuals, [('vector', i) for i in range(num_modes)],

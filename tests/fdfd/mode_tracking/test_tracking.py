@@ -279,7 +279,9 @@ def test_current_schema_does_not_ignore_unknown_controls(tmp_path):
 
 def test_tm_cutoff_and_physical_maxwell_ratio():
     cfg = config(polarization='TM', neff_guess=-.7j)
-    sweep = track_modes(slab, [.8*FC, 1.2*FC], port=PortSpec(boundary='enclosed'), config=cfg)
+    # Mode 1 is now the TEM fundamental; the first TM cutoff branch is Mode 2.
+    sweep = track_modes(slab, [.8*FC, 1.2*FC], port=PortSpec(boundary='enclosed'),
+                        config=cfg, seed_modes=(1,))
     modes = sweep.export()
     for mode in modes:
         n = mode.beta/(2*np.pi*mode.frequency/C)
