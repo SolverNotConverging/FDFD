@@ -10,9 +10,16 @@ Material-first workflow
 -----------------------
 
 The dedicated viewer shows all six electric and magnetic field components
-together, with the material geometry in the background. Select a mode and
+together, with the material geometry in the background. Select a mode from the dropdown and
 magnitude, real part, imaginary part, or phase. The title displays the selected
 mode's complex ``neff``. Material backgrounds are also retained in saved results.
+
+For frequency sweeps, import ``plot_dispersion`` from ``fdfd_waveguide_modes``
+and call ``plot_dispersion(frequencies, neff_sweep)`` after the loop. Frequencies
+are in hertz; append ``result.neff`` to ``neff_sweep`` at each frequency.
+The figure shows real and imaginary ``neff`` on two panels, with one trace per
+mode on each panel. Each column follows the returned mode order through the
+sweep. Use ``show=False`` to return the figure for saving without opening it.
 
 Define reusable material and shape objects before assigning geometry. The
 following slab example uses an explicit mesh and saves a result without opening

@@ -1069,6 +1069,42 @@ Returns: the atomically written HDF5 path.
 
 Returns: a typed ``PeriodicModeSet`` without solving.
 
+``plot_dispersion``
+~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    plot_dispersion(frequencies, neff, *, show=True)
+
+Plot Re(neff) and Im(neff), with a trace per mode on each panel.
+
+.. list-table:: Arguments
+   :header-rows: 1
+   :widths: 16 20 12 16 36
+
+   * - Argument
+     - Type / units
+     - Required / optional
+     - Default
+     - Meaning
+   * - ``frequencies``
+     - ``array-like or scalar``
+     - Required
+     - ``—``
+     - Sweep frequencies in hertz.
+   * - ``neff``
+     - ``array-like or scalar``
+     - Required
+     - ``—``
+     - Complex effective indices with shape (frequencies, modes).
+   * - ``show``
+     - ``bool``
+     - Optional
+     - ``True``
+     - Open the dispersion figure when True.
+
+Returns: a two-panel Matplotlib Figure with Re(neff) and Im(neff).
+
 Results and examples
 --------------------
 

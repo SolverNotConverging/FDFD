@@ -14,12 +14,13 @@ INVENTORY = json.loads((ROOT / "scripts/fdfd_public_api.json").read_text(encodin
 EXPORTS = {
     "fdfd_mode_tracking": {"ModeTracker1D", "ModeTracker2D", "PortSpec", "VerificationSpec", "TrackingConfig", "TrackedSweep", "PortMode",
                            "track_modes", "load_sweep", "export_subspace"},
-    "fdfd_waveguide_modes": {"ModeSolver1D", "ModeSolver2D", "ModeSet", "load_result"},
+    "fdfd_waveguide_modes": {"ModeSolver1D", "ModeSolver2D", "ModeSet", "load_result", "plot_dispersion"},
     "fdfd_periodic_modes": {
         "PeriodicModeSolver2D",
         "PeriodicModeSolver3D",
         "PeriodicModeSet",
         "load_result",
+        "plot_dispersion",
     },
     "fdfd_band_structure": {"BandStructureSolver2D", "BandStructureResult", "load_result"},
     "fdfd_scattering": {"ScatteringSolver2D", "ScatteringResult", "load_result"},

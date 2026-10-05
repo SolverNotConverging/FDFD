@@ -2,6 +2,7 @@
 import numpy as np
 from fdfd_common.errors import ConfigurationError
 from fdfd_common.field_plot import draw_field_panel, effective_index_label
+from fdfd_common.viewer_controls import ModeDropdown
 
 
 class PeriodicModeViewer:
@@ -32,11 +33,8 @@ class PeriodicModeViewer:
                                              ('magnitude', 'real', 'imag', 'phase'))
         self.quantity_control.ax.set_title('Field quantity')
         self.quantity_control.on_clicked(self._set_quantity)
-        self.mode_control = None
-        if len(result) > 1:
-            self.mode_control = Slider(self.figure.add_axes((.48, .17, .4, .03)),
-                                       'Mode', 1, len(result), valstep=1, valinit=1)
-            self.mode_control.on_changed(self._set_mode)
+        self.mode_control = ModeDropdown(self.figure, (.48, .16, .2, .05),
+                                         len(result), self._set_mode)
         self.plane_control = self.slice_control = None
         if self.plane is not None:
             self.plane_control = RadioButtons(self.figure.add_axes((.25, .025, .12, .14)),

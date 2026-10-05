@@ -54,11 +54,39 @@ def test_modal_viewer_updates_complex_neff_when_mode_changes(monkeypatch, result
                   else figure._periodic_mode_viewer)
         assert len(viewer.components) == 2
         assert 'neff = 1.5-0.02j' in figure._suptitle.get_text()
-        assert viewer.mode_control.valmin == 1
-        viewer.mode_control.set_val(2)
+        assert viewer.mode_control.button.label.get_text() == 'Mode 1 ▾'
+        assert not viewer.mode_control.menu_axis.get_visible()
+        from matplotlib.backend_bases import MouseEvent
+        canvas = figure.canvas
+        bounds = viewer.mode_control.button.ax.get_window_extent()
+        for event_name in ('button_press_event', 'button_release_event'):
+            canvas.callbacks.process(event_name, MouseEvent(event_name, canvas,
+                (bounds.x0+bounds.x1)/2, (bounds.y0+bounds.y1)/2, button=1))
+        assert viewer.mode_control.menu_axis.get_visible()
+        bounds = viewer.mode_control.options.labels[1].get_window_extent()
+        for event_name in ('button_press_event', 'button_release_event'):
+            canvas.callbacks.process(event_name, MouseEvent(event_name, canvas,
+                (bounds.x0+bounds.x1)/2, (bounds.y0+bounds.y1)/2, button=1))
+        assert not viewer.mode_control.menu_axis.get_visible()
+        assert viewer.mode_control.button.label.get_text() == 'Mode 2 ▾'
         assert 'Mode 2: neff = 2.1+0.03j' in figure._suptitle.get_text()
         viewer.quantity_control.set_active(2)
         assert all('(imag)' in ax.get_title() for ax in viewer.field_axes[:2])
+    finally:
+        plt.close(figure)
+
+
+def test_mode_dropdown_closes_when_clicking_elsewhere(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(plt, 'show', lambda **kwargs: None)
+    result = result_for(ModeSet, 'fdfd_waveguide_modes', ('x', 'y'), [1.5])
+    figure = result.show(block=False)
+    try:
+        dropdown = figure._waveguide_mode_viewer.mode_control
+        dropdown._toggle(None)
+        dropdown._close_outside(SimpleNamespace(inaxes=figure.axes[0]))
+        assert not dropdown.menu_axis.get_visible()
+        assert dropdown.mode == 1
     finally:
         plt.close(figure)
 

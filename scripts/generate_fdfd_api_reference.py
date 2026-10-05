@@ -102,6 +102,11 @@ def main():
         ):
             out += entry(f'{result_name}.{method}', getattr(result_type, method), returned)
         out += entry('load_result', module.load_result, f'a typed ``{result_name}`` without solving')
+        if hasattr(module, 'plot_dispersion'):
+            DESCRIPTIONS.update(frequencies='Sweep frequencies in hertz.',
+                                neff='Complex effective indices with shape (frequencies, modes).',
+                                show='Open the dispersion figure when True.')
+            out += entry('plot_dispersion', module.plot_dispersion, 'a two-panel Matplotlib Figure with Re(neff) and Im(neff)')
         out+=section('Results and examples')
         if family=='band_structure':out+='``solve`` returns ``BandStructureResult`` with frequency arrays in hertz and\neigenvalues indexed by TE/TM polarization.\n\n'
         elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with three TE/TM fields at their\nphysical Yee-grid locations.\n\n'
@@ -110,9 +115,10 @@ def main():
         out += "\n" + SHARED_REFERENCE
         (ROOT/package/"docs"/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
     inventory_path = ROOT/'scripts/fdfd_public_api.json'
-    inventory = json.loads(inventory_path.read_text()) if inventory_path.exists() else {}
-    inventory.update(INVENTORY)
-    inventory_path.write_text(json.dumps(inventory,indent=2)+'\n')
+    existing = json.loads(inventory_path.read_text()) if inventory_path.exists() else {}
+    inventory = {**existing, **INVENTORY}
+    if inventory != existing:
+        inventory_path.write_text(json.dumps(inventory,indent=2)+'\n')
 
 
 if __name__=='__main__':main()

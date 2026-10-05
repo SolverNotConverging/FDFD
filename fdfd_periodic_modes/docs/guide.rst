@@ -53,10 +53,17 @@ staggered grids. In 2D plots, ``z`` is horizontal and ``x`` is vertical.
 
 The 2D viewer shows the three active TE or TM components together with the
 material geometry in the background. The 3D viewer shows all six components.
-Select a mode and magnitude, real part, imaginary part, or phase. Mode numbers
+Select a mode from the dropdown and magnitude, real part, imaginary part, or phase. Mode numbers
 start at 1. The title displays the selected mode's complex ``neff``.
 The 3D viewer also selects an xy, xz, or yz plane and its physical slice position.
 Both dimensions retain material backgrounds in saved results.
+
+For frequency sweeps, import ``plot_dispersion`` from ``fdfd_periodic_modes``
+and call ``plot_dispersion(frequencies, neff_sweep)`` after the loop. Frequencies
+are in hertz; append ``result.neff`` to ``neff_sweep`` at each frequency.
+The figure shows real and imaginary ``neff`` on two panels, with one trace per
+mode on each panel. Each column follows the returned mode order through the
+sweep. Use ``show=False`` to return the figure for saving without opening it.
 
 Examples and API
 ----------------
