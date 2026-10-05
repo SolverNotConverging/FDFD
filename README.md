@@ -6,13 +6,13 @@ You can run examples directly from the downloaded source after installing the re
 
 ## Choose a solver
 
-| Solver | Import | Documentation | Examples |
-|---|---|---|---|
-| band structure | `fdfd_band_structure` | [Guide](fdfd_band_structure/docs/guide.rst) | [Examples](fdfd_band_structure/examples/README.rst) |
-| mode tracking | `fdfd_mode_tracking` | [Guide](fdfd_mode_tracking/docs/guide.rst) | [Examples](fdfd_mode_tracking/examples/README.rst) |
-| periodic modes | `fdfd_periodic_modes` | [Guide](fdfd_periodic_modes/docs/guide.rst) | [Examples](fdfd_periodic_modes/examples/README.rst) |
-| scattering | `fdfd_scattering` | [Guide](fdfd_scattering/docs/guide.rst) | [Examples](fdfd_scattering/examples/README.rst) |
-| waveguide modes | `fdfd_waveguide_modes` | [Guide](fdfd_waveguide_modes/docs/guide.rst) | [Examples](fdfd_waveguide_modes/examples/README.rst) |
+| Solver | What it solves | Import | Documentation | Examples |
+|---|---|---|---|---|
+| band structure | Finds eigenfrequencies versus Bloch wavevector in 2D periodic structures, for photonic bands and band gaps. | `fdfd_band_structure` | [Guide](fdfd_band_structure/docs/guide.rst) | [Examples](fdfd_band_structure/examples/README.rst) |
+| mode tracking | Follows the same waveguide modes across a frequency sweep, including crossings, degeneracies, and cutoff; provides bound-mode fields for ports. | `fdfd_mode_tracking` | [Guide](fdfd_mode_tracking/docs/guide.rst) | [Examples](fdfd_mode_tracking/examples/README.rst) |
+| periodic modes | Finds Bloch propagation constants and fields at a chosen frequency in 2D or 3D structures that repeat along the propagation direction, such as loaded guides and leaky-wave antennas. | `fdfd_periodic_modes` | [Guide](fdfd_periodic_modes/docs/guide.rst) | [Examples](fdfd_periodic_modes/examples/README.rst) |
+| scattering | Computes total and scattered fields for 2D TE or TM illumination problems, such as a plane wave incident on a dielectric cylinder. | `fdfd_scattering` | [Guide](fdfd_scattering/docs/guide.rst) | [Examples](fdfd_scattering/examples/README.rst) |
+| waveguide modes | Finds propagation constants, effective indices, and mode fields at a chosen frequency for layered 1D guides or 2D waveguide cross sections. | `fdfd_waveguide_modes` | [Guide](fdfd_waveguide_modes/docs/guide.rst) | [Examples](fdfd_waveguide_modes/examples/README.rst) |
 
 Each solver folder contains its own `src/`, `docs/`, and `examples/`. Shared materials and geometry live in `fdfd_common/`. Use Python 3.11–3.13.
 
