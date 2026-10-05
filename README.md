@@ -14,7 +14,7 @@ You can run examples directly from the downloaded source after installing the re
 | scattering | Computes total and scattered fields for 2D TE or TM illumination problems, such as a plane wave incident on a dielectric cylinder. | `fdfd_scattering` | [Guide](fdfd_scattering/docs/guide.rst) | [Examples](fdfd_scattering/examples/README.rst) |
 | waveguide modes | Finds propagation constants, effective indices, and mode fields at a chosen frequency for layered 1D guides or 2D waveguide cross sections. | `fdfd_waveguide_modes` | [Guide](fdfd_waveguide_modes/docs/guide.rst) | [Examples](fdfd_waveguide_modes/examples/README.rst) |
 
-Each solver folder contains its own `src/`, `docs/`, and `examples/`. Shared materials and geometry live in `fdfd_common/`. Use Python 3.11–3.13.
+Each solver folder contains its own `src/`, `docs/`, and `examples/`. Shared materials and geometry live in `fdfd_common/`.
 
 ## Download, install required packages, and run
 
@@ -54,14 +54,14 @@ With your environment active, [uv](https://docs.astral.sh/uv/pip/packages/) can 
 uv pip install .
 ```
 
-To create an environment first, run `uv venv --python 3.12`. Activate it with `.\.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux or macOS, then run the installation command above. Keep that environment active when using FDFD from another folder.
+To create an environment first, run `uv venv`. Activate it with `.\.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux or macOS, then run the installation command above. Keep that environment active when using FDFD from another folder.
 
 ### Conda environment
 
 Create and activate a [Conda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-pkgs.html#using-pip-in-an-environment), then install FDFD with its pip:
 
 ```sh
-conda create -n fdfd python=3.12 pip
+conda create -n fdfd python pip
 conda activate fdfd
 python -m pip install .
 ```
