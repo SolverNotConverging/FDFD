@@ -3,6 +3,8 @@
 from pathlib import Path as _Path
 __path__.append(str(_Path(__file__).parent / "src"))
 
+from fdfd_common import Material, GoodConductor, SurfaceImpedance, materials, shapes
+
 from .contracts import PortSpec, VerificationSpec, TrackingConfig, TrackedSweep, PortMode
 from .sweep import track_modes
 from .persistence import load_sweep
@@ -11,3 +13,5 @@ from .api import ModeTracker1D, ModeTracker2D
 
 __all__ = ['PortSpec', 'VerificationSpec', 'TrackingConfig', 'TrackedSweep', 'PortMode',
            'ModeTracker1D', 'ModeTracker2D', 'track_modes', 'load_sweep', 'export_subspace']
+
+__all__ += ["Material", "GoodConductor", "SurfaceImpedance", "materials", "shapes"]

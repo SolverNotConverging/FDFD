@@ -177,3 +177,13 @@ Archive errors raise ``fdfd_common.errors.PersistenceError``. Invalid factory
 contracts and configuration raise ``ValueError``. Solver errors are propagated
 except for explicitly handled convergence failures and work-budget exhaustion,
 which produce unresolved events after a valid reference seed exists.
+
+Shared materials and shapes
+---------------------------
+
+Import ``Material``, ``GoodConductor``, ``SurfaceImpedance``, ``materials``, and
+``shapes`` directly from this solver package. These are the same shared objects
+provided by ``fdfd_common``; examples need only the solver package import.
+See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
+for their definitions. Each solver supports the material and shape types
+listed in its guide.

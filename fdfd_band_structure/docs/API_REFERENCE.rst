@@ -561,3 +561,13 @@ exports ``load_result()``. Invalid dimensions, materials, and controls raise
 actionable ``fdfd_common`` exceptions. See the `user guide <guide.rst>`_ and
 root examples. Assembly routines, matrix builders, grid-index records, and
 Arnoldi kernels are excluded from this user reference.
+
+Shared materials and shapes
+---------------------------
+
+Import ``Material``, ``GoodConductor``, ``SurfaceImpedance``, ``materials``, and
+``shapes`` directly from this solver package. These are the same shared objects
+provided by ``fdfd_common``; examples need only the solver package import.
+See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
+for their definitions. Each solver supports the material and shape types
+listed in its guide.

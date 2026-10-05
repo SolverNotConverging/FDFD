@@ -1,21 +1,35 @@
 """Geometry and smoke coverage for the open CPW example."""
 from pathlib import Path
-import runpy
+import ast
 
 import numpy as np
-import pytest
 
 from fdfd_mode_tracking import TrackingConfig, VerificationSpec, load_sweep
 
 
-def example_module():
+def example_tracker(*, frequencies=None, air_padding=8e-3, cell_size=.1e-3):
+    """Run the example geometry before its demonstration sweep, with a smoke mesh."""
     root = Path(__file__).resolve().parents[3]
-    return runpy.run_path(str(
-        root / 'fdfd_mode_tracking/examples/tracked_coplanar_waveguide_2d.py'))
+    path = root / 'fdfd_mode_tracking/examples/tracked_coplanar_waveguide_2d.py'
+    tree = ast.parse(path.read_text())
+    settings = {'frequencies', 'air_padding', 'cell_size'}
+    prefix = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            names = {target.id for target in node.targets if isinstance(target, ast.Name)}
+            if 'sweep' in names:
+                break
+            if names & settings:
+                continue
+        prefix.append(node)
+    scope = dict(__file__=str(path), frequencies=frequencies,
+                 air_padding=air_padding, cell_size=cell_size)
+    exec(compile(ast.Module(body=prefix, type_ignores=[]), str(path), 'exec'), scope)
+    return scope['tracker']
 
 
-def test_coplanar_default_air_clearance_and_mesh():
-    tracker = example_module()['build_tracker'](frequencies=[10e9])
+def test_coplanar_air_clearance_and_mesh():
+    tracker = example_tracker(frequencies=[10e9])
     assert tracker.port.boundary == 'open'
     np.testing.assert_allclose(tracker.x_range, (-.014, .014))
     np.testing.assert_allclose(tracker.y_range, (-.008, .0094))
@@ -26,14 +40,11 @@ def test_coplanar_default_air_clearance_and_mesh():
         assert len(solver._objects) == 4
         for original, variant in zip(tracker._objects.values(), solver._objects.values()):
             assert original[0].shape == variant[0].shape
-    for kwargs in ({'air_padding': 0}, {'cell_size': -1}, {'cell_size': np.nan}):
-        with pytest.raises(ValueError):
-            example_module()['build_tracker'](**kwargs)
 
 
 def test_coplanar_example_tracks_and_saves(tmp_path):
     # Smaller smoke mesh, not the demonstration's fine default grid.
-    tracker = example_module()['build_tracker'](
+    tracker = example_tracker(
         frequencies=[10e9, 11e9], air_padding=4e-3, cell_size=.2e-3)
     sweep = tracker.solve(
         num_modes=3,

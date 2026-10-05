@@ -31,8 +31,7 @@ contribute a bulk index. ``neff_guess`` remains an optional explicit override.
 
 .. code-block:: python
 
-   from fdfd_common import Material
-   from fdfd_mode_tracking import ModeTracker2D, PortSpec
+   from fdfd_mode_tracking import ModeTracker2D, PortSpec, Material
 
    tracker = ModeTracker2D(
        frequencies=[5e9, 6e9, 8e9],

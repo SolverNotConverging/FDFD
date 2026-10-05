@@ -29,7 +29,11 @@ EXPORTS = {
 @pytest.mark.parametrize("package", INVENTORY)
 def test_fdfd_reference_matches_curated_public_api(package: str) -> None:
     module = importlib.import_module(package)
-    assert set(module.__all__) == EXPORTS[package]
+    shared = {"Material", "GoodConductor", "SurfaceImpedance", "materials", "shapes"}
+    assert set(module.__all__) == EXPORTS[package] | shared
+    common = importlib.import_module("fdfd_common")
+    for name in shared:
+        assert getattr(module, name) is getattr(common, name)
     family = package.removeprefix("fdfd_")
     reference = (ROOT / package / "docs" / "API_REFERENCE.rst").read_text(
         encoding="utf-8"

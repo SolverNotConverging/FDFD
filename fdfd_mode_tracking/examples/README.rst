@@ -1,8 +1,9 @@
 Tracked port mode examples
 ==========================
 
-Install the checkout into the active environment before running these examples.
-None of these examples requires an FDTD engine. The ``tracked_*`` examples and
+Install the required Python packages from the `root README <../../README.md>`_.
+The scripts run directly from top to bottom and import shared materials from
+the solver package. Installing FDFD itself is optional. The ``tracked_*`` examples and
 the degeneracy/crossing examples open an interactive Matplotlib viewer.
 
 * ``parallel_plate_cutoff.py`` tracks a physical PEC guide above and below
@@ -14,27 +15,22 @@ the degeneracy/crossing examples open an interactive Matplotlib viewer.
 * ``tracked_coplanar_waveguide_2d.py`` sweeps an open, finite-board CPW
   from 6 to 30 GHz. A 1.2 mm centre strip and two 0.6 mm slots sit on a 1.2 mm,
   epsilon-r = 4 substrate, 12 mm wide. There is no backing ground or housing.
-  Vacuum extends 8 mm beyond the complete board/metal bounding box in each of
-  the four directions (+/-x and +/-y), giving a 28 by 17.4 mm domain. The
-  0.1 mm mesh (280 by 174 cells) resolves each slot with six cells and the
-  0.2 mm metal thickness with two. Six candidates per frequency are tracked.
-  No PML is used: confinement requires mesh refinement AND two exterior-domain
-  enlargements with the same physical geometry. These checks reach 560 by
-  348 cells and make this example substantially more expensive than before.
-  Padding is not a guarantee of confinement, especially for weakly bound
-  branches. Failed checks remain visible; inspect saved candidate evidence
-  before interpreting an ``x`` as radiation rather than mesh uncertainty.
-  Run normally for the frequency-selectable field viewer, or call
-  ``main(show=False)`` headlessly. ``air_padding`` and ``cell_size`` can be
-  changed on ``build_tracker`` or ``main`` for further convergence studies;
-  ``frequencies`` can restrict a costly run to selected samples.
+  Vacuum extends 4 mm beyond the board/metal bounding box on every side,
+  giving a 20 by 9.4 mm domain with a 100 by 47 grid. Six candidates per
+  frequency are tracked. No PML is used: confinement requires mesh refinement
+  and two exterior-domain enlargements with the same physical geometry.
+  Edit ``frequencies``, ``air_padding``, and ``cell_size`` near the top of the
+  script to change the sweep or refine the grid. Inspect the saved candidate
+  evidence when assessing confinement.
 * ``degenerate_square_waveguide_2d.py`` follows the two-dimensional
   TE10/TE01 eigenspace of a square PEC guide. The GUI marks both members as a
   degenerate subspace instead of assigning physical meaning to an arbitrary
   eigensolver basis rotation.
-* ``anisotropic_mode_crossing_1d.py`` uses a diagonal anisotropic dielectric to
+* ``anisotropic_pec_mode_crossing_1d.py`` uses a diagonal anisotropic dielectric to
   create a true TE1/TM1 crossing. The distinct polarizations remain separate
   tracked branches as their propagation constants exchange order.
+
+To run without opening a viewer, omit the ``sweep.show(...)`` line.
 
 The interactive viewer shows tracked dispersion curves and every candidate
 returned by each primary/adaptive solve. Set just ``num_modes`` to control the

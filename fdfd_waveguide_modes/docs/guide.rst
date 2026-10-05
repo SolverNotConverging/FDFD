@@ -15,8 +15,7 @@ a window:
 
 .. code-block:: python
 
-   from fdfd_common import Material, materials, shapes
-   from fdfd_waveguide_modes import ModeSolver1D, load_result
+   from fdfd_waveguide_modes import ModeSolver1D, load_result, Material, materials, shapes
 
    dielectric = Material(name="dielectric", epsilon=2.25)
    solver = ModeSolver1D(

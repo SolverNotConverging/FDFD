@@ -69,8 +69,7 @@ python -m pip install .
 After installation, you can use imports such as these from any folder in that environment:
 
 ```python
-from fdfd_common import Material, materials, shapes
-from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D
+from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D, Material, materials, shapes
 ```
 
 ## Optional Cython build

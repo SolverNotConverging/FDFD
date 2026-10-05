@@ -1,6 +1,9 @@
 FDFD periodic modes examples
 ============================
 
+The scripts run directly from top to bottom. Shared materials and shapes are
+imported from the solver package alongside the solver classes.
+
 Install the Python dependencies first; see `setup <../../README.md>`_.
 The `user guide <../docs/guide.rst>`_ and
 `public API <../docs/API_REFERENCE.rst>`_ explain supported controls.
@@ -23,7 +26,7 @@ substantially longer. 3D cases also require more memory.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use
-``fdfd_periodic_modes/outputs/examples/<example>/`` in the checkout.
+``fdfd_periodic_modes/outputs/examples/<example>/`` in the repository.
 
 Postprocessing
 --------------

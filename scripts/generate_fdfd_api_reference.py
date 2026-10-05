@@ -34,6 +34,18 @@ RESULT_TYPES = {
 }
 
 
+SHARED_REFERENCE = """Shared materials and shapes
+---------------------------
+
+Import ``Material``, ``GoodConductor``, ``SurfaceImpedance``, ``materials``, and
+``shapes`` directly from this solver package. These are the same shared objects
+provided by ``fdfd_common``; examples need only the solver package import.
+See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
+for their definitions. Each solver supports the material and shape types
+listed in its guide.
+"""
+
+
 def main():
     DESCRIPTIONS.update({
         'background_material':'Predefined bulk Material assigned to unfilled grid cells.',
@@ -95,6 +107,7 @@ def main():
         elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with scalar total fields at their\nphysical Yee-grid locations.\n\n'
         else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and zero-based mode selection.\n\n'
         out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``fdfd_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
+        out += "\n" + SHARED_REFERENCE
         (ROOT/package/"docs"/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
     (ROOT/'scripts/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
 
