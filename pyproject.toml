@@ -39,16 +39,14 @@ dev = [
 fdfd = "fdfd.__main__:main"
 
 [tool.uv]
-package = true
+package = false
 default-groups = ["dev"]
 cache-keys = [
   { file = "pyproject.toml" },
   { file = "setup.py" },
-  { file = "libraries/**/src/**/*.py" },
-  { file = "libraries/**/src/**/*.pyx" },
-  { file = "libraries/**/src/**/*.pxd" },
-  { file = "solvers/**/src/**/*.py" },
-  { file = "src/**/*.py" },
+  { file = "setup_cython.py" },
+  { file = "**/src/*.py" },
+  { file = "**/src/*.pyx" },
 ]
 
 [tool.setuptools]

@@ -3,6 +3,15 @@
 The exact vacuum solution is beta = sqrt(k0**2 - (pi / width)**2).
 Refine spatial resolution while keeping frequency, dimensions, and the mode fixed.
 """
+
+# Run directly from the checkout without installing solver packages.
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = next(parent for parent in _Path(__file__).resolve().parents
+             if (parent / "cem_common" / "__init__.py").is_file())
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+
 from cem_common import materials, shapes
 import argparse
 import csv

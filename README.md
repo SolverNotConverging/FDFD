@@ -1,42 +1,48 @@
 # FDFD
 
-Electromagnetic solvers using the finite difference frequency domain method.
+Electromagnetic solvers. Each root solver folder contains its own `src/`, `docs/`, and `examples/`.
 
-Shared materials, shapes, persistence, and periodic eigensolver libraries are included.
+| Solver | Import | Documentation | Examples |
+|---|---|---|---|
+| band structure | `fdfd_band_structure` | [Guide](fdfd_band_structure/docs/guide.rst) | [Examples](fdfd_band_structure/examples/README.rst) |
+| mode tracking | `fdfd_mode_tracking` | [Guide](fdfd_mode_tracking/docs/guide.rst) | [Examples](fdfd_mode_tracking/examples/README.rst) |
+| periodic modes | `fdfd_periodic_modes` | [Guide](fdfd_periodic_modes/docs/guide.rst) | [Examples](fdfd_periodic_modes/examples/README.rst) |
+| scattering | `fdfd_scattering` | [Guide](fdfd_scattering/docs/guide.rst) | [Examples](fdfd_scattering/examples/README.rst) |
+| waveguide modes | `fdfd_waveguide_modes` | [Guide](fdfd_waveguide_modes/docs/guide.rst) | [Examples](fdfd_waveguide_modes/examples/README.rst) |
 
-| Solver | Python package | Documentation |
-|---|---|---|
-| band structure | `fdfd_band_structure` | [Guide](doc/solvers/fdfd/band_structure/guide.rst) |
-| mode tracking | `fdfd_mode_tracking` | [Guide](doc/solvers/fdfd/mode_tracking/guide.rst) |
-| periodic modes | `fdfd_periodic_modes` | [Guide](doc/solvers/fdfd/periodic_modes/guide.rst) |
-| scattering | `fdfd_scattering` | [Guide](doc/solvers/fdfd/scattering/guide.rst) |
-| waveguide modes | `fdfd_waveguide_modes` | [Guide](doc/solvers/fdfd/waveguide_modes/guide.rst) |
+## Run from the checkout
 
-## Install from source
-
-Python 3.11–3.13 is supported; `.python-version` selects Python 3.12.
-Install uv, clone this repository, and build from the repository root:
+Install the Python dependencies, then run an example. No solver package installation is needed.
 
 ```sh
-git clone https://github.com/SolverNotConverging/FDFD.git FDFD
-cd FDFD
-uv sync
-uv run python -m fdfd info
-uv run python examples/fdfd/waveguide_modes/rectangular_waveguide_2d.py
+python -m pip install -r requirements.txt
+python fdfd_waveguide_modes/examples/parallel_plate_waveguide_1d.py
 ```
 
-
-A C compiler is required for the periodic eigensolver Cython extension.
-
-## Examples and checks
-
-See [examples](examples/README.rst), [documentation](doc/README.rst), and
-[benchmarks](benchmarks/README.md). Electromagnetic solvers use `exp(+i*omega*t)`;
-passive permittivity has nonpositive imaginary part.
+You can also run examples as modules from the root:
 
 ```sh
-uv run python -m pytest
-uv run python scripts/check_documentation.py
+python -m fdfd_waveguide_modes.examples.parallel_plate_waveguide_1d
 ```
 
-Original source is available under the [MIT license](LICENSE).
+Shared materials and geometry live in `cem_common/`; `periodic_eigensolver/` provides
+the NumPy eigensolver and an optional Cython kernel. To compile the kernel in place:
+
+```sh
+python -m pip install "Cython>=3,<4" "setuptools>=77,<83"
+python setup_cython.py build_ext --inplace
+```
+
+Without the compiled kernel, the default backend uses NumPy. A C compiler is needed only for this optional build.
+
+## Checks
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest
+python scripts/check_documentation.py
+python scripts/qualify_examples.py --import-only
+```
+
+`uv sync` can also create a dependency environment without installing the solvers.
+Generated results are saved under ignored `outputs/`. Source is [MIT licensed](LICENSE).

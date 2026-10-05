@@ -1,15 +1,15 @@
 {
-  "generated_utc": "2026-10-05T18:47:34.689968+00:00",
-  "base_git_revision": "119e73c95ba5d18185ace71c6edc3dc99a8cc59a",
+  "generated_utc": "2026-10-05T19:05:14.578421+00:00",
+  "base_git_revision": "dae8239900edc16eafaf4797db82894f17af229a",
   "working_tree_modified": true,
-  "source_sha256": "bc84256a6840b0e610112cb3ddfa1072928c9015bbc57c9130ba4f7b84261d9e",
-  "source_hash_definition": "Sorted benchmark .py and solver/library src .py/.cpp/.h/.hpp; relative POSIX path, NUL, bytes, NUL.",
+  "source_sha256": "5db4f40177da3f002b9be33d8cce27c56a2ca43bf148a8d4cfb86a33de323e61",
+  "source_hash_definition": "Sorted benchmark .py and root package src .py/.cpp/.h/.hpp; relative POSIX path, NUL, bytes, NUL.",
   "python": "3.12.14",
   "platform": "Windows-11-10.0.26200-SP0",
   "dependencies": {
     "numpy": "2.5.3",
     "scipy": "1.18.1",
-    "matplotlib": "3.11.1",
+    "matplotlib": "3.11.2",
     "h5py": "3.16.0"
   },
   "commands": [
@@ -17,7 +17,7 @@
   ],
   "checks": "All benchmark commands exited successfully with --check.",
   "artifact_sha256": {
-    "rectangular_waveguide_modes/comparison.csv": "0c7a499d659ea44e5f96110ac73cb1a9b761ff215e013637fcd47b6f726e209a",
-    "rectangular_waveguide_modes/convergence.png": "a88c48931f1bc4b1799c6066b282aa1b282b95ed8db8280210a231e4a0c8b4bc"
+    "rectangular_waveguide_modes/comparison.csv": "0168c3d0b228d05974000411a678e11749aa36d4e6e3a8c2ca3368fad8370ca4",
+    "rectangular_waveguide_modes/convergence.png": "cccb8015bef765bbd32813a2f9a071729aee716fb6d67e8558002f03efeb47f3"
   }
 }

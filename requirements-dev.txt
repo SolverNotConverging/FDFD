@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8,<10
+docutils
+Cython>=3,<4
+setuptools>=77,<83

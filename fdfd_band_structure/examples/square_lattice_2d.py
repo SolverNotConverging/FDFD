@@ -1,0 +1,39 @@
+"""Dielectric rods in a periodic cell: material, geometry, grid, Bloch bands."""
+
+# Run directly from the checkout without installing solver packages.
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = next(parent for parent in _Path(__file__).resolve().parents
+             if (parent / "cem_common" / "__init__.py").is_file())
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+
+from pathlib import Path
+import numpy as np
+from cem_common import Material
+from fdfd_band_structure import BandStructureSolver2D
+
+OUTPUT = _ROOT / "outputs/fdfd_band_structure/examples/square_lattice_2d"
+
+
+def main():
+    a, b = .01, .01
+    rod = Material(name="dielectric rod", epsilon=8.9)
+    solver = BandStructureSolver2D(x_range=(-a/2, a/2), y_range=(-b/2, b/2))
+    solver.add_circle(center=(0., 0.), radius=.2*min(a,b), material=rod)
+    solver.mesh(resolution=(20, 20))
+    path = solver.make_bloch_path(
+        points=((0.,0.), (np.pi/a,0.), (np.pi/a,np.pi/b), (0.,0.)),
+        num_points=16,
+    )
+    result = solver.solve(beta_path=path, num_modes=4)
+    print("First TE band (Hz):", result.frequencies["TE"][0])
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    result.save(OUTPUT / "bands.h5")
+    result.plot().savefig(OUTPUT / "bands.png", dpi=160)
+    result.show()
+    return result
+
+
+if __name__ == "__main__":
+    main()

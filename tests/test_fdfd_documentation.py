@@ -31,7 +31,7 @@ def test_fdfd_reference_matches_curated_public_api(package: str) -> None:
     module = importlib.import_module(package)
     assert set(module.__all__) == EXPORTS[package]
     family = package.removeprefix("fdfd_")
-    reference = (ROOT / "doc" / "solvers" / "fdfd" / family / "API_REFERENCE.rst").read_text(
+    reference = (ROOT / package / "docs" / "API_REFERENCE.rst").read_text(
         encoding="utf-8"
     )
     for name in module.__all__:
@@ -61,7 +61,7 @@ def test_fdfd_user_rst_is_valid(package: str) -> None:
     if family == "mode_tracking":
         filenames += ("mathematics.rst",)
     for filename in filenames:
-        path = ROOT / "doc" / "solvers" / "fdfd" / family / filename
+        path = ROOT / package / "docs" / filename
         messages = io.StringIO()
         publish_doctree(
             path.read_text(encoding="utf-8"),

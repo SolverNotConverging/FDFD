@@ -11,7 +11,7 @@ from fdfd_mode_tracking import TrackingConfig, VerificationSpec, load_sweep
 def example_module():
     root = Path(__file__).resolve().parents[3]
     return runpy.run_path(str(
-        root / 'examples/fdfd/mode_tracking/tracked_coplanar_waveguide_2d.py'))
+        root / 'fdfd_mode_tracking/examples/tracked_coplanar_waveguide_2d.py'))
 
 
 def test_coplanar_default_air_clearance_and_mesh():

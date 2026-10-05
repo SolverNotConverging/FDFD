@@ -1,8 +1,17 @@
 """Render the deliberately selected material-first FDFD user API."""
+
+# Run directly from the checkout without installing solver packages.
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = next(parent for parent in _Path(__file__).resolve().parents
+             if (parent / "cem_common" / "__init__.py").is_file())
+if str(_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_ROOT))
+
 from importlib import import_module
 import json
 from pathlib import Path
-from generate_api_reference import entry, section, DESCRIPTIONS, TYPES
+from _api_reference import entry, section, DESCRIPTIONS, TYPES
 
 ROOT=Path(__file__).resolve().parents[1]
 INVENTORY={
@@ -86,7 +95,7 @@ def main():
         elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with scalar total fields at their\nphysical Yee-grid locations.\n\n'
         else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and zero-based mode selection.\n\n'
         out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``cem_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
-        (ROOT/'doc/solvers/fdfd'/family/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
+        (ROOT/package/"docs"/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
     (ROOT/'doc/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
 
 

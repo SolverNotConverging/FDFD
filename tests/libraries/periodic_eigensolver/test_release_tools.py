@@ -12,7 +12,7 @@ from benchmarks.periodic_eigensolver.benchmark_end_to_end import (
     _build_problem,
     enforce_release_gate,
 )
-from libraries.periodic_eigensolver.scripts.verify_native_wheel import verify_native_wheel
+from periodic_eigensolver.scripts.verify_native_wheel import verify_native_wheel
 
 
 def _write_wheel(path: Path, native_members: tuple[str, ...]) -> None:

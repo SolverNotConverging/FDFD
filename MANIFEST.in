@@ -1,2 +1,2 @@
 include LICENSE README.md pyproject.toml setup.py
-recursive-include libraries/periodic_eigensolver/src/periodic_eigensolver *.pyx
+recursive-include periodic_eigensolver/src *.pyx
