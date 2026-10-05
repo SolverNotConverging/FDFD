@@ -13,7 +13,7 @@ import importlib.util
 from pathlib import Path
 import numpy as np
 
-OUTPUT = _ROOT / "outputs/fdfd_periodic_modes/examples/image_guide_leaky_wave_antenna_3d_dispersion"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/image_guide_leaky_wave_antenna_3d_dispersion"
 
 
 def main():

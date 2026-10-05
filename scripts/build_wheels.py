@@ -21,7 +21,7 @@ from periodic_eigensolver.scripts.verify_native_wheel import verify_native_wheel
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "outputs/dist")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist")
     args = parser.parse_args()
     env = dict(os.environ, FDFD_BUILD_CYTHON="1")
     subprocess.run(["uv", "build", "--wheel", "--out-dir", str(args.output), str(ROOT)], check=True, env=env)

@@ -17,7 +17,7 @@ from fdfd_mode_tracking import ModeTracker1D, PortSpec, TrackingConfig
 
 
 OUTPUT = (_ROOT
-          / 'outputs/fdfd_mode_tracking/examples/anisotropic_mode_crossing_1d')
+          / 'fdfd_mode_tracking/outputs/examples/anisotropic_mode_crossing_1d')
 C0 = 1 / np.sqrt(8.854187817e-12 * 4e-7 * np.pi)
 
 

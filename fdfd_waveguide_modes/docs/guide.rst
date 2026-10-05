@@ -32,8 +32,8 @@ a window:
    )
    solver.mesh(max_element_size=0.25e-3)
    result = solver.solve(num_modes=2, neff_guess=1.2)
-   result.save("outputs/fdfd_modes.h5")
-   loaded = load_result("outputs/fdfd_modes.h5")
+   result.save("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
+   loaded = load_result("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
    figure = loaded.plot(component="Ey", quantity="magnitude", mode=0)
 
 ``solve()`` meshes automatically if needed. Geometry edits through

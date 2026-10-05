@@ -24,7 +24,7 @@ from matplotlib.ticker import FormatStrFormatter
 from scipy.constants import c
 from fdfd_waveguide_modes import ModeSolver2D as FDFDModeSolver2D
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / 'outputs/benchmarks/analytical/rectangular_waveguide_modes'
+DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / 'fdfd_waveguide_modes/outputs/benchmarks/analytical/rectangular_waveguide_modes'
 
 
 def compare(levels=(8, 12, 16)):

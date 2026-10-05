@@ -13,7 +13,7 @@ import numpy as np
 from fdfd_common import Material
 from fdfd_band_structure import BandStructureSolver2D
 
-OUTPUT = _ROOT / "outputs/fdfd_band_structure/examples/square_lattice_2d"
+OUTPUT = _ROOT / "fdfd_band_structure/outputs/examples/square_lattice_2d"
 
 
 def main():

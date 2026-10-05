@@ -31,8 +31,8 @@ Material-first workflow
    solver.add_pml(thickness=2.5e-3, direction="x+")
    solver.mesh(resolution=(40, 32))
    result = solver.solve(num_modes=4, neff_guess=0.5)
-   result.save("outputs/fdfd_periodic.h5")
-   loaded = load_result("outputs/fdfd_periodic.h5")
+   result.save("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
+   loaded = load_result("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
    loaded.plot(component="Hy", quantity="magnitude", mode=0)
 
 The 3D class uses ``add_box()``, ``add_sphere()``, and ``add_cylinder()``

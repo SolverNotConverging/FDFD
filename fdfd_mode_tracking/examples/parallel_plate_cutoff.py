@@ -15,7 +15,7 @@ from fdfd_common import materials
 from fdfd_waveguide_modes import ModeSolver1D
 from fdfd_mode_tracking import PortSpec, TrackingConfig, track_modes
 
-OUTPUT = _ROOT / 'outputs/fdfd_mode_tracking/examples/parallel_plate_cutoff'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/parallel_plate_cutoff'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
 

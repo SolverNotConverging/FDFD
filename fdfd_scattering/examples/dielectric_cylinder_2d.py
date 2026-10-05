@@ -12,7 +12,7 @@ from pathlib import Path
 from fdfd_common import Material
 from fdfd_scattering import ScatteringSolver2D
 
-OUTPUT = _ROOT / "outputs/fdfd_scattering/examples/dielectric_cylinder_2d"
+OUTPUT = _ROOT / "fdfd_scattering/outputs/examples/dielectric_cylinder_2d"
 
 
 def main():

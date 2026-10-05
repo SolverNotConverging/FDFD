@@ -20,4 +20,4 @@ substantially longer. 3D cases also require more memory.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use
-``outputs/fdfd_scattering/examples/<example>/`` in the checkout.
+``fdfd_scattering/outputs/examples/<example>/`` in the checkout.

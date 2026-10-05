@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.figure import Figure
 
-DEFAULT_INPUT = _ROOT / "outputs/fdfd_waveguide_modes/examples/layered_waveguide_1d_dispersion/dispersion.csv"
+DEFAULT_INPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/layered_waveguide_1d_dispersion/dispersion.csv"
 
 
 def main():

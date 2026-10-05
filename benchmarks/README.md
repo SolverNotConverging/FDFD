@@ -6,5 +6,5 @@ Run analytical benchmarks after installing the project:
 python benchmarks/analytical/rectangular_waveguide_modes.py --check
 ```
 
-Reports are written to ignored `outputs/benchmarks/analytical/`.
+Reports are written to ignored `fdfd_waveguide_modes/outputs/benchmarks/analytical/`.
 Shared periodic eigensolver performance benchmarks are in `periodic_eigensolver/`.

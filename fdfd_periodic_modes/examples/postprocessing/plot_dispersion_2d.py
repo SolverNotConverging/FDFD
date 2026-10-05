@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.figure import Figure
 
-DEFAULT_INPUT = _ROOT / "outputs/fdfd_periodic_modes/examples/surface_wave_antenna_2d_dispersion/dispersion.csv"
+DEFAULT_INPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d_dispersion/dispersion.csv"
 
 
 def main():

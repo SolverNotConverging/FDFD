@@ -12,7 +12,7 @@ from pathlib import Path
 from fdfd_common import Material, materials, shapes
 from fdfd_waveguide_modes import ModeSolver2D
 
-OUTPUT = _ROOT / "outputs/fdfd_waveguide_modes/examples/microstrip_2d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/microstrip_2d"
 
 
 def build_solver():

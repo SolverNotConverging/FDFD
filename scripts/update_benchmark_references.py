@@ -1,6 +1,6 @@
 """Run analytical checks, then refresh the deliberately tracked benchmark reports.
 
-Ordinary benchmark runs write to ignored outputs/. Run this script explicitly
+Ordinary benchmark runs write to ignored fdfd_waveguide_modes/outputs/benchmarks/. Run this script explicitly
 when updating the reviewed reference PNG/CSV files under benchmarks/.
 """
 
@@ -43,7 +43,7 @@ def main():
         target = destination / case
         target.mkdir(parents=True, exist_ok=True)
         for filename in filenames:
-            source = ROOT / 'outputs/benchmarks/analytical' / case / filename
+            source = ROOT / 'fdfd_waveguide_modes/outputs/benchmarks/analytical' / case / filename
             shutil.copyfile(source, target / filename)
             artifacts[f'{case}/{filename}'] = hashlib.sha256(source.read_bytes()).hexdigest()
     source_hash = hashlib.sha256()

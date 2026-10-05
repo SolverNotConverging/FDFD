@@ -52,5 +52,5 @@ red ``x``; degenerate modes use diamonds and cutoff-bracket modes use stars. A
 proven bound exact-cutoff candidate keeps the star without an ``x`` so the branch
 remains visible, although its singular exact-cutoff profile cannot be exported.
 
-Generated artifacts live under ``outputs/fdfd_mode_tracking/examples/``.
+Generated artifacts live under ``fdfd_mode_tracking/outputs/examples/``.
 See the `tracking guide <../docs/guide.rst>`_.

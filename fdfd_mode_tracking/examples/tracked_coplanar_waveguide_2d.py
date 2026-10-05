@@ -24,7 +24,7 @@ from fdfd_mode_tracking import ModeTracker2D, PortSpec, TrackingConfig
 
 
 OUTPUT = (_ROOT
-          / 'outputs/fdfd_mode_tracking/examples/tracked_coplanar_waveguide_2d')
+          / 'fdfd_mode_tracking/outputs/examples/tracked_coplanar_waveguide_2d')
 
 
 def build_tracker(*, frequencies=None, air_padding=8e-3, cell_size=.1e-3):

@@ -212,8 +212,9 @@ __marimo__/
 # Personal use scripts/data
 personal_use/
 
-# Generated simulations and release qualification artifacts
-/outputs/
+# Generated simulations
+/fdfd_*/outputs/*
+!/fdfd_*/outputs/.gitkeep
 
 mode_data.*
 

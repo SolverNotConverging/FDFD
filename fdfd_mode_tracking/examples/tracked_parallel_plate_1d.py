@@ -13,7 +13,7 @@ import numpy as np
 from fdfd_common import materials
 from fdfd_mode_tracking import ModeTracker1D, PortSpec, TrackingConfig
 
-OUTPUT = _ROOT / 'outputs/fdfd_mode_tracking/examples/tracked_parallel_plate_1d'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/tracked_parallel_plate_1d'
 C = 1/np.sqrt(8.854187817e-12*4e-7*np.pi)
 
 

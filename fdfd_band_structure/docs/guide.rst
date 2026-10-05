@@ -26,8 +26,8 @@ Material-first workflow
    )
    result = solver.solve(beta_path=path, num_modes=5,
                          polarizations=("TE", "TM"))
-   result.save("outputs/bands.h5")
-   loaded = load_result("outputs/bands.h5")
+   result.save("fdfd_band_structure/outputs/bands.h5")
+   loaded = load_result("fdfd_band_structure/outputs/bands.h5")
    loaded.plot(component="TE", quantity="real", mode=None)
 
 The generic geometry API accepts compatible shared shapes; rectangle, circle,

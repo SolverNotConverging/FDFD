@@ -27,8 +27,8 @@ Material-first workflow
    solver.add_source(kind="plane_wave", angle=0.0)
    solver.set_source_region(inset=0.015)
    result = solver.solve()
-   result.save("outputs/fdfd_scattering.h5")
-   loaded = load_result("outputs/fdfd_scattering.h5")
+   result.save("fdfd_scattering/outputs/fdfd_scattering.h5")
+   loaded = load_result("fdfd_scattering/outputs/fdfd_scattering.h5")
    loaded.plot(component="Ez", quantity="magnitude")
 
 Define the source and rectangular total-field region before solving. A point

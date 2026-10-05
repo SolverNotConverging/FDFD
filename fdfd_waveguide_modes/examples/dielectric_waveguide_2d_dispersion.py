@@ -14,7 +14,7 @@ import numpy as np
 from fdfd_common import Material
 from fdfd_waveguide_modes import ModeSolver2D
 
-OUTPUT = _ROOT / "outputs/fdfd_waveguide_modes/examples/dielectric_waveguide_2d_dispersion"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/dielectric_waveguide_2d_dispersion"
 
 
 def main():

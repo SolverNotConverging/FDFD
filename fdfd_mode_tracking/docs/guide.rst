@@ -43,7 +43,7 @@ contribute a bulk index. ``neff_guess`` remains an optional explicit override.
                       material=Material(name="core", epsilon=4.))
    tracker.mesh(resolution=(40, 40))
    sweep = tracker.solve(num_modes=4)
-   sweep.save("outputs/tracked_modes.h5")
+   sweep.save("fdfd_mode_tracking/outputs/tracked_modes.h5")
    sweep.show(component="E")
 
 The interactive viewer plots every candidate returned by every primary and

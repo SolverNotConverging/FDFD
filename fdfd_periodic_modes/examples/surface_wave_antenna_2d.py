@@ -15,7 +15,7 @@ from pathlib import Path
 from fdfd_common import Material, materials
 from fdfd_periodic_modes import PeriodicModeSolver2D
 
-OUTPUT = _ROOT / "outputs/fdfd_periodic_modes/examples/surface_wave_antenna_2d"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/surface_wave_antenna_2d"
 
 
 def build_solver(*, frequency=25e9):

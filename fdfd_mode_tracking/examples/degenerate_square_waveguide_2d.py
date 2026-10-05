@@ -17,7 +17,7 @@ from fdfd_mode_tracking import ModeTracker2D, PortSpec, TrackingConfig
 
 
 OUTPUT = (_ROOT
-          / 'outputs/fdfd_mode_tracking/examples/degenerate_square_waveguide_2d')
+          / 'fdfd_mode_tracking/outputs/examples/degenerate_square_waveguide_2d')
 
 
 def main(*, show=True):

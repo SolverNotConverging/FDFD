@@ -13,7 +13,7 @@ import numpy as np
 from fdfd_common import Material
 from fdfd_mode_tracking import ModeTracker2D, PortSpec, TrackingConfig
 
-OUTPUT = _ROOT / 'outputs/fdfd_mode_tracking/examples/tracked_dielectric_waveguide_2d'
+OUTPUT = _ROOT / 'fdfd_mode_tracking/outputs/examples/tracked_dielectric_waveguide_2d'
 
 
 def main():

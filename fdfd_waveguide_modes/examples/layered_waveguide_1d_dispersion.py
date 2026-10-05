@@ -14,7 +14,7 @@ import numpy as np
 from fdfd_common import Material
 from fdfd_waveguide_modes import ModeSolver1D
 
-OUTPUT = _ROOT / "outputs/fdfd_waveguide_modes/examples/layered_waveguide_1d_dispersion"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/layered_waveguide_1d_dispersion"
 
 
 def main():

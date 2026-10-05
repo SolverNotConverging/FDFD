@@ -12,7 +12,7 @@ from pathlib import Path
 from fdfd_common import Material, materials, shapes
 from fdfd_waveguide_modes import ModeSolver1D
 
-OUTPUT = _ROOT / "outputs/fdfd_waveguide_modes/examples/parallel_plate_waveguide_1d"
+OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/parallel_plate_waveguide_1d"
 
 
 def build_solver():

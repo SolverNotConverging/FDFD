@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 from fdfd_periodic_modes import load_result
 
-DEFAULT_INPUT = _ROOT / "outputs/fdfd_periodic_modes/examples/image_guide_leaky_wave_antenna_3d/modes.h5"
+DEFAULT_INPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/image_guide_leaky_wave_antenna_3d/modes.h5"
 
 
 def main():

@@ -94,4 +94,4 @@ Remove-Item Env:FDFD_BUILD_CYTHON
 
 On Linux or macOS, use `FDFD_BUILD_CYTHON=1 python -m pip install --force-reinstall .`.
 
-Generated results are saved under `outputs/`. Source is [MIT licensed](LICENSE).
+Generated results are saved in the `outputs/` folder inside each solver family, such as `fdfd_waveguide_modes/outputs/`. Source is [MIT licensed](LICENSE).

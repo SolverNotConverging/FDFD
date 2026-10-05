@@ -15,7 +15,7 @@ from pathlib import Path
 from fdfd_common import Material, materials
 from fdfd_periodic_modes import PeriodicModeSolver3D
 
-OUTPUT = _ROOT / "outputs/fdfd_periodic_modes/examples/image_guide_leaky_wave_antenna_3d"
+OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/image_guide_leaky_wave_antenna_3d"
 
 
 def build_solver(*, frequency=30e9):
