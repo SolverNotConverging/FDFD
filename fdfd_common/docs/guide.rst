@@ -1,13 +1,13 @@
 Shared materials, geometry, and errors
 ======================================
 
-``cem_common`` provides the values shared by every Python solver. Numerical
+``fdfd_common`` provides the values shared by every Python solver. Numerical
 assembly remains in each solver package. Define materials and shapes once, then
 assign them through a solver's ``add_geometry`` or convenience methods.
 
 .. code-block:: python
 
-   from cem_common import Material, materials, shapes
+   from fdfd_common import Material, materials, shapes
 
    substrate = Material(
        name="microwave substrate",

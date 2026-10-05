@@ -11,7 +11,7 @@ Material-first workflow
 .. code-block:: python
 
    import numpy as np
-   from cem_common import Material
+   from fdfd_common import Material
    from fdfd_band_structure import BandStructureSolver2D, load_result
 
    rod = Material(name="dielectric rod", epsilon=8.9)

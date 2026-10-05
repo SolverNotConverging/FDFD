@@ -1,9 +1,9 @@
 """Public fixed-frequency periodic grid solvers."""
 import numpy as np
-from cem_common import materials, shapes
-from cem_common.grid import GridSceneMixin, GridResult, load_grid_result
-from cem_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve
-from cem_common.errors import ConfigurationError
+from fdfd_common import materials, shapes
+from fdfd_common.grid import GridSceneMixin, GridResult, load_grid_result
+from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve
+from fdfd_common.errors import ConfigurationError
 
 
 class PeriodicModeSet(GridResult):

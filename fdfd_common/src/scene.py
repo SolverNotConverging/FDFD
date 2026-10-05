@@ -61,7 +61,7 @@ class SceneMixin:
 
     def _register_geometry(self, *, shape, material, name=None, clip=False, background=False):
         if not isinstance(shape, shapes.Shape):
-            raise GeometryError('shape must be a cem_common.shapes object.')
+            raise GeometryError('shape must be a fdfd_common.shapes object.')
         if shape.dimension != len(self._physical_axes):
             raise BackendCapabilityError(f'{type(shape).__name__} does not match the {self.plane} domain.')
         if not isinstance(material, (materials.Material, materials.IdealBoundary,

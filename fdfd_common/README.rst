@@ -1,5 +1,5 @@
-cem common
-==========
+FDFD common
+===========
 
 Source is under ``src/``. Install only the Python dependencies from the
 `root README <../README.md>`_, then import this folder directly.

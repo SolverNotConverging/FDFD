@@ -11,7 +11,7 @@ Material-first workflow
 
 .. code-block:: python
 
-   from cem_common import Material, materials
+   from fdfd_common import Material, materials
    from fdfd_periodic_modes import PeriodicModeSolver2D, load_result
 
    substrate = Material(name="substrate", epsilon=4.0)

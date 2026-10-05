@@ -5,17 +5,6 @@ Periodic eigensolver
 
 The optional Cython extension accelerates large complex orthogonalization and residual-norm kernels. If it is unavailable, the same public API uses a portable NumPy/SciPy implementation.
 
-First example
--------------
-
-With the packages installed, run this from the repository root::
-
-   python periodic_eigensolver/examples/diagonal_pencil.py
-
-The example prints eigenvalues near 3 and 4 and their original-pencil residuals.
-Open the `example <../examples/diagonal_pencil.py>`_
-to see how to supply the matrices and choose the spectral shift.
-
 For environment setup, native extension requirements, and wheel builds, see
 the `root README <../../README.md>`_.
 

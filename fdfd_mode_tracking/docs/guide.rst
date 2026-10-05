@@ -31,7 +31,7 @@ contribute a bulk index. ``neff_guess`` remains an optional explicit override.
 
 .. code-block:: python
 
-   from cem_common import Material
+   from fdfd_common import Material
    from fdfd_mode_tracking import ModeTracker2D, PortSpec
 
    tracker = ModeTracker2D(
@@ -218,5 +218,4 @@ New sweep archives use schema 1.1 and store only conventional tracking controls.
 Schema 1.0 sweeps remain readable: the retired scoring-weight field is ignored,
 while historical events and computed results are retained without recomputation.
 
-See the `runnable examples <../examples/README.rst>`_
-and `development plan <../PLAN.md>`_.
+See the `runnable examples <../examples/README.rst>`_.

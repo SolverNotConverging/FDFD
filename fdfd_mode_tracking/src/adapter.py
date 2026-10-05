@@ -13,7 +13,7 @@ def material_index_guess(solver):
     For diagonal anisotropy all principal epsilon/mu pairs are considered, including the
     transverse crossed pairs. Conductors and surface impedances are excluded.
     """
-    from cem_common.materials import Material, bulk_values
+    from fdfd_common.materials import Material, bulk_values
     media = [solver.background_material]
     media.extend(record.material for record, _ in solver._objects.values()
                  if isinstance(record.material, Material))

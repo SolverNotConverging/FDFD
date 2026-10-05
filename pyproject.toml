@@ -42,11 +42,13 @@ fdfd = "fdfd.__main__:main"
 package = false
 default-groups = ["dev"]
 cache-keys = [
+  { env = "FDFD_BUILD_CYTHON" },
   { file = "pyproject.toml" },
   { file = "setup.py" },
   { file = "setup_cython.py" },
   { file = "**/src/*.py" },
-  { file = "**/src/*.pyx" },
+  { file = "periodic_eigensolver/*.py" },
+  { file = "periodic_eigensolver/*.pyx" },
 ]
 
 [tool.setuptools]

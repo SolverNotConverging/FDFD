@@ -7,8 +7,8 @@ import inspect
 import numpy as np
 import pytest
 
-from cem_common import Material, SurfaceImpedance, materials, shapes
-from cem_common.errors import BackendCapabilityError, ConfigurationError, GeometryError
+from fdfd_common import Material, SurfaceImpedance, materials, shapes
+from fdfd_common.errors import BackendCapabilityError, ConfigurationError, GeometryError
 
 
 def test_materials_are_named_reusable_values_with_exp_plus_iwt_loss_sign() -> None:

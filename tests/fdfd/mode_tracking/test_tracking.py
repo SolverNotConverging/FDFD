@@ -1,8 +1,8 @@
 from dataclasses import replace
 import numpy as np
 import pytest
-from cem_common import materials, shapes
-from cem_common.errors import ConfigurationError
+from fdfd_common import materials, shapes
+from fdfd_common.errors import ConfigurationError
 from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D
 from fdfd_mode_tracking import (PortSpec, TrackingConfig, VerificationSpec, track_modes,
                                 load_sweep, export_subspace, ModeTracker1D, ModeTracker2D)
@@ -19,7 +19,7 @@ def rectangle(frequency, spec=VerificationSpec(), *, loss=0.):
     nx, ny = 32, 16
     dx, dy = WIDTH/nx, HEIGHT/ny
     bounds = ((-dx, WIDTH+dx), (-dy, HEIGHT+dy))
-    from cem_common import Material
+    from fdfd_common import Material
     s = ModeSolver2D(frequency=frequency, x_range=bounds[0], y_range=bounds[1],
                      background_material=Material(name='fill', epsilon=1-1j*loss))
     wall = shapes.Difference(shape=shapes.Rectangle(bounds=bounds),
@@ -235,7 +235,7 @@ def test_tracking_public_api_has_no_learned_scoring():
 
 def test_legacy_sweep_loads_without_retired_control(tmp_path):
     import h5py
-    from cem_common.persistence import write_value
+    from fdfd_common.persistence import write_value
     sweep = track_modes(slab, [.8*FC], port=PortSpec(boundary='enclosed'),
                         config=config(polarization='TE'), progress=False)
     # Preserve historical provenance, but never execute an old scoring model.
@@ -265,8 +265,8 @@ def test_legacy_sweep_loads_without_retired_control(tmp_path):
 
 def test_current_schema_does_not_ignore_unknown_controls(tmp_path):
     import h5py
-    from cem_common.persistence import write_value
-    from cem_common.errors import PersistenceError
+    from fdfd_common.persistence import write_value
+    from fdfd_common.errors import PersistenceError
     sweep = track_modes(slab, [.8*FC], port=PortSpec(boundary='enclosed'),
                         config=config(polarization='TE'), progress=False)
     path = tmp_path/'invalid.h5'
@@ -365,7 +365,7 @@ def test_avoided_crossing_follows_rotating_eigenbranch():
 
 
 def test_open_bound_slab_passes_independent_verification():
-    from cem_common import Material
+    from fdfd_common import Material
     def factory(f, spec):
         spacing, cells = .0002, 200
         padding = round(cells*spec.padding_fraction)
@@ -409,7 +409,7 @@ def test_material_first_sweep_api_and_gui_show_every_candidate(monkeypatch):
 
 
 def test_material_search_guess_includes_background_and_anisotropic_regions():
-    from cem_common import Material
+    from fdfd_common import Material
     from fdfd_mode_tracking.adapter import material_index_guess
     solver = ModeSolver1D(frequency=10e9, x_range=.02,
                           background_material=Material(epsilon=4., mu=2.))

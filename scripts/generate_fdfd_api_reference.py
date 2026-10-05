@@ -4,7 +4,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "cem_common" / "__init__.py").is_file())
+             if (parent / "fdfd_common" / "__init__.py").is_file())
 if str(_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_ROOT))
 
@@ -38,7 +38,7 @@ def main():
     DESCRIPTIONS.update({
         'background_material':'Predefined bulk Material assigned to unfilled grid cells.',
         'material':'Predefined Material, PEC/PMC, or supported SIBC assignment.',
-        'shape':'Continuous cem_common shape expressed in metres.',
+        'shape':'Continuous fdfd_common shape expressed in metres.',
         'resolution':'Positive cell count for each physical axis.',
         'neff_guess':'Dimensionless complex effective-index search target.',
         'eigensolver_tolerance':'Algebraic eigensolver convergence tolerance.',
@@ -63,7 +63,7 @@ def main():
         out=section(package+' user API','=')
         out+='Version 1.1.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
-        out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``cem_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nAll plotting and selection indices are zero-based.\n\n'
+        out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nAll plotting and selection indices are zero-based.\n\n'
         for clsname,methods in solvers.items():
             cls=getattr(module,clsname)
             for method in methods:
@@ -94,9 +94,9 @@ def main():
         if family=='band_structure':out+='``solve`` returns ``BandStructureResult`` with frequency arrays in hertz and\neigenvalues indexed by TE/TM polarization.\n\n'
         elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with scalar total fields at their\nphysical Yee-grid locations.\n\n'
         else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and zero-based mode selection.\n\n'
-        out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``cem_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
+        out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``fdfd_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
         (ROOT/package/"docs"/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
-    (ROOT/'doc/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
+    (ROOT/'scripts/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
 
 
 if __name__=='__main__':main()

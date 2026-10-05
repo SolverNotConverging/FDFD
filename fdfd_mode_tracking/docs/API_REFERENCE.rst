@@ -173,7 +173,7 @@ refer to the sample's stored smooth orthonormal basis. Every term retains its
 own propagation constant; an arbitrary near-degenerate mixture is not exported
 as a single mode.
 
-Archive errors raise ``cem_common.errors.PersistenceError``. Invalid factory
+Archive errors raise ``fdfd_common.errors.PersistenceError``. Invalid factory
 contracts and configuration raise ``ValueError``. Solver errors are propagated
 except for explicitly handled convergence failures and work-budget exhaustion,
 which produce unresolved events after a valid reference seed exists.

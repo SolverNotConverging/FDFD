@@ -1,9 +1,9 @@
 """Public scalar TE/TM scattering workflow with physical material geometry."""
 import numpy as np
-from cem_common import materials, shapes
-from cem_common.grid import GridSceneMixin, GridResult, fractions, load_grid_result
-from cem_common._yee_scene import field_coordinates
-from cem_common.errors import ConfigurationError, BackendCapabilityError
+from fdfd_common import materials, shapes
+from fdfd_common.grid import GridSceneMixin, GridResult, fractions, load_grid_result
+from fdfd_common._yee_scene import field_coordinates
+from fdfd_common.errors import ConfigurationError, BackendCapabilityError
 
 
 class ScatteringResult(GridResult):

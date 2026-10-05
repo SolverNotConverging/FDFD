@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def main():
     errors=[]
     files=[]
-    for directory in ('cem_common', 'fdfd_band_structure', 'fdfd_mode_tracking', 'fdfd_periodic_modes', 'fdfd_scattering', 'fdfd_waveguide_modes', 'periodic_eigensolver', 'apps', 'doc', 'tests', 'benchmarks'):
+    for directory in ('fdfd_common', 'fdfd_band_structure', 'fdfd_mode_tracking', 'fdfd_periodic_modes', 'fdfd_scattering', 'fdfd_waveguide_modes', 'periodic_eigensolver', 'tests', 'benchmarks'):
         files.extend((ROOT/directory).rglob('*.rst'))
     for path in files:
         if any(part in ('build','dist') or part.endswith('.egg-info') for part in path.parts):continue
@@ -25,7 +25,7 @@ def main():
         for link in links:
             if '://' in link or link.startswith(('mailto:','#')):continue
             if not (path.parent/link.split('#')[0]).exists():errors.append(f'{path}: broken local link {link}')
-    for path in [ROOT/'README.md', ROOT/'benchmarks/README.md', *(ROOT/'doc').rglob('*.md')]:
+    for path in [ROOT/'README.md', ROOT/'benchmarks/README.md']:
         for link in re.findall(r'\[[^\]\n]+\]\(([^)\n]+)\)', path.read_text(encoding='utf-8')):
             if '://' in link or link.startswith(('mailto:','#')):continue
             if not (path.parent/link.split('#')[0]).exists():errors.append(f'{path}: broken local link {link}')

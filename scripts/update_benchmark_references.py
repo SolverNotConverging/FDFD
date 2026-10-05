@@ -8,7 +8,7 @@ when updating the reviewed reference PNG/CSV files under benchmarks/.
 import sys as _sys
 from pathlib import Path as _Path
 _ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "cem_common" / "__init__.py").is_file())
+             if (parent / "fdfd_common" / "__init__.py").is_file())
 if str(_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_ROOT))
 
@@ -48,7 +48,7 @@ def main():
             artifacts[f'{case}/{filename}'] = hashlib.sha256(source.read_bytes()).hexdigest()
     source_hash = hashlib.sha256()
     sources = list((ROOT / 'benchmarks/analytical').glob('*.py'))
-    for parent in ('cem_common', 'fdfd_band_structure', 'fdfd_mode_tracking', 'fdfd_periodic_modes', 'fdfd_scattering', 'fdfd_waveguide_modes', 'periodic_eigensolver'):
+    for parent in ('fdfd_common', 'fdfd_band_structure', 'fdfd_mode_tracking', 'fdfd_periodic_modes', 'fdfd_scattering', 'fdfd_waveguide_modes', 'periodic_eigensolver'):
         sources.extend(p for p in (ROOT / parent).rglob('*')
                        if 'src' in p.parts and p.suffix in ('.py', '.cpp', '.h', '.hpp'))
     for source in sorted(sources):

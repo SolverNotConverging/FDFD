@@ -10,7 +10,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INVENTORY = json.loads((ROOT / "doc/fdfd_public_api.json").read_text(encoding="utf-8"))
+INVENTORY = json.loads((ROOT / "scripts/fdfd_public_api.json").read_text(encoding="utf-8"))
 EXPORTS = {
     "fdfd_mode_tracking": {"ModeTracker1D", "ModeTracker2D", "PortSpec", "VerificationSpec", "TrackingConfig", "TrackedSweep", "PortMode",
                            "track_modes", "load_sweep", "export_subspace"},

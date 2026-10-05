@@ -4,7 +4,7 @@
 import sys as _sys
 from pathlib import Path as _Path
 _ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "cem_common" / "__init__.py").is_file())
+             if (parent / "fdfd_common" / "__init__.py").is_file())
 if str(_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_ROOT))
 
@@ -62,7 +62,7 @@ DESCRIPTIONS = {
     "outer_potential": "Exterior potential in volts; None permits natural boundaries.",
     "density": "Volume charge density in coulombs per cubic metre.",
     "region": "Geometry primitive or supported boundary name.",
-    "shape": "A predefined cem_common.shapes object in metres.",
+    "shape": "A predefined fdfd_common.shapes object in metres.",
     "clip": "Intersect the shape with the solver domain; otherwise out-of-bounds objects raise GeometryError.",
     "name": "Optional name used for later identification and diagnostics.",
     "center": "Physical centre coordinates in metres.",

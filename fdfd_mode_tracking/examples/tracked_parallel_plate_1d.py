@@ -4,13 +4,13 @@
 import sys as _sys
 from pathlib import Path as _Path
 _ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "cem_common" / "__init__.py").is_file())
+             if (parent / "fdfd_common" / "__init__.py").is_file())
 if str(_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_ROOT))
 
 from pathlib import Path
 import numpy as np
-from cem_common import materials
+from fdfd_common import materials
 from fdfd_mode_tracking import ModeTracker1D, PortSpec, TrackingConfig
 
 OUTPUT = _ROOT / 'outputs/fdfd_mode_tracking/examples/tracked_parallel_plate_1d'

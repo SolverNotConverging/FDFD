@@ -11,7 +11,7 @@ Material-first workflow
 
 .. code-block:: python
 
-   from cem_common import Material
+   from fdfd_common import Material
    from fdfd_scattering import ScatteringSolver2D, load_result
 
    dielectric = Material(name="cylinder", epsilon=4.0)

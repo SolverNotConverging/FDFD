@@ -11,7 +11,7 @@ Configuration and units
 
 Constructor extents and shape coordinates use metres; frequencies use hertz.
 ``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a
-physical grid-spacing limit. Define reusable ``cem_common.Material`` and shape
+physical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape
 objects before assigning them. Grid-index geometry is private backend detail.
 All plotting and selection indices are zero-based.
 
@@ -73,7 +73,7 @@ Assign a predefined material to a continuous shape in metres.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Continuous cem_common shape expressed in metres.
+     - Continuous fdfd_common shape expressed in metres.
    * - ``material``
      - ``array-like or scalar``
      - Required
@@ -277,7 +277,7 @@ Replace a shape in metres and invalidate mesh/result.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Continuous cem_common shape expressed in metres.
+     - Continuous fdfd_common shape expressed in metres.
 
 Returns: the documented data or None when storing state on the solver.
 
@@ -558,6 +558,6 @@ eigenvalues indexed by TE/TM polarization.
 
 Results provide ``plot()``, ``show()``, and atomic ``save()``; each package
 exports ``load_result()``. Invalid dimensions, materials, and controls raise
-actionable ``cem_common`` exceptions. See the `user guide <guide.rst>`_ and
+actionable ``fdfd_common`` exceptions. See the `user guide <guide.rst>`_ and
 root examples. Assembly routines, matrix builders, grid-index records, and
 Arnoldi kernels are excluded from this user reference.

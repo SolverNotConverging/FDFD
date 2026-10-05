@@ -2,9 +2,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
-from cem_common import materials, shapes
-from cem_common.grid import GridSceneMixin, GridData
-from cem_common.errors import ConfigurationError, PersistenceError
+from fdfd_common import materials, shapes
+from fdfd_common.grid import GridSceneMixin, GridData
+from fdfd_common.errors import ConfigurationError, PersistenceError
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class BandStructureResult:
         plt.show(block=block)
         return fig
     def save(self,path):
-        from cem_common.persistence import atomic_h5,write_value
+        from fdfd_common.persistence import atomic_h5,write_value
         with atomic_h5(path) as handle:
             handle.attrs.update(format='cem-fdfd-results',schema='1.0',solver_family='fdfd_band_structure',
                 units='SI',time_convention='exp(+i*omega*t)',dimension=2,result_kind='bands',field_representation='Bloch eigenfrequencies')
@@ -62,7 +62,7 @@ class BandStructureResult:
 
 def load_result(path):
     import h5py
-    from cem_common.persistence import read_value
+    from fdfd_common.persistence import read_value
     try:
         with h5py.File(path,'r') as handle:
             for key,value in dict(format='cem-fdfd-results',schema='1.0',solver_family='fdfd_band_structure',
@@ -117,7 +117,7 @@ class BandStructureSolver2D(GridSceneMixin):
         return np.vstack([*(np.linspace(a,b,n,endpoint=False) for a,b,n in zip(pts[:-1],pts[1:],counts)),pts[-1:]]).T
     def solve(self, *, beta_path, num_modes=4, polarizations=('TE','TM'), eigenvalue_guess=0., eigensolver_tolerance=0.):
         """Solve complex eigenfrequencies; dispersive/SIBC materials are unsupported."""
-        from cem_common._yee_scene import validate_solve
+        from fdfd_common._yee_scene import validate_solve
         validate_solve(num_modes,eigenvalue_guess,eigensolver_tolerance)
         self._ensure_grid()
         self._backend._eigensolver_tolerance=eigensolver_tolerance

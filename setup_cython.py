@@ -10,6 +10,6 @@ setup(
     name="periodic-eigensolver-kernel",
     packages=[],
     ext_modules=cythonize([Extension("periodic_eigensolver._cython_kernels",
-        ["periodic_eigensolver/src/_cython_kernels.pyx"])],
+        ["periodic_eigensolver/_cython_kernels.pyx"])],
         language_level=3, build_dir="build/cython"),
 )

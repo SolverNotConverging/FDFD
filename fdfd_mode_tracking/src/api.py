@@ -1,10 +1,10 @@
 """Material-first sweep API mirroring the single-frequency FDFD mode solvers."""
 from dataclasses import replace
 import numpy as np
-from cem_common import materials, shapes
-from cem_common.contracts import bounds
-from cem_common.errors import ConfigurationError, NoResultError
-from cem_common.grid import GridData, GridSceneMixin
+from fdfd_common import materials, shapes
+from fdfd_common.contracts import bounds
+from fdfd_common.errors import ConfigurationError, NoResultError
+from fdfd_common.grid import GridData, GridSceneMixin
 from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D
 from .contracts import PortSpec, TrackingConfig, VerificationSpec
 from .sweep import track_modes

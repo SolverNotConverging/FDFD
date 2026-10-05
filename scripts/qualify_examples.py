@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 RUN = """import runpy, sys
 from unittest.mock import patch
-from cem_common.contracts import SolverMixin, ResultMixin
+from fdfd_common.contracts import SolverMixin, ResultMixin
 with patch.object(SolverMixin, 'show'), patch.object(ResultMixin, 'show'), patch('matplotlib.pyplot.show'):
     runpy.run_path(sys.argv[1], run_name='__main__')
 """
