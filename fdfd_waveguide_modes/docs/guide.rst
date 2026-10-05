@@ -3,7 +3,7 @@ FDFD Waveguide Mode Solvers
 
 ``ModeSolver1D`` solves stratified guides and ``ModeSolver2D`` solves full-vector
 cross sections on staggered Yee grids. Lengths use metres, frequency uses hertz,
-and Python mode indices are zero-based. Electromagnetic phasors use
+and mode numbers start at 1. Electromagnetic phasors use
 ``exp(+i*omega*t)`` with propagation ``exp(-i*beta*z)``.
 
 Material-first workflow
@@ -38,7 +38,7 @@ a window:
    result = solver.solve(num_modes=2, neff_guess=1.2)
    result.save("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
    loaded = load_result("fdfd_waveguide_modes/outputs/fdfd_modes.h5")
-   figure = loaded.plot(component="Ey", quantity="magnitude", mode=0)
+   figure = loaded.plot(component="Ey", quantity="magnitude", mode=1)
 
 ``solve()`` meshes automatically if needed. Geometry edits through
 ``set_shape()``, ``set_material()``, or ``remove()`` invalidate the mesh and

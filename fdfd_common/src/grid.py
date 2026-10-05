@@ -162,7 +162,7 @@ class GridResult:
         return next((name for name, values in self.fields.items() if np.any(values)),
                     next(iter(self.fields)))
 
-    def plot(self, *, component=None, quantity='real', mode=0, plane=None, position=None):
+    def plot(self, *, component=None, quantity='real', mode=1, plane=None, position=None):
         from matplotlib.figure import Figure
         fig = Figure(figsize=(7, 5))
         self._draw(fig.subplots(), component, quantity, mode, plane, position)
@@ -170,15 +170,16 @@ class GridResult:
         return fig
 
     def _draw(self, ax, component, quantity, mode, plane, position):
-        if isinstance(mode, bool) or int(mode) != mode or mode < 0:
-            raise ConfigurationError('mode must be a zero-based integer.')
+        if isinstance(mode, bool) or int(mode) != mode or mode < 1:
+            raise ConfigurationError('mode must be a one-based integer (starting at 1).')
+        index = int(mode)-1
         name = self._default_component() if component is None else component
         if name not in self.fields:
             raise ConfigurationError(f'Available components: {tuple(self.fields)}.')
         raw = np.asarray(self.fields[name])
-        if mode >= raw.shape[-1]:
+        if index >= raw.shape[-1]:
             raise ConfigurationError('Mode index is out of range.')
-        raw = raw[..., mode]
+        raw = raw[..., index]
         coordinates = self.field_coordinates[name]
         axes = self.mesh_data.axes
         if raw.ndim == 3:
@@ -206,7 +207,7 @@ class GridResult:
             ax.set(xlabel=axes[0]+' (m)', ylabel=axes[1]+' (m)', aspect='equal')
         title = f'{self.family}: {name} ({quantity})'
         if len(self.neff):
-            neff = complex(self.neff[mode])
+            neff = complex(self.neff[index])
             title += f'\nmode {mode}, neff = {neff.real:.6g}{neff.imag:+.6g}j'
         ax.set_title(title)
 

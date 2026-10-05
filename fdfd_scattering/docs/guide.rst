@@ -9,8 +9,8 @@ use ``exp(+i*omega*t)``.
 Material-first workflow
 -----------------------
 
-The interactive viewer displays the scattering field with magnitude, real,
-imaginary, and phase options. A scattering result has no mode selector.
+The interactive viewer displays all three TE/TM fields together with magnitude,
+real, imaginary, and phase options. A scattering result has no mode selector.
 
 .. code-block:: python
 
@@ -31,7 +31,7 @@ imaginary, and phase options. A scattering result has no mode selector.
    result = solver.solve()
    result.save("fdfd_scattering/outputs/fdfd_scattering.h5")
    loaded = load_result("fdfd_scattering/outputs/fdfd_scattering.h5")
-   loaded.plot(component="Ez", quantity="magnitude")
+   loaded.show()
 
 Define the source and rectangular total-field region before solving. A point
 source instead uses ``kind="point"`` and a physical ``location=(x, y)``.
@@ -43,6 +43,9 @@ Geometry edits invalidate mesh and result while retaining the last explicit
 mesh settings. ``solve()`` neither opens a window nor saves a file. Returned
 fields carry their physical staggered coordinates and support static plotting,
 interactive display, atomic saving, and loading without rerunning the solver.
+TE results contain ``Ez``, ``Hx``, and ``Hy``; TM results contain ``Ex``, ``Ey``,
+and ``Hz``. ``result.show()`` displays all three fields together with material
+geometry and a magnitude/real/imaginary/phase control. There is no mode selector.
 
 Examples and API
 ----------------

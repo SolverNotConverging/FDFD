@@ -13,7 +13,7 @@ Constructor extents and shape coordinates use metres; frequencies use hertz.
 ``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a
 physical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape
 objects before assigning them. Grid-index geometry is private backend detail.
-All plotting and selection indices are zero-based.
+Mode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.
 
 ``ScatteringSolver2D``
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -512,7 +512,7 @@ construct them directly. Field results expose ``mesh_data``, ``metadata``,
 
 .. code-block:: python
 
-    ScatteringResult.plot(*, component=None, quantity='real', mode=0, plane=None, position=None)
+    ScatteringResult.plot(*, component=None, quantity='real', mode=1, plane=None, position=None)
 
 .. list-table:: Arguments
    :header-rows: 1
@@ -536,8 +536,8 @@ construct them directly. Field results expose ``mesh_data``, ``metadata``,
    * - ``mode``
      - ``int``
      - Optional
-     - ``0``
-     - Zero-based mode or band index.
+     - ``1``
+     - One-based mode or band number (starting at 1).
    * - ``plane``
      - ``array-like or scalar``
      - Optional
@@ -626,7 +626,7 @@ Returns: a typed ``ScatteringResult`` without solving.
 Results and examples
 --------------------
 
-``solve`` returns ``ScatteringResult`` with scalar total fields at their
+``solve`` returns ``ScatteringResult`` with three TE/TM fields at their
 physical Yee-grid locations.
 
 Results provide ``plot()``, ``show()``, and atomic ``save()``; each package

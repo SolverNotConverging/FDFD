@@ -26,7 +26,7 @@ for frequency in np.linspace(25e9, 35e9, 3):
     result = solver.solve(num_modes=4, neff_guess=0, eigensolver="eigs")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"modes_{frequency / 1e9:.0f}GHz.h5")
-    for mode, neff in enumerate(result.neff):
+    for mode, neff in enumerate(result.neff, start=1):
         rows.append(dict(frequency_hz=frequency, mode=mode, neff_real=neff.real, neff_imag=neff.imag))
 with (OUTPUT / "dispersion.csv").open("w", newline="") as stream:
     writer = csv.DictWriter(stream, fieldnames=rows[0].keys())

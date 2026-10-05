@@ -13,6 +13,7 @@ def test_all_periodic_components_and_longitudinal_maxwell_equation(polarization,
     )
     solver.mesh(resolution=(10, 8))
     result = solver.solve(num_modes=2, neff_guess=1.4)
+    assert result.metadata['polarization'] == polarization
     backend = solver._backend
     assert set(result.fields) == {'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'}
     for name, values in result.fields.items():

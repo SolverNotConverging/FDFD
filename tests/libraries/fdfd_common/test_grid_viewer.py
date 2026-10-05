@@ -24,15 +24,18 @@ def result_for(result_type, family, axes, neff):
 def test_scattering_viewer_has_no_mode_control_or_mode_title(monkeypatch):
     monkeypatch.setattr(plt, 'show', lambda **kwargs: None)
     result = result_for(ScatteringResult, 'fdfd_scattering', ('x', 'y'), [])
+    result.fields['Hz'] = result.fields['Ex'].copy()
+    result.field_coordinates['Hz'] = result.field_coordinates['Ex']
     figure = result.show(block=False)
     try:
         viewer = figure._scattering_viewer
         assert not hasattr(viewer, 'mode_control')
-        assert len(viewer.field_axes) == 4
+        assert len(viewer.field_axes) == 3
         assert 'Mode' not in figure._suptitle.get_text()
-        for axis, quantity in zip(viewer.field_axes, viewer.quantities):
-            assert f'({quantity})' in axis.get_title()
-        np.testing.assert_array_equal(viewer.field_axes[1].collections[0].get_array(),
+        viewer.quantity_control.set_active(2)
+        for axis in viewer.field_axes:
+            assert '(imag)' in axis.get_title()
+        np.testing.assert_array_equal(viewer.field_axes[0].collections[0].get_array(),
                                       result.fields['Ex'][..., 0].imag.T)
     finally:
         plt.close(figure)
@@ -51,8 +54,9 @@ def test_modal_viewer_updates_complex_neff_when_mode_changes(monkeypatch, result
                   else figure._periodic_mode_viewer)
         assert len(viewer.components) == 2
         assert 'neff = 1.5-0.02j' in figure._suptitle.get_text()
-        viewer.mode_control.set_val(1)
-        assert 'Mode 1: neff = 2.1+0.03j' in figure._suptitle.get_text()
+        assert viewer.mode_control.valmin == 1
+        viewer.mode_control.set_val(2)
+        assert 'Mode 2: neff = 2.1+0.03j' in figure._suptitle.get_text()
         viewer.quantity_control.set_active(2)
         assert all('(imag)' in ax.get_title() for ax in viewer.field_axes[:2])
     finally:
@@ -76,9 +80,11 @@ def test_periodic_2d_plot_uses_z_horizontal_and_x_vertical():
     (ModeSet, 'fdfd_waveguide_modes', ('x', 'y')),
     (PeriodicModeSet, 'fdfd_periodic_modes', ('x', 'z')),
 ])
-def test_modal_viewer_shows_six_fields_and_same_material_geometry(monkeypatch, result_type, family, axes):
+def test_modal_viewer_shows_fields_with_same_material_geometry(monkeypatch, result_type, family, axes):
     monkeypatch.setattr(plt, 'show', lambda **kwargs: None)
     result = result_for(result_type, family, axes, [1.5])
+    if family == 'fdfd_periodic_modes':
+        result.metadata['polarization'] = 'TM'
     epsilon = np.ones((3, 2, 3))
     epsilon[:, 1, :] = 4.
     result.metadata['material_background'] = dict(epsilon=epsilon, mu=np.ones_like(epsilon),
@@ -90,8 +96,10 @@ def test_modal_viewer_shows_six_fields_and_same_material_geometry(monkeypatch, r
     try:
         viewer = (figure._waveguide_mode_viewer if family == 'fdfd_waveguide_modes'
                   else figure._periodic_mode_viewer)
-        assert viewer.components == ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
-        assert len(viewer.field_axes) == 6
+        expected_components = (('Ex', 'Ez', 'Hy') if family == 'fdfd_periodic_modes'
+                               else ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'))
+        assert viewer.components == expected_components
+        assert len(viewer.field_axes) == len(expected_components)
         assert 'neff = 1.5+0j' in figure._suptitle.get_text()
         expected = (np.array([[1., 1., 1.], [2., 2., 2.]]) if axes == ('x', 'z')
                     else np.array([[1., 2.], [1., 2.], [1., 2.]]))
@@ -102,6 +110,38 @@ def test_modal_viewer_shows_six_fields_and_same_material_geometry(monkeypatch, r
                 assert ax.get_xlabel() == 'z (m)' and ax.get_ylabel() == 'x (m)'
     finally:
         plt.close(figure)
+
+
+@pytest.mark.parametrize(('polarization', 'components'), [
+    ('TE', ('Ey', 'Hx', 'Hz')), ('TM', ('Ex', 'Ez', 'Hy')),
+])
+def test_periodic_2d_viewer_shows_only_active_polarization(monkeypatch, polarization, components):
+    monkeypatch.setattr(plt, 'show', lambda **kwargs: None)
+    result = result_for(PeriodicModeSet, 'fdfd_periodic_modes', ('x', 'z'), [1.5])
+    for name in ('Ez', 'Hx', 'Hy', 'Hz'):
+        result.fields[name] = result.fields['Ex'].copy()
+        result.field_coordinates[name] = result.field_coordinates['Ex']
+    result.metadata['polarization'] = polarization
+    figure = result.show(block=False)
+    try:
+        assert figure._periodic_mode_viewer.components == components
+        assert len(figure._periodic_mode_viewer.field_axes) == 3
+        assert 'Mode 1:' in figure._suptitle.get_text()
+    finally:
+        plt.close(figure)
+
+
+def test_plot_mode_numbers_start_at_one():
+    from fdfd_common.errors import ConfigurationError
+    result = result_for(ModeSet, 'fdfd_waveguide_modes', ('x', 'y'), [1.5, 2.1])
+    for number in (1, 2):
+        figure = result.plot(component='Ex', mode=number)
+        np.testing.assert_array_equal(figure.axes[0].collections[0].get_array(),
+                                      result.fields['Ex'][..., number-1].real.T)
+        assert f'mode {number},' in figure.axes[0].get_title()
+    for number in (0, -1, 3):
+        with pytest.raises(ConfigurationError):
+            result.plot(mode=number)
 
 
 def test_periodic_3d_slice_controls_change_physical_plane(monkeypatch):
@@ -136,6 +176,7 @@ def test_band_viewer_has_polarization_and_normalized_frequency_controls(monkeypa
     figure = result.show(block=False)
     try:
         viewer = figure._band_structure_viewer
+        assert viewer.axis.lines[0].get_label() == 'TE 1'
         viewer.polarization_control.set_active(1)
         assert len(viewer.axis.lines) == 1
         viewer.scale_control.set_active(1)

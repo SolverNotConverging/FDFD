@@ -2,12 +2,12 @@
 import numpy as np
 from fdfd_common import materials, shapes
 from fdfd_common.grid import GridSceneMixin, GridResult, fractions, load_grid_result
-from fdfd_common._yee_scene import field_coordinates
+from fdfd_common._yee_scene import material_background
 from fdfd_common.errors import ConfigurationError, BackendCapabilityError
 
 
 class ScatteringResult(GridResult):
-    """Returned total-field/scattered-field scalar grid solution."""
+    """Returned three-component total-field/scattered-field grid solution."""
     def show(self, *, block=True):
         from .visualization import show_result
         return show_result(self, block=block)
@@ -42,6 +42,9 @@ class ScatteringSolver2D(GridSceneMixin):
             mask = np.zeros(resolution, dtype=bool)
             mask[slices] = occupancy.astype(bool)
             backend.add_object(*materials.bulk_values(record.material), mask.T)
+        for component in ('xx', 'yy', 'zz'):
+            setattr(backend, 'cell_eps_r_' + component, getattr(backend, 'ER' + component).T.copy())
+            setattr(backend, 'cell_mu_r_' + component, getattr(backend, 'MR' + component).T.copy())
     def _apply_pml(self, backend, resolution, spec):
         if spec['direction'] not in ('x', 'y', 'all'):
             raise BackendCapabilityError('This scattering PML supports paired x/y ends only.')
@@ -95,11 +98,16 @@ class ScatteringSolver2D(GridSceneMixin):
         backend.add_mask((~mask).astype(float))
         self._result=None
         operation = backend.solve_total_field_TE if self.polarization=='TE' else backend.solve_total_field_TM
-        field = operation(reuse_factorisation=reuse_factorization)
-        name='Ez' if self.polarization=='TE' else 'Hz'
-        fields={name: np.array(field.T[...,None],copy=True)}
+        operation(reuse_factorisation=reuse_factorization)
+        fields = {name: np.array(field.T[..., None], copy=True)
+                  for name, field in backend.transverse_fields(self.polarization).items()}
+        offsets = {'Ez': (0., 0.), 'Hx': (0., .5), 'Hy': (.5, 0.),
+                   'Hz': (0., 0.), 'Ex': (0., -.5), 'Ey': (-.5, 0.)}
+        coordinates = {name: (x + offsets[name][0]*backend.dx,
+                              y + offsets[name][1]*backend.dy) for name in fields}
         self._result=ScatteringResult('fdfd_scattering', self.mesh_data, self.frequency, fields,
-            field_coordinates(self,fields), np.array([],dtype=complex),
-            {'k0':backend.k0,'field_representation':'TF/SF scalar field; staggered-grid',
+            coordinates, np.array([],dtype=complex),
+            {'k0':backend.k0,'field_representation':'TF/SF fields; staggered-grid',
+             'material_background': material_background(self),
              'context':self._scene_context(),'solve_info':{'polarization':self.polarization}})
         return self.result

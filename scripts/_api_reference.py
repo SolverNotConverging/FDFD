@@ -46,7 +46,7 @@ DESCRIPTIONS = {
     "target_reflection": "Desired PML amplitude reflection ratio in (0, 1).",
     "component": "Field component to display, such as Ey; electrostatics also accepts potential or mesh.",
     "quantity": "Displayed field quantity: real, imag, magnitude/abs, or phase; static fields support real or magnitude.",
-    "mode": "Zero-based mode index.",
+    "mode": "One-based mode number (starting at 1).",
     "case": "Zero-based sweep case index.",
     "block": "Wait for the interactive viewer to close when true.",
     "path": "Destination/source HDF5 path. Saving is atomic; loading does not run a solver.",
@@ -76,7 +76,7 @@ DESCRIPTIONS = {
     "Zs": "Surface impedance in ohms; alternatively select a metal preset.",
     "preset": "Metal name for the good-conductor impedance model.",
     "results": "Nonempty sequence of completed periodic mode sets, in sweep order.",
-    "number": "Zero-based mode index.",
+    "number": "One-based mode number (starting at 1).",
     "num_points": "Number of field sampling points; positive integer.",
 }
 TYPES = {"block": "bool", "case": "int", "mode": "int", "number": "int",

@@ -35,6 +35,7 @@ class _PeriodicAPI(GridSceneMixin):
         self._result = PeriodicModeSet('fdfd_periodic_modes', self.mesh_data, self.frequency,
             fields, field_coordinates(self, fields), np.array(backend.neff),
             {'k0': backend.k0, 'material_background': material_background(self),
+             'polarization': getattr(self, 'polarization', None),
              'field_representation': 'periodic-envelope; staggered-fields',
              'field_normalization': 'native eigenvector normalization', 'context': self._scene_context(),
              'solve_info': {'eigensolver_tolerance': tolerance, 'residuals': getattr(backend, 'refined_residuals', None)}})

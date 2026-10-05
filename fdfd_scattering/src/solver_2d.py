@@ -239,6 +239,26 @@ class _ScatteringSolver2D:
         return self.Hz
 
     # ============ 7.  Quick-look visualisations =================================
+    def transverse_fields(self, polarization):
+        """Recover the two transverse fields, retaining the TF/SF interface."""
+        DEX, DEY, DHX, DHY = self._yeeder2d()
+        eta0 = 1. / (self.c0 * self.eps0)
+
+        def derivative(operator, field):
+            # Remove the artificial jump of the incident field at the TF/SF mask.
+            return (operator @ field.ravel()
+                    + (operator @ self.Q - self.Q @ operator) @ self.source)
+
+        if polarization == 'TE':
+            hx = 1j * derivative(DEY, self.Ez) / (eta0 * self.MRxx.ravel())
+            hy = -1j * derivative(DEX, self.Ez) / (eta0 * self.MRyy.ravel())
+            return {'Ez': self.Ez, 'Hx': hx.reshape(self.Ny, self.Nx),
+                    'Hy': hy.reshape(self.Ny, self.Nx)}
+        ex = -1j * eta0 * derivative(DHY, self.Hz) / self.ERxx.ravel()
+        ey = 1j * eta0 * derivative(DHX, self.Hz) / self.ERyy.ravel()
+        return {'Ex': ex.reshape(self.Ny, self.Nx), 'Ey': ey.reshape(self.Ny, self.Nx),
+                'Hz': self.Hz}
+
     def _quick_imshow(self, data, ax, title, cmap="viridis"):
         im = ax.imshow(np.real_if_close(data), origin='lower', cmap=cmap,
                        extent=[-self.x_range / 2, self.x_range / 2,

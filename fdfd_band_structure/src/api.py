@@ -30,11 +30,11 @@ class BandStructureResult:
             if pol not in self.frequencies:
                 raise ConfigurationError(f'Available polarizations: {tuple(self.frequencies)}.')
             values=self.frequencies[pol]
-            modes=range(len(values)) if mode is None else (mode,)
+            modes=range(1, len(values)+1) if mode is None else (mode,)
             for i in modes:
-                if isinstance(i,bool) or int(i)!=i or not 0<=i<len(values):
-                    raise ConfigurationError('mode must be a zero-based band index.')
-                ax.plot(distance,operation(values[i]),label=f'{pol} {i}')
+                if isinstance(i,bool) or int(i)!=i or not 1<=i<=len(values):
+                    raise ConfigurationError('mode must be a one-based band number.')
+                ax.plot(distance,operation(values[int(i)-1]),label=f'{pol} {i}')
         ax.set(xlabel='Distance along Bloch path (rad/m)',ylabel=f'Frequency ({quantity}, Hz)')
         ax.legend()
         ax.grid(alpha=.25)

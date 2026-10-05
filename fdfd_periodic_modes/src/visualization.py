@@ -10,12 +10,17 @@ class PeriodicModeViewer:
         from matplotlib.widgets import RadioButtons, Slider
 
         self.result = result
-        self.mode = 0
+        self.mode = 1
         self.quantity = 'magnitude'
         self.plane = 'xy' if len(result.mesh_data.axes) == 3 else None
         self.slice_fraction = .5
         self.components = tuple(name for name in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
                                 if name in result.fields)
+        if len(result.mesh_data.axes) == 2:
+            polarization = result.metadata.get('polarization')
+            if polarization in ('TE', 'TM'):
+                active = ('Ey', 'Hx', 'Hz') if polarization == 'TE' else ('Ex', 'Ez', 'Hy')
+                self.components = tuple(name for name in active if name in result.fields)
         columns = min(3, len(self.components))
         rows = int(np.ceil(len(self.components)/columns))
         self.figure, axes = plt.subplots(rows, columns, squeeze=False, figsize=(13, 9))
@@ -30,7 +35,7 @@ class PeriodicModeViewer:
         self.mode_control = None
         if len(result) > 1:
             self.mode_control = Slider(self.figure.add_axes((.48, .17, .4, .03)),
-                                       'Mode', 0, len(result)-1, valstep=1, valinit=0)
+                                       'Mode', 1, len(result), valstep=1, valinit=1)
             self.mode_control.on_changed(self._set_mode)
         self.plane_control = self.slice_control = None
         if self.plane is not None:

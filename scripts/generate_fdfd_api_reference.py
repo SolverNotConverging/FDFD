@@ -57,7 +57,7 @@ def main():
         'thickness':'PML thickness in metres.', 'order':'Polynomial PML order.',
         'sigma_max':'Maximum PML-strength magnitude.',
         'subpixels':'Number of subcell samples used to average region material values.',
-        'mode':'Zero-based mode or band index.',
+        'mode':'One-based mode or band number (starting at 1).',
         'kernel_backend':'Refined-kernel backend: auto, numpy, or cython.',
         'ncv':'Arnoldi subspace size; None selects the backend default.',
         'max_restarts':'Maximum refined Arnoldi restarts.', 'random_seed':'Deterministic initial-vector seed.',
@@ -75,7 +75,7 @@ def main():
         out=section(package+' user API','=')
         out+='Version 1.1.0. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
-        out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nAll plotting and selection indices are zero-based.\n\n'
+        out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nMode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.\n\n'
         for clsname,methods in solvers.items():
             cls=getattr(module,clsname)
             for method in methods:
@@ -104,12 +104,15 @@ def main():
         out += entry('load_result', module.load_result, f'a typed ``{result_name}`` without solving')
         out+=section('Results and examples')
         if family=='band_structure':out+='``solve`` returns ``BandStructureResult`` with frequency arrays in hertz and\neigenvalues indexed by TE/TM polarization.\n\n'
-        elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with scalar total fields at their\nphysical Yee-grid locations.\n\n'
-        else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and zero-based mode selection.\n\n'
+        elif family=='scattering':out+='``solve`` returns ``ScatteringResult`` with three TE/TM fields at their\nphysical Yee-grid locations.\n\n'
+        else:out+='``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,\nexplicit staggered field coordinates, and one-based mode selection.\n\n'
         out+='Results provide ``plot()``, ``show()``, and atomic ``save()``; each package\nexports ``load_result()``. Invalid dimensions, materials, and controls raise\nactionable ``fdfd_common`` exceptions. See the `user guide <guide.rst>`_ and\nroot examples. Assembly routines, matrix builders, grid-index records, and\nArnoldi kernels are excluded from this user reference.\n'
         out += "\n" + SHARED_REFERENCE
         (ROOT/package/"docs"/'API_REFERENCE.rst').write_text(out,encoding='utf-8')
-    (ROOT/'scripts/fdfd_public_api.json').write_text(json.dumps(INVENTORY,indent=2)+'\n')
+    inventory_path = ROOT/'scripts/fdfd_public_api.json'
+    inventory = json.loads(inventory_path.read_text()) if inventory_path.exists() else {}
+    inventory.update(INVENTORY)
+    inventory_path.write_text(json.dumps(inventory,indent=2)+'\n')
 
 
 if __name__=='__main__':main()

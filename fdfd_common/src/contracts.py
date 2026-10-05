@@ -154,7 +154,7 @@ class ResultMixin:
             raise ConfigurationError("block must be a boolean.")
         return self._result_api().show_result(self, block=block)
 
-    def plot(self, *, component: str | None = None, quantity: str = "real", mode: int = 0):
+    def plot(self, *, component: str | None = None, quantity: str = "real", mode: int = 1):
         return self._result_api().plot_result(self, component=component, quantity=quantity, mode=mode)
 
     def save(self, path):

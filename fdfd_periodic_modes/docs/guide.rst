@@ -32,7 +32,7 @@ Material-first workflow
    result = solver.solve(num_modes=4, neff_guess=0.5)
    result.save("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
    loaded = load_result("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
-   loaded.plot(component="Hy", quantity="magnitude", mode=0)
+   loaded.plot(component="Hy", quantity="magnitude", mode=1)
 
 The 3D class uses ``add_box()``, ``add_sphere()``, and ``add_cylinder()``
 convenience methods. Both dimensions also accept compatible shared shapes through
@@ -51,9 +51,10 @@ The 2D result includes all six components: ``Ex``, ``Ey``, ``Ez``, ``Hx``,
 The longitudinal fields are reconstructed from Maxwell's equations on their
 staggered grids. In 2D plots, ``z`` is horizontal and ``x`` is vertical.
 
-The dedicated viewer shows all six components together with the material
-geometry in the background. Select a mode and magnitude, real part, imaginary
-part, or phase. The title displays the selected mode's complex ``neff``.
+The 2D viewer shows the three active TE or TM components together with the
+material geometry in the background. The 3D viewer shows all six components.
+Select a mode and magnitude, real part, imaginary part, or phase. Mode numbers
+start at 1. The title displays the selected mode's complex ``neff``.
 The 3D viewer also selects an xy, xz, or yz plane and its physical slice position.
 Both dimensions retain material backgrounds in saved results.
 

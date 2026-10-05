@@ -13,7 +13,7 @@ Constructor extents and shape coordinates use metres; frequencies use hertz.
 ``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a
 physical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape
 objects before assigning them. Grid-index geometry is private backend detail.
-All plotting and selection indices are zero-based.
+Mode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.
 
 ``BandStructureSolver2D``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -474,7 +474,7 @@ construct them directly. Field results expose ``mesh_data``, ``metadata``,
      - ``int``
      - Optional
      - ``None``
-     - Zero-based mode or band index.
+     - One-based mode or band number (starting at 1).
 
 Returns: a Matplotlib Figure without opening a window.
 

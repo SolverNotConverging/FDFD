@@ -13,7 +13,7 @@ Constructor extents and shape coordinates use metres; frequencies use hertz.
 ``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a
 physical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape
 objects before assigning them. Grid-index geometry is private backend detail.
-All plotting and selection indices are zero-based.
+Mode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.
 
 ``ModeSolver1D``
 ~~~~~~~~~~~~~~~~
@@ -797,7 +797,7 @@ construct them directly. Field results expose ``mesh_data``, ``metadata``,
 
 .. code-block:: python
 
-    ModeSet.plot(*, component=None, quantity='real', mode=0, plane=None, position=None)
+    ModeSet.plot(*, component=None, quantity='real', mode=1, plane=None, position=None)
 
 .. list-table:: Arguments
    :header-rows: 1
@@ -821,8 +821,8 @@ construct them directly. Field results expose ``mesh_data``, ``metadata``,
    * - ``mode``
      - ``int``
      - Optional
-     - ``0``
-     - Zero-based mode or band index.
+     - ``1``
+     - One-based mode or band number (starting at 1).
    * - ``plane``
      - ``array-like or scalar``
      - Optional
@@ -912,7 +912,7 @@ Results and examples
 --------------------
 
 ``solve`` returns a modal set with dimensionless ``neff``, ``beta`` in rad/m,
-explicit staggered field coordinates, and zero-based mode selection.
+explicit staggered field coordinates, and one-based mode selection.
 
 Results provide ``plot()``, ``show()``, and atomic ``save()``; each package
 exports ``load_result()``. Invalid dimensions, materials, and controls raise

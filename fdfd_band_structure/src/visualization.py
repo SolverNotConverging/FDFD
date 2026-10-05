@@ -54,7 +54,7 @@ class BandStructureViewer:
         for name in self.polarizations:
             if name in self.selected:
                 for index, values in enumerate(frequencies[name]):
-                    self.axis.plot(distance, operation(values), label=f'{name} {index}')
+                    self.axis.plot(distance, operation(values), label=f'{name} {index+1}')
         unit = 'fa/c' if self.scale == 'normalized' else 'GHz'
         self.axis.set(xlabel='Distance along Bloch path (rad/m)',
                       ylabel=f'Frequency ({self.quantity}, {unit})', title='Photonic band structure')

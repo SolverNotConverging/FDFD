@@ -10,7 +10,7 @@ class WaveguideModeViewer:
         from matplotlib.widgets import RadioButtons, Slider
 
         self.result = result
-        self.mode = 0
+        self.mode = 1
         self.quantity = 'magnitude'
         self.components = tuple(name for name in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
                                 if name in result.fields)
@@ -28,7 +28,7 @@ class WaveguideModeViewer:
         self.mode_control = None
         if len(result) > 1:
             self.mode_control = Slider(self.figure.add_axes((.4, .07, .48, .035)),
-                                       'Mode', 0, len(result)-1, valstep=1, valinit=0)
+                                       'Mode', 1, len(result), valstep=1, valinit=1)
             self.mode_control.on_changed(self._set_mode)
         self.figure._waveguide_mode_viewer = self
         self.draw()

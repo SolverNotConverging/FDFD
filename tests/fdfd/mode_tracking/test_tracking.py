@@ -317,7 +317,7 @@ def test_open_box_modes_fail_domain_verification():
     assert any(line.get_marker() == 'x' for axis in (viewer.phase_axis, viewer.decay_axis)
                for line in axis.lines)
     assert all(not np.isfinite(line.get_ydata()).any() for line in viewer.phase_axis.lines
-               if line.get_label() == 'track 0')
+               if line.get_label() == 'track 1')
     assert len(_dispersion_edges(viewer, style='--')) == 1
 
 
@@ -663,7 +663,7 @@ def test_material_first_api_forwards_progress(monkeypatch, tracker_type):
 
 def _dispersion_edges(viewer, *, track=0, style='-', axis=None):
     axis = viewer.phase_axis if axis is None else axis
-    label = f'track {track}' + (' (ineligible)' if style == '--' else '')
+    label = f'track {track+1}' + (' (ineligible)' if style == '--' else '')
     line = next(line for line in axis.lines if line.get_label() == label)
     assert line.get_linestyle() == style
     return [tuple(chunk[:2]) for chunk in np.asarray(line.get_xdata()).reshape(-1, 3)]
@@ -694,8 +694,8 @@ def test_ineligible_tracks_are_dashed_and_keep_export_guard(display_sweep, confi
             tuple(frequencies[0:2]), tuple(frequencies[1:3])]
         assert _dispersion_edges(viewer, style='-', axis=axis) == [
             tuple(frequencies[2:4]), tuple(frequencies[3:5])]
-        solid = next(line for line in axis.lines if line.get_label() == 'track 0')
-        dashed = next(line for line in axis.lines if line.get_label() == 'track 0 (ineligible)')
+        solid = next(line for line in axis.lines if line.get_label() == 'track 1')
+        dashed = next(line for line in axis.lines if line.get_label() == 'track 1 (ineligible)')
         assert solid.get_color() == dashed.get_color()
         assert sum(line.get_marker() == 'x' for line in axis.lines) == 2
     assert 'NON-BOUND' in viewer.field_axes[0].get_title()
@@ -738,7 +738,7 @@ def test_track_colors_follow_global_identity_and_survive_reload(display_sweep, t
     assert len(set(viewer.track_colors)) == 32
     for axis in (viewer.phase_axis, viewer.decay_axis):
         for track, color in enumerate(viewer.track_colors):
-            for label in (f'track {track}', f'track {track} (ineligible)'):
+            for label in (f'track {track+1}', f'track {track+1} (ineligible)'):
                 line = next(line for line in axis.lines if line.get_label() == label)
                 assert line.get_color() == color
         markers = [line for line in axis.lines if line.get_picker() == 5]

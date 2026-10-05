@@ -167,7 +167,7 @@ class ModeTrackingViewer:
                 phase.extend((*values[si:si+2, 0], np.nan))
                 decay.extend((*values[si:si+2, 1], np.nan))
             for style, (x, phase, decay) in edges.items():
-                label = f'track {track}' + (' (ineligible)' if style == '--' else '')
+                label = f'track {track+1}' + (' (ineligible)' if style == '--' else '')
                 self.phase_axis.plot(x, phase, style, color=color, lw=1.3, alpha=.75, label=label)
                 self.decay_axis.plot(x, decay, style, color=color, lw=1.3, alpha=.75, label=label)
         # Mark every candidate returned at every primary/adaptive frequency.
@@ -237,9 +237,9 @@ class ModeTrackingViewer:
             if status['degenerate']: flags.append('DEGENERATE')
             if status['cutoff']: flags.append('CUTOFF')
             if status['invalid']: flags.append(status['invalid_kind']+' ×')
-            track = f' · track {tracked[candidate]}' if candidate in tracked else ''
+            track = f' · track {tracked[candidate]+1}' if candidate in tracked else ''
             suffix = ' · '+' / '.join(flags) if flags else ''
-            axis.set_title(f'mode {candidate}{track}\n{label} {shown_quantity}{suffix}', fontsize=9,
+            axis.set_title(f'mode {candidate+1}{track}\n{label} {shown_quantity}{suffix}', fontsize=9,
                            color='firebrick' if status['invalid'] else 'black')
             if status['invalid']:
                 axis.text(.5, .5, '×', transform=axis.transAxes, ha='center', va='center',

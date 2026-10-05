@@ -50,7 +50,7 @@ def _draw_material_background(result, ax, component, plane, position):
     ax.set_ylim(ylim)
 
 
-def draw_field_panel(result, ax, component, quantity, mode=0, plane=None, position=None):
+def draw_field_panel(result, ax, component, quantity, mode=1, plane=None, position=None):
     result._draw(ax, component, quantity, mode, plane, position)
     ax.set_title(f'{component} ({quantity})')
     field = ax.collections[0] if ax.collections else None
@@ -67,5 +67,5 @@ def draw_field_panel(result, ax, component, quantity, mode=0, plane=None, positi
 
 
 def effective_index_label(result, mode):
-    value = complex(result.neff[mode])
+    value = complex(result.neff[mode-1])
     return f'Mode {mode}: neff = {value.real:.6g}{value.imag:+.6g}j'
