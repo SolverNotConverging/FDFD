@@ -12,7 +12,7 @@ from fdfd_periodic_modes import plot_dispersion, Material, materials, PeriodicMo
 
 OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/2d_surface_wave_antenna_dispersion"
 
-frequencies = np.linspace(25e9, 35e9, 3)
+frequencies = np.linspace(25e9, 35e9, 30)
 neff_sweep = []
 rows = []
 for frequency in frequencies:
@@ -31,7 +31,7 @@ for frequency in frequencies:
         rows.append(dict(frequency_hz=frequency, mode=mode, neff_real=neff.real, neff_imag=neff.imag))
 with (OUTPUT / "dispersion.csv").open("w", newline="") as stream:
     writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
-    writer.writeheader();
+    writer.writeheader()
     writer.writerows(rows)
 
 plot_dispersion(frequencies, neff_sweep)

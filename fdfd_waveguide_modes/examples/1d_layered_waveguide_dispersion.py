@@ -14,14 +14,14 @@ from fdfd_waveguide_modes import plot_dispersion, Material, ModeSolver1D
 OUTPUT = _ROOT / "fdfd_waveguide_modes/outputs/examples/1d_layered_waveguide_dispersion"
 
 core = Material(name="dielectric core", epsilon=4.)
-frequencies = np.linspace(20e9, 60e9, 5)
+frequencies = np.linspace(20e9, 60e9, 50)
 neff_sweep = []
 rows = []
 for frequency in frequencies:
     solver = ModeSolver1D(frequency=frequency, x_range=10e-3)
     solver.add_layer(x_range=(3e-3, 7e-3), material=core)
     solver.mesh(resolution=200)
-    result = solver.solve(num_modes=3, neff_guess=1.8)
+    result = solver.solve(num_modes=3)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"modes_{frequency/1e9:.0f}GHz.h5")
     neff_sweep.append(result.neff)
