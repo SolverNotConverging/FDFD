@@ -37,3 +37,5 @@ Plots are saved beside their source data.
 
 * `3d_inspect_results.py <postprocessing/3d_inspect_results.py>`_
 * `2d_plot_dispersion.py <postprocessing/2d_plot_dispersion.py>`_
+
+Sweeps show a ``tqdm`` progress bar as each frequency finishes.

@@ -16,6 +16,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+from tqdm.auto import tqdm
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -305,7 +306,7 @@ class _BandStructureSolver2D:
             frequencies[pol] = np.zeros((num_bands, num_samples), dtype=complex)
             eigenvalues[pol] = np.zeros((num_bands, num_samples), dtype=complex)
 
-        for idx in range(num_samples):
+        for idx in tqdm(range(num_samples), desc="Band structure", unit="k-point"):
             beta = beta_path[:, idx]
             DEX, DEY, DHX, DHY = yeeder2d(
                 [self.Nx, self.Ny],
