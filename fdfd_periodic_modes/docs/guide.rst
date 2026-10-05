@@ -45,6 +45,18 @@ staggered coordinates. It exposes ``neff``, ``beta``, fields, residual metadata,
 plotting, interactive viewing, and atomic HDF5 persistence. Geometry edits
 invalidate mesh and result while retaining explicit meshing settings.
 
+The 2D result includes all six components: ``Ex``, ``Ey``, ``Ez``, ``Hx``,
+``Hy``, and ``Hz``. TM modes have ``Ex``, ``Ez``, and ``Hy``; TE modes have
+``Ey``, ``Hx``, and ``Hz``. The other components are zero for that polarization.
+The longitudinal fields are reconstructed from Maxwell's equations on their
+staggered grids. In 2D plots, ``z`` is horizontal and ``x`` is vertical.
+
+The dedicated viewer shows all six components together with the material
+geometry in the background. Select a mode and magnitude, real part, imaginary
+part, or phase. The title displays the selected mode's complex ``neff``.
+The 3D viewer also selects an xy, xz, or yz plane and its physical slice position.
+Both dimensions retain material backgrounds in saved results.
+
 Examples and API
 ----------------
 

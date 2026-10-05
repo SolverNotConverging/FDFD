@@ -2,12 +2,16 @@
 import numpy as np
 from fdfd_common import materials, shapes
 from fdfd_common.grid import GridSceneMixin, GridResult, load_grid_result
-from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve
+from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve, material_background
 from fdfd_common.errors import ConfigurationError
 
 
 class PeriodicModeSet(GridResult):
     """Returned Bloch modes and staggered periodic-envelope fields."""
+    def show(self, *, block=True):
+        from .visualization import show_result
+        return show_result(self, block=block)
+
 
 
 def load_result(path):
@@ -30,7 +34,8 @@ class _PeriodicAPI(GridSceneMixin):
         backend = self._backend
         self._result = PeriodicModeSet('fdfd_periodic_modes', self.mesh_data, self.frequency,
             fields, field_coordinates(self, fields), np.array(backend.neff),
-            {'k0': backend.k0, 'field_representation': 'periodic-envelope; staggered-fields',
+            {'k0': backend.k0, 'material_background': material_background(self),
+             'field_representation': 'periodic-envelope; staggered-fields',
              'field_normalization': 'native eigenvector normalization', 'context': self._scene_context(),
              'solve_info': {'eigensolver_tolerance': tolerance, 'residuals': getattr(backend, 'refined_residuals', None)}})
         return self.result
@@ -62,7 +67,7 @@ class PeriodicModeSolver2D(_PeriodicAPI):
         self._result = None
         backend.solve(guess=1j*backend.k0*neff_guess, tol=eigensolver_tolerance, ncv=ncv,
                       method=eigensolver, max_restarts=max_restarts, random_seed=random_seed, kernel_backend=arnoldi_backend)
-        names = ('Ex', 'Hy') if self.polarization == 'TM' else ('Ey', 'Hx')
+        names = ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
         fields = {name: np.asarray(getattr(backend, name)).reshape((*getattr(backend, 'shape_'+name.lower()), num_modes), order='F').copy() for name in names}
         return self._finish(fields, eigensolver_tolerance)
 

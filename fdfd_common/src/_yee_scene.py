@@ -75,6 +75,27 @@ def field_coordinates(solver, fields):
     return result
 
 
+def material_background(solver):
+    """Retain cell materials and conductor footprints for saved-result viewers."""
+    backend = solver._backend
+    epsilon = []
+    mu = []
+    for component in ('xx', 'yy', 'zz'):
+        eps = getattr(backend, 'cell_eps_r_' + component, None)
+        permeability = getattr(backend, 'cell_mu_r_' + component, None)
+        if eps is None:
+            eps = getattr(backend, 'cell_Er' + component + '_3D')
+            permeability = getattr(backend, 'cell_Mr' + component + '_3D')
+        epsilon.append(np.array(eps, copy=True))
+        mu.append(np.array(permeability, copy=True))
+    conductor = np.zeros(solver.mesh_data.resolution, dtype=bool)
+    coordinates = np.meshgrid(*solver.mesh_data.coordinates, indexing='ij', sparse=True)
+    for record, _ in solver._objects.values():
+        if not isinstance(record.material, materials.Material):
+            conductor |= record.shape.contains(*coordinates)
+    return dict(epsilon=np.stack(epsilon), mu=np.stack(mu), conductor=conductor)
+
+
 def validate_solve(num_modes, neff_guess, eigensolver_tolerance):
     if isinstance(num_modes, bool) or int(num_modes) != num_modes or num_modes < 1:
         raise ConfigurationError('num_modes must be a positive integer.')

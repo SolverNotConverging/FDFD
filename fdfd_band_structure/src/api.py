@@ -45,12 +45,8 @@ class BandStructureResult:
         fig.tight_layout()
         return fig
     def show(self, *, block=True):
-        from matplotlib import pyplot as plt
-        fig,ax=plt.subplots(figsize=(7,5))
-        self._draw(ax,None,'real',None)
-        fig.tight_layout()
-        plt.show(block=block)
-        return fig
+        from .visualization import show_result
+        return show_result(self, block=block)
     def save(self,path):
         from fdfd_common.persistence import atomic_h5,write_value
         with atomic_h5(path) as handle:

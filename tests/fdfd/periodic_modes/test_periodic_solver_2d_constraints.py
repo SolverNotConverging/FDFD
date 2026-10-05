@@ -498,7 +498,11 @@ class PeriodicModeSolver2DConstraintTests(unittest.TestCase):
                 ):
                     solver.solve()
 
-                inverse_mock.assert_called_once()
+                # Both the Schur system and longitudinal reconstruction use
+                # the same conductor-aware inverse.
+                self.assertEqual(inverse_mock.call_count, 2)
+                np.testing.assert_array_equal(inverse_mock.call_args_list[0].args[1],
+                                              inverse_mock.call_args_list[1].args[1])
                 constrained = inverse_mock.call_args.args[1]
                 self.assertTrue(np.any(constrained))
                 diagonal = solver._inverse_diag_on_free(

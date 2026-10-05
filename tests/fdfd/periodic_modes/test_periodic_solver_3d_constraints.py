@@ -582,7 +582,8 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
         ):
             solver.solve(method="eigs")
 
-        self.assertEqual(inverse_mock.call_count, 2)
+        # The pencil and longitudinal field reconstruction each use both masks.
+        self.assertEqual(inverse_mock.call_count, 4)
         called_masks = [call.args[1] for call in inverse_mock.call_args_list]
         self.assertTrue(any(np.array_equal(mask, pec_zz) for mask in called_masks))
         self.assertTrue(any(np.array_equal(mask, pmc_zz) for mask in called_masks))

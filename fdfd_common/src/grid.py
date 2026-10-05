@@ -158,6 +158,10 @@ class GridResult:
     def attenuation_constant(self): return -self.beta.imag
     def __len__(self): return len(self.neff)
 
+    def _default_component(self):
+        return next((name for name, values in self.fields.items() if np.any(values)),
+                    next(iter(self.fields)))
+
     def plot(self, *, component=None, quantity='real', mode=0, plane=None, position=None):
         from matplotlib.figure import Figure
         fig = Figure(figsize=(7, 5))
@@ -168,7 +172,7 @@ class GridResult:
     def _draw(self, ax, component, quantity, mode, plane, position):
         if isinstance(mode, bool) or int(mode) != mode or mode < 0:
             raise ConfigurationError('mode must be a zero-based integer.')
-        name = next(iter(self.fields)) if component is None else component
+        name = self._default_component() if component is None else component
         if name not in self.fields:
             raise ConfigurationError(f'Available components: {tuple(self.fields)}.')
         raw = np.asarray(self.fields[name])
@@ -194,30 +198,17 @@ class GridResult:
             ax.plot(coordinates[0], values)
             ax.set(xlabel=axes[0]+' (m)', ylabel=f'{name} ({quantity})')
         else:
+            if self.family == 'fdfd_periodic_modes' and axes == ('x', 'z'):
+                coordinates = coordinates[::-1]
+                axes = axes[::-1]
+                values = values.T
             ax.pcolormesh(*coordinates, values.T, shading='auto', cmap='viridis')
             ax.set(xlabel=axes[0]+' (m)', ylabel=axes[1]+' (m)', aspect='equal')
-        ax.set_title(f'{self.family}: {name}, mode {mode}')
-
-    def show(self, *, block=True):
-        from matplotlib import pyplot as plt
-        from matplotlib.widgets import RadioButtons, Slider
-        if not isinstance(block, bool):
-            raise ConfigurationError('block must be a boolean.')
-        figure, ax = plt.subplots(figsize=(9, 5))
-        figure.subplots_adjust(left=.28, bottom=.2)
-        selector = RadioButtons(figure.add_axes((.02, .35, .18, .5)), tuple(self.fields))
-        count = max(np.asarray(v).shape[-1] for v in self.fields.values())
-        slider = Slider(figure.add_axes((.32, .05, .5, .04)), 'mode', 0, max(1, count-1), valinit=0, valstep=1)
-        def draw(_=None):
-            ax.clear()
-            self._draw(ax, selector.value_selected, 'magnitude', min(int(slider.val), count-1), None, None)
-            figure.canvas.draw_idle()
-        selector.on_clicked(draw)
-        slider.on_changed(draw)
-        figure._cem_controls = (selector, slider, draw)
-        draw()
-        plt.show(block=block)
-        return figure
+        title = f'{self.family}: {name} ({quantity})'
+        if len(self.neff):
+            neff = complex(self.neff[mode])
+            title += f'\nmode {mode}, neff = {neff.real:.6g}{neff.imag:+.6g}j'
+        ax.set_title(title)
 
     def save(self, path):
         from .persistence import atomic_h5, write_value

@@ -956,6 +956,24 @@ class _PeriodicModeSolver3D:
         self._update_propagation_outputs()
         self.store_fields()
 
+        # Restore the longitudinal fields eliminated from the transverse pencil.
+        Ex = self.eigenvectors[:self.n_ex]
+        Ey = self.eigenvectors[self.n_ex:self.n_ex+self.n_ey]
+        Hx = self.eigenvectors[self.n_ex+self.n_ey:self.n_ex+self.n_ey+self.n_hx]
+        Hy = self.eigenvectors[self.n_ex+self.n_ey+self.n_hx:]
+        inverse_eps = self._inverse_diag_on_free(materials['erzz'], pec_zz_mask)
+        inverse_mu = self._inverse_diag_on_free(materials['mrzz'], pmc_zz_mask)
+        Ez = (-1j / (self.omega * self.epsilon0)) * (
+            inverse_eps @ (self.DHX_HY_TO_EZ @ Hy - self.DHY_HX_TO_EZ @ Hx)
+        )
+        Hz = (1j / (self.omega * self.mu0)) * (
+            inverse_mu @ (self.DEX_EY_TO_HZ @ Ey - self.DEY_EX_TO_HZ @ Ex)
+        )
+        for name, values, shape in (('Ez', Ez, self.shape_ez), ('Hz', Hz, self.shape_hz)):
+            self.fields[name] = np.array([
+                values[:, index].reshape(shape, order='F') for index in range(self.num_modes)
+            ])
+
     def _update_propagation_outputs(self):
         """Map the spatial eigenvalue to the repository phasor convention."""
         if self.eigenvalues is None:

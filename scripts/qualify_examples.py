@@ -9,12 +9,20 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN = """import runpy, sys
+from contextlib import ExitStack
 from unittest.mock import patch
 from fdfd_common.contracts import SolverMixin, ResultMixin
+from fdfd_band_structure import BandStructureResult
+from fdfd_waveguide_modes import ModeSet
+from fdfd_periodic_modes import PeriodicModeSet
+from fdfd_scattering import ScatteringResult
 from fdfd_mode_tracking import TrackedSweep
 path = sys.argv[1]
 sys.argv = [path]
-with patch.object(SolverMixin, 'show'), patch.object(ResultMixin, 'show'), patch.object(TrackedSweep, 'show'), patch('matplotlib.pyplot.show'):
+with ExitStack() as stack:
+    for cls in (SolverMixin, ResultMixin, BandStructureResult, ModeSet, PeriodicModeSet, ScatteringResult, TrackedSweep):
+        stack.enter_context(patch.object(cls, 'show'))
+    stack.enter_context(patch('matplotlib.pyplot.show'))
     runpy.run_path(path, run_name='__main__')
 """
 

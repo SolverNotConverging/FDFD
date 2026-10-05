@@ -39,6 +39,10 @@ radians per metre. ``solve()`` returns frequency arrays in hertz indexed by
 polarization, raw eigenvalues, normalized frequencies, solver metadata, and
 plot/show/save operations. Loading never solves again.
 
+The dedicated band viewer displays all bands together. Its controls select
+TE/TM polarizations, real part, imaginary part, or magnitude, and frequency
+in GHz or normalized ``fa/c``.
+
 Examples and API
 ----------------
 

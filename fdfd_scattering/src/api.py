@@ -8,6 +8,10 @@ from fdfd_common.errors import ConfigurationError, BackendCapabilityError
 
 class ScatteringResult(GridResult):
     """Returned total-field/scattered-field scalar grid solution."""
+    def show(self, *, block=True):
+        from .visualization import show_result
+        return show_result(self, block=block)
+
 
 
 def load_result(path):

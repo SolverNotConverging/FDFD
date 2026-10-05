@@ -9,6 +9,9 @@ use ``exp(+i*omega*t)``.
 Material-first workflow
 -----------------------
 
+The interactive viewer displays the scattering field with magnitude, real,
+imaginary, and phase options. A scattering result has no mode selector.
+
 .. code-block:: python
 
    from fdfd_scattering import ScatteringSolver2D, load_result, Material

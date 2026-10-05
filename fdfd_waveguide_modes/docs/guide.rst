@@ -9,6 +9,11 @@ and Python mode indices are zero-based. Electromagnetic phasors use
 Material-first workflow
 -----------------------
 
+The dedicated viewer shows all six electric and magnetic field components
+together, with the material geometry in the background. Select a mode and
+magnitude, real part, imaginary part, or phase. The title displays the selected
+mode's complex ``neff``. Material backgrounds are also retained in saved results.
+
 Define reusable material and shape objects before assigning geometry. The
 following slab example uses an explicit mesh and saves a result without opening
 a window:

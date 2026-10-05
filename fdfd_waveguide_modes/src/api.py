@@ -2,13 +2,17 @@
 import numpy as np
 from fdfd_common import materials, shapes
 from fdfd_common.grid import GridSceneMixin, GridResult, load_grid_result
-from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve
+from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve, material_background
 from fdfd_common.errors import ConfigurationError
 from .diagnostics import boundary_provenance
 
 
 class ModeSet(GridResult):
     """Returned staggered waveguide fields and complex effective indices."""
+    def show(self, *, block=True):
+        from .visualization import show_result
+        return show_result(self, block=block)
+
 
 
 def load_result(path):
@@ -26,7 +30,8 @@ class _WaveguideAPI(GridSceneMixin):
     def add_pml(self, *, thickness, direction='all', order=3, sigma_max=5.):
         self._record_pml(thickness=thickness, direction=direction, order=order, sigma_max=sigma_max)
     def _result_from_fields(self, fields, neff, polarizations, residuals, source_indices, field_residuals):
-        metadata = {'k0': self._backend.k_0, 'field_representation': 'staggered-fields; exp(-i*beta*z)',
+        metadata = {'k0': self._backend.k_0, 'material_background': material_background(self),
+                    'field_representation': 'staggered-fields; exp(-i*beta*z)',
                     'field_normalization': 'native eigenvector normalization; H_num=-i*eta0*H',
                     'polarizations': tuple(polarizations), 'context': self._scene_context(),
                     'eta0': float(np.sqrt(self._backend.mu0 / self._backend.epsilon0)),

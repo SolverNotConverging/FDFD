@@ -832,12 +832,25 @@ class _PeriodicModeSolver2D:
         self.propagation_constant = np.real(self.neff)
         self.attenuation_constant = -np.imag(self.neff)
 
+        for name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+            shape = getattr(self, "shape_" + name.lower())
+            setattr(self, name, np.zeros((int(np.prod(shape)), self.num_modes), dtype=complex))
         if self.polarization == "TM":
             self.Ex = eigenvectors[:self.n_ex, :]
             self.Hy = eigenvectors[self.n_ex:, :]
+            # Ampere's longitudinal equation: d_x Hy = i omega epsilon Ez.
+            inverse_eps = self._inverse_diag_on_free(eps_r_zz, pec_zz_mask)
+            self.Ez = (-1j / (self.omega * self.epsilon0)) * (
+                inverse_eps @ self.DHX_HY_TO_EZ @ self.Hy
+            )
         else:
             self.Hx = eigenvectors[:self.n_hx, :]
             self.Ey = eigenvectors[self.n_hx:, :]
+            # Faraday's longitudinal equation: d_x Ey = -i omega mu Hz.
+            inverse_mu = self._inverse_diag_on_free(mu_r_zz, pmc_zz_mask)
+            self.Hz = (1j / (self.omega * self.mu0)) * (
+                inverse_mu @ self.DEX_EY_TO_HZ @ self.Ey
+            )
 
         self.spurious_scores = np.zeros(self.num_modes, dtype=float)
         self.accepted_candidate_indices = np.arange(self.num_modes)
