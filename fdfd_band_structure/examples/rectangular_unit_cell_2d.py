@@ -19,7 +19,7 @@ solver.add_circle(center=(0., 0.), radius=.2*min(a,b), material=rod)
 solver.mesh(resolution=(20, 20))
 path = solver.make_bloch_path(
     points=((0.,0.), (np.pi/a,0.), (np.pi/a,np.pi/b), (0.,0.)),
-    num_points=16,
+    num_points=100,
 )
 result = solver.solve(beta_path=path, num_modes=4)
 print("First TE band (Hz):", result.frequencies["TE"][0])
