@@ -23,6 +23,7 @@ sweep. Use ``show=False`` to return the figure for saving without opening it.
 
 The waveguide solver automatically searches 1% above the largest refractive
 index magnitude of the assigned bulk materials, including the background.
+The examples omit ``neff_guess`` to use this automatic choice at each frequency.
 It accounts for both permittivity and permeability and all diagonal tensor
 components. Lower ``neff_guess`` values are raised to this search value;
 higher values are retained. Modes are ordered by decreasing real ``neff``,
