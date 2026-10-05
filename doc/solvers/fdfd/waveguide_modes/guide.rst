@@ -74,7 +74,7 @@ Start with `rectangular_waveguide_2d.py <../../../../examples/fdfd/waveguide_mod
 The `family example index <../../../../examples/fdfd/waveguide_modes/README.rst>`_
 then covers slab, microstrip, dielectric, dispersion, and postprocessing cases.
 The `rectangular-waveguide benchmark <../../../../benchmarks/analytical/rectangular_waveguide_modes.py>`_
-compares FDFD and FEM against TE10 theory.
+compares FDFD against TE10 theory.
 
 See `API_REFERENCE.rst <API_REFERENCE.rst>`_ for supported signatures, defaults,
 return values, and actionable exceptions.

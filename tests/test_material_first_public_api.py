@@ -50,28 +50,6 @@ def test_shared_shapes_support_boolean_and_transformed_geometry() -> None:
         shapes.Polygon(points=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0)))
 
 
-@pytest.mark.gmsh
-@pytest.mark.parametrize(
-    "shape",
-    (
-        shapes.Ellipse(center=(0.5, 0.5), radii=(0.25, 0.15)),
-        shapes.RoundedRectangle(bounds=((0.2, 0.8), (0.2, 0.8)), radius=0.1),
-        shapes.Difference(
-            shape=shapes.Circle(center=(0.5, 0.5), radius=0.3),
-            tool=shapes.Circle(center=(0.5, 0.5), radius=0.12),
-        ),
-    ),
-)
-def test_shared_extended_shapes_mesh_in_fem(shape) -> None:
-    from fem_waveguide_modes import ModeSolver2D
-
-    solver = ModeSolver2D(frequency=299_792_458.0, x_range=1.0, y_range=1.0)
-    solver.add_geometry(
-        shape=shape,
-        material=Material(name="inclusion", epsilon=2.25),
-    )
-    mesh = solver.mesh(max_element_size=0.25, material_aware=False)
-    assert mesh.elements.size > 0
 
 
 @pytest.mark.parametrize(
@@ -83,12 +61,6 @@ def test_shared_extended_shapes_mesh_in_fem(shape) -> None:
         ("fdfd_periodic_modes", "PeriodicModeSolver3D"),
         ("fdfd_scattering", "ScatteringSolver2D"),
         ("fdfd_band_structure", "BandStructureSolver2D"),
-        ("fem_waveguide_modes", "ModeSolver1D"),
-        ("fem_waveguide_modes", "ModeSolver2D"),
-        ("fem_periodic_modes", "PeriodicModeSolver2D"),
-        ("fem_periodic_modes", "PeriodicModeSolver3D"),
-        ("fem_waveguide_scattering", "WaveguideScatteringSolver2D"),
-        ("fem_electrostatics", "ElectrostaticSolver"),
     ),
 )
 def test_public_solver_configuration_is_keyword_only(package: str, solver_name: str) -> None:
@@ -107,10 +79,6 @@ def test_clean_break_removes_obsolete_solver_workflows() -> None:
         "fdfd_periodic_modes": ("PeriodicModeSolver2D", "PeriodicModeSolver3D"),
         "fdfd_scattering": ("ScatteringSolver2D",),
         "fdfd_band_structure": ("BandStructureSolver2D",),
-        "fem_waveguide_modes": ("ModeSolver1D", "ModeSolver2D"),
-        "fem_periodic_modes": ("PeriodicModeSolver2D", "PeriodicModeSolver3D"),
-        "fem_waveguide_scattering": ("WaveguideScatteringSolver2D",),
-        "fem_electrostatics": ("ElectrostaticSolver",),
     }.items():
         module = __import__(package, fromlist=names)
         solver_types.extend(getattr(module, name) for name in names)

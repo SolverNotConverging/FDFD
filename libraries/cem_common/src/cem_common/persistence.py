@@ -35,10 +35,10 @@ def validate_envelope(handle, *, family, static=False):
     for name, value in expected.items():
         actual = handle.attrs.get(name)
         if not isinstance(actual, str) or actual != value:
-            raise PersistenceError(f"Incompatible FEM archive: {name} must be {value!r}; "
+            raise PersistenceError(f"Incompatible result archive: {name} must be {value!r}; "
                                    f"received {handle.attrs.get(name)!r}. Legacy archives are unsupported.")
     if "field_representation" not in handle.attrs or "dimension" not in handle.attrs or "result_kind" not in handle.attrs:
-        raise PersistenceError("Incomplete FEM archive envelope.")
+        raise PersistenceError("Incomplete result archive envelope.")
     representations = {"waveguide_modes": "sampled-fields; exp(-i*beta*z)",
         "periodic_modes": "periodic-envelope", "waveguide_scattering": "sampled-fields; exp(-i*ky*y)",
         "electrostatics": "nodal-potential; nodal-and-cell-fields"}

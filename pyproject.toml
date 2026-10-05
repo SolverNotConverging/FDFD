@@ -1,24 +1,23 @@
 [build-system]
 requires = [
-  "scikit-build-core>=1.0,<2",
-  "cython-cmake>=0.2,<1",
+  "setuptools>=77,<83",
   "Cython>=3,<4",
   "numpy>=1.26,<3",
   "scipy>=1.12,<2",
 ]
-build-backend = "scikit_build_core.build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdfd"
 version = "1.1.0"
-description = "FDFD: electromagnetic solvers and interactive native applications"
+description = "FDFD electromagnetic solvers"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = "MIT AND GPL-3.0-or-later AND LGPL-3.0-or-later"
+license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
   "numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4",
-  "h5py>=3.15,<4", "scikit-fem>=12,<13", "gmsh>=4.13,<5", "meshio>=5.3,<6",
+  "h5py>=3.15,<4",
   "tqdm>=4.66,<5",
 ]
 
@@ -33,32 +32,18 @@ test = ["pytest>=8,<10", "docutils"]
 dev = [
   "pytest>=8,<10",
   "docutils",
-  "delocate>=0.13,<1; sys_platform == 'darwin'",
   "pandas",
 ]
 
 [project.scripts]
 fdfd = "fdfd.__main__:main"
-transmission-line-calculator = "fdfd._apps:calculator"
-transmission-line-calculator-cli = "fdfd._apps:calculator_cli"
-fem-periodic-mode-viewer = "fdfd._apps:periodic_viewer"
-fem-periodic-mode-inspect = "fdfd._apps:periodic_inspector"
-fem-waveguide-scattering-viewer = "fdfd._apps:scattering_viewer"
-fem-waveguide-scattering-viewer-inspect = "fdfd._apps:scattering_inspector"
 
 [tool.uv]
 package = true
 default-groups = ["dev"]
 cache-keys = [
   { file = "pyproject.toml" },
-  { file = "CMakeLists.txt" },
-  { file = "cmake/**/*.cmake" },
-  { file = "cmake/**/*.in" },
-  { file = "apps/**/CMakeLists.txt" },
-  { file = "apps/**/native/**/*.cpp" },
-  { file = "apps/**/native/**/*.hpp" },
-  { file = "apps/**/native/**/*.c" },
-  { file = "apps/**/native/**/*.h" },
+  { file = "setup.py" },
   { file = "libraries/**/src/**/*.py" },
   { file = "libraries/**/src/**/*.pyx" },
   { file = "libraries/**/src/**/*.pxd" },
@@ -66,30 +51,5 @@ cache-keys = [
   { file = "src/**/*.py" },
 ]
 
-[tool.scikit-build]
-minimum-version = "build-system.requires"
-build-dir = "build/{wheel_tag}"
-cmake.build-type = "Release"
-wheel.packages = [
-  "src/fdfd",
-  "libraries/cem_common/src/cem_common",
-  "libraries/fem_adaptivity/src/fem_adaptivity",
-  "libraries/periodic_eigensolver/src/periodic_eigensolver",
-  "solvers/fdfd/band_structure/src/fdfd_band_structure",
-  "solvers/fdfd/periodic_modes/src/fdfd_periodic_modes",
-  "solvers/fdfd/scattering/src/fdfd_scattering",
-  "solvers/fdfd/waveguide_modes/src/fdfd_waveguide_modes",
-  "solvers/fdfd/mode_tracking/src/fdfd_mode_tracking",
-  "solvers/fem/electrostatics/src/fem_electrostatics",
-  "solvers/fem/periodic_modes/src/fem_periodic_modes",
-  "solvers/fem/waveguide_modes/src/fem_waveguide_modes",
-  "solvers/fem/waveguide_scattering/src/fem_waveguide_scattering",
-]
-wheel.exclude = ["**/*.pyx", "**/__pycache__/**"]
-sdist.exclude = [".idea", "outputs", "examples", "**/__pycache__", "**/build"]
-
-# Keep Windows caches separate from the former MinGW build directory.
-[[tool.scikit-build.overrides]]
-if.platform-system = "^win32$"
-build-dir = "build/msvc/{wheel_tag}"
-cmake.args = ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"]
+[tool.setuptools]
+include-package-data = false

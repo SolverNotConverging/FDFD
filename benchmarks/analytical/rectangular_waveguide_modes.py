@@ -1,4 +1,4 @@
-"""Compare FEM and FDFD TE10 modes against a rectangular PEC waveguide.
+"""Compare FDFD TE10 modes against a rectangular PEC waveguide.
 
 The exact vacuum solution is beta = sqrt(k0**2 - (pi / width)**2).
 Refine spatial resolution while keeping frequency, dimensions, and the mode fixed.
@@ -14,7 +14,6 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import FormatStrFormatter
 from scipy.constants import c
 from fdfd_waveguide_modes import ModeSolver2D as FDFDModeSolver2D
-from fem_waveguide_modes import ModeSolver2D as FEMModeSolver2D
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / 'outputs/benchmarks/analytical/rectangular_waveguide_modes'
 
@@ -27,36 +26,27 @@ def compare(levels=(8, 12, 16)):
     rows = []
     for cells_x in levels:
         cells_y = max(4, round(cells_x * height / width))
-        for method in ('FDFD', 'FEM'):
+        for method in ('FDFD',):
             start = perf_counter()
-            if method == 'FDFD':
-                # One solid cell on each side places the PEC inner faces at
-                # exactly the requested clear width/height for every resolution.
-                nx, ny = cells_x + 2, cells_y + 2
-                dx, dy = width / cells_x, height / cells_y
-                total_x, total_y = nx * dx, ny * dy
-                solver = FDFDModeSolver2D(
-                    frequency=frequency, x_range=total_x,
-                    y_range=total_y,
-                )
-                wall = shapes.Difference(
-                    shape=shapes.Rectangle(bounds=((0., total_x), (0., total_y))),
-                    tool=shapes.Rectangle(bounds=((dx, (nx-1)*dx), (dy, (ny-1)*dy))),
-                )
-                solver.add_geometry(shape=wall, material=materials.PEC, name='wall')
-                solver.mesh(resolution=(nx, ny))
-                result = solver.solve(num_modes=1, neff_guess=exact_neff)
-                neff = result.neff[0]
-                elements = cells_x * cells_y
-                algebraic_residual = ''  # Not exposed by this FDFD solve API.
-            else:
-                solver = FEMModeSolver2D(frequency=frequency, x_range=width, y_range=height, boundary=materials.PEC)
-                mesh = solver.mesh(resolution=(cells_x + 1, cells_y + 1), element_order=1)
-                mode = solver.solve(
-                    num_modes=1, neff_guess=exact_neff, max_refinements=0,
-                    dense_linearization_limit=4,
-                )[0]
-                neff, elements, algebraic_residual = mode.neff, len(mesh.elements), mode.residual
+            # One solid cell on each side places the PEC inner faces at
+            # exactly the requested clear width/height for every resolution.
+            nx, ny = cells_x + 2, cells_y + 2
+            dx, dy = width / cells_x, height / cells_y
+            total_x, total_y = nx * dx, ny * dy
+            solver = FDFDModeSolver2D(
+                frequency=frequency, x_range=total_x,
+                y_range=total_y,
+            )
+            wall = shapes.Difference(
+                shape=shapes.Rectangle(bounds=((0., total_x), (0., total_y))),
+                tool=shapes.Rectangle(bounds=((dx, (nx-1)*dx), (dy, (ny-1)*dy))),
+            )
+            solver.add_geometry(shape=wall, material=materials.PEC, name='wall')
+            solver.mesh(resolution=(nx, ny))
+            result = solver.solve(num_modes=1, neff_guess=exact_neff)
+            neff = result.neff[0]
+            elements = cells_x * cells_y
+            algebraic_residual = ''  # Not exposed by this FDFD solve API.
             row = dict(
                 method=method, cells_x=cells_x, cells_y=cells_y, elements=elements,
                 nominal_h_m=max(width / cells_x, height / cells_y), frequency_hz=frequency,
@@ -86,7 +76,7 @@ def main():
         writer.writerows(rows)
     figure = Figure(figsize=(7, 4.5))
     ax = figure.subplots()
-    for method in ('FDFD', 'FEM'):
+    for method in ('FDFD',):
         selected = [row for row in rows if row['method'] == method]
         ax.semilogy([r['nominal_h_m'] * 1e3 for r in selected], [max(r['relative_neff_error'], 1e-16) for r in selected], 'o-', label=method)
     ax.set_xticks(sorted({r['nominal_h_m'] * 1e3 for r in rows}))
@@ -97,7 +87,7 @@ def main():
     figure.tight_layout()
     figure.savefig(args.output / 'convergence.png', dpi=160)
     if args.check:
-        for method in ('FDFD', 'FEM'):
+        for method in ('FDFD',):
             finest = [r for r in rows if r['method'] == method][-1]
             if not (np.isfinite(finest['relative_neff_error']) and finest['relative_neff_error'] < .01 and abs(finest['neff_imag']) < 1e-8):
                 raise SystemExit(f'{method} failed the TE10 analytical check: {finest}')

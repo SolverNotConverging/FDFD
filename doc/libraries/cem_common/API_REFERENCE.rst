@@ -24,7 +24,7 @@ Materials
 ``materials`` exports ``vacuum``, ``air``, ``PEC``, ``PMC``, and the metal SIBC
 presets ``aluminium``, ``copper``, ``gold``, ``molybdenum``, ``palladium``,
 ``silver``, ``tungsten``, and ``zinc``. ``materials.SpatialMaterial`` is the
-named callback value accepted by FEM waveguide scattering.
+named callback value for spatial material parameters.
 
 Shapes
 ------
@@ -87,5 +87,5 @@ Errors and mesh snapshots
 ``ViewerError``.
 
 ``MeshSnapshot`` exposes read-only ``coordinates``, zero-based ``elements``,
-physical ``axes``, ``info``, and ``metadata`` on stored FEM results. Users
+physical ``axes``, ``info``, and ``metadata`` on stored results. Users
 normally receive it through ``result.mesh_data`` rather than constructing it.

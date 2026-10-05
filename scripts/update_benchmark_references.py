@@ -17,9 +17,6 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
     'rectangular_waveguide_modes': ('comparison.csv', 'convergence.png'),
-    'parallel_plate_electrostatics': ('comparison.csv', 'potential.csv', 'comparison.png'),
-    'uniform_periodic_medium': ('comparison.csv', 'comparison.png'),
-    'coaxial_waveguide_adaptivity': ('comparison.csv', 'adaptive_history.csv', 'convergence.png', 'meshes.png'),
 }
 
 
@@ -57,8 +54,8 @@ def main():
         source_hash_definition='Sorted benchmark .py and solver/library src .py/.cpp/.h/.hpp; relative POSIX path, NUL, bytes, NUL.',
         python=platform.python_version(), platform=platform.platform(),
         dependencies={name: version(name) for name in (
-            'numpy', 'scipy', 'matplotlib', 'scikit-fem', 'gmsh', 'h5py')},
-        commands=commands, checks='All four commands exited successfully with --check.',
+            'numpy', 'scipy', 'matplotlib', 'h5py')},
+        commands=commands, checks='All benchmark commands exited successfully with --check.',
         artifact_sha256=artifacts,
     )
     (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')

@@ -1,6 +1,6 @@
-"""Errors applications can handle consistently across FEM solver families."""
+"""Errors applications can handle consistently across solver families."""
 class CEMError(Exception):
-    """Base class for user-facing FEM errors."""
+    """Base class for user-facing solver errors."""
 
 class BackendCapabilityError(CEMError, NotImplementedError):
     """A material, geometry, or operation is unsupported by this solver."""

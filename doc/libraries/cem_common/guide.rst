@@ -61,7 +61,7 @@ Errors and result metadata
 Applications may catch ``CEMError`` across solver families. Its public
 subclasses distinguish configuration, geometry, backend capability, meshing,
 solving, missing results, persistence, and viewer failures. ``MeshSnapshot`` is
-the common read-only mesh view stored on completed FEM results.
+the common read-only mesh view stored on completed results.
 
 See `API_REFERENCE.rst <API_REFERENCE.rst>`_ for supported constructors and
 units. Solver-specific capabilities are documented in each solver guide.
