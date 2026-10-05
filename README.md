@@ -36,7 +36,20 @@ The examples import the solver source directly. **Installing FDFD itself is not 
 
 ## Optional installation: import from any folder
 
-Installing FDFD mainly lets you import and use the solvers from any folder in the same Python environment, including your own scripts and notebooks. The installation also installs the required Python packages. Choose one of the methods below and run it from the downloaded repository folder.
+Installing FDFD mainly lets you import and use the solvers from any folder in the same Python environment, including your own scripts and notebooks. The installation also installs the required Python packages. You can install the release wheel directly, or install from the downloaded source.
+
+The [release wheel](https://github.com/SolverNotConverging/FDFD/releases/latest)
+works on Windows, macOS, and Linux. It is pure Python (`py3-none-any`), includes
+the NumPy fallback, and contains no Cython kernel. Install it directly without
+building FDFD:
+
+```sh
+python -m pip install https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.0/fdfd-1.1.0-py3-none-any.whl
+```
+
+In an activated environment, you can use `uv pip install` with the same wheel URL.
+In a conda environment, use that environment's `python -m pip install` command.
+The methods below install from the downloaded source instead.
 
 ### pip
 
