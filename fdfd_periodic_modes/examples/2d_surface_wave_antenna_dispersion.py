@@ -19,13 +19,13 @@ rows = []
 for case, frequency in enumerate(tqdm(frequencies, desc="Frequency sweep", unit="frequency"), start=1):
     substrate = Material(name="antenna substrate", epsilon=10.2)
     solver = PeriodicModeSolver2D(frequency=frequency, x_range=(0., 10e-3),
-        z_range=(0., 8e-3), polarization="TM", boundary=materials.PEC)
+                                  z_range=(0., 8e-3), polarization="TM", boundary=materials.PEC)
     solver.add_rectangle(x_range=(0., 1.27e-3), z_range=(0., 8e-3),
-        material=substrate, name="grounded_dielectric_slab")
-    solver.add_rectangle(x_range=(1.27e-3, 1.32e-3), z_range=(1e-3, 2e-3),
-        material=materials.PEC, name="top_pec_perturbation")
+                         material=substrate, name="grounded_dielectric_slab")
+    solver.add_rectangle(x_range=(1.27e-3, 1.37e-3), z_range=(1e-3, 2e-3),
+                         material=materials.PEC, name="top_pec_perturbation")
     solver.add_pml(thickness=2.5e-3, direction="x+")
-    solver.mesh(resolution=(1000, 320))
+    solver.mesh(resolution=(100, 80))
     result = solver.solve(num_modes=4, neff_guess=0., eigensolver_tolerance=1e-9, ncv=36)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"case_{case:03d}_{frequency / 1e9:.6g}GHz.h5")
