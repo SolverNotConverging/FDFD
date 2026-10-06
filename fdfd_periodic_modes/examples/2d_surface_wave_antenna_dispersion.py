@@ -13,7 +13,7 @@ from fdfd_periodic_modes import plot_dispersion, Material, materials, PeriodicMo
 
 OUTPUT = _ROOT / "fdfd_periodic_modes/outputs/examples/2d_surface_wave_antenna_dispersion"
 
-frequencies = np.linspace(18e9, 22e9, 9)
+frequencies = np.linspace(18e9, 22e9, 50)
 neff_sweep = []
 rows = []
 for case, frequency in enumerate(tqdm(frequencies, desc="Frequency sweep", unit="frequency"), start=1):
