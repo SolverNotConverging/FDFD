@@ -4,7 +4,7 @@ import scipy.sparse as sp
 from scipy.sparse import linalg as spla
 from scipy.special import hankel2
 from scipy.constants import epsilon_0, speed_of_light
-from fdfd_common.yee import node_average, node_to_cell_difference
+from fdfd_common.yee import node_average, node_to_cell_difference, occupied_nodes
 
 
 class _ScatteringSolver2D:
@@ -38,6 +38,7 @@ class _ScatteringSolver2D:
         }
         for name in ('ERxx', 'ERyy', 'ERzz', 'MRxx', 'MRyy', 'MRzz'):
             setattr(self, name, np.ones((self.Ny, self.Nx), dtype=complex))
+        self.pec_cells = np.zeros((self.Ny, self.Nx), dtype=bool)
         self._operators = {}
         self._systems = {}
         self._inset = None
@@ -86,6 +87,17 @@ class _ScatteringSolver2D:
             for component, value in zip(('xx', 'yy', 'zz'), tensor):
                 getattr(self, prefix+component)[region_mask] = value
         self._systems.clear()
+
+    def add_pec(self, region_mask):
+        """Constrain a metal volume and its boundary at actual Yee sites."""
+        self.pec_cells |= region_mask
+        self._systems.clear()
+
+    def pec_field_masks(self):
+        x_nodes = occupied_nodes(self.pec_cells, 1)
+        y_nodes = occupied_nodes(self.pec_cells, 0)
+        return {'Ez': occupied_nodes(y_nodes, 1), 'Hz': self.pec_cells,
+                'Hx': x_nodes, 'Hy': y_nodes, 'Ex': y_nodes, 'Ey': x_nodes}
 
     def add_source(self, src_type='plane_wave', angle_deg=0., polarization='TE',
                    location=None, amplitude=1.):
@@ -178,6 +190,9 @@ class _ScatteringSolver2D:
         # Tangential E is zero on the outer PEC walls. Both end traces exist.
         inverse_ex[[0, -1], :] = 0
         inverse_ey[:, [0, -1]] = 0
+        masks = self.pec_field_masks()
+        inverse_ex[masks['Ex']] = 0
+        inverse_ey[masks['Ey']] = 0
         return inverse_ex, inverse_ey
 
     def _build_system(self):
@@ -195,6 +210,7 @@ class _ScatteringSolver2D:
                       dey @ sp.diags(inverse_x.ravel()) @ dhy +
                       sp.diags(self.MRzz.ravel()))
             free = np.ones(self.primary_shape, dtype=bool)
+        free &= ~self.pec_field_masks()[self.primary]
         return matrix.tocsr(), free.ravel()
 
     def _solve(self, polarization, reuse_factorisation):
@@ -239,5 +255,9 @@ class _ScatteringSolver2D:
             values = {'Hz': scalar.ravel(),
                       'Ex': -1j*eta0*derivative(dhy, 'Ex')*inverse_x.ravel(),
                       'Ey': 1j*eta0*derivative(dhx, 'Ey')*inverse_y.ravel()}
-        return {name: field.reshape(len(self.coordinates[name][1]), len(self.coordinates[name][0]))
-                for name, field in values.items()}
+        fields = {name: field.reshape(len(self.coordinates[name][1]), len(self.coordinates[name][0]))
+                  for name, field in values.items()}
+        masks = self.pec_field_masks()
+        for name, field in fields.items():
+            field[masks[name]] = 0
+        return fields

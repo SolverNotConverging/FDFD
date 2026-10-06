@@ -35,8 +35,11 @@ real, imaginary, and phase options. A scattering result has no mode selector.
 
 Define the source and rectangular total-field region before solving. A point
 source instead uses ``kind="point"`` and a physical ``location=(x, y)``.
-The current scalar backend supports isotropic bulk materials. PEC, PMC, SIBC,
-and anisotropic scattering objects raise explicit capability errors.
+The solver supports scalar or diagonal bulk materials and PEC objects.
+Use ``material=materials.PEC`` for a perfectly conducting scatterer. PEC
+electric fields are constrained on their Yee traces; TM enforces zero
+tangential electric field at the metal surface. Put the whole PEC scatterer
+inside the total-field source region. PMC and SIBC objects are unsupported.
 
 ``mesh()`` accepts cell ``resolution`` or physical ``max_element_size``.
 Geometry edits invalidate mesh and result while retaining the last explicit
@@ -94,5 +97,6 @@ Examples and API
 ----------------
 
 The runnable `dielectric-cylinder example <../examples/2d_dielectric_cylinder.py>`_
-shows the complete workflow. See `API_REFERENCE.rst <API_REFERENCE.rst>`_ for
+and `PEC-cylinder example <../examples/2d_pec_cylinder.py>`_
+show the complete workflow. See `API_REFERENCE.rst <API_REFERENCE.rst>`_ for
 supported signatures, defaults, and errors.

@@ -1082,7 +1082,9 @@ Returns: a typed ``PeriodicModeSet`` without solving.
 
     plot_dispersion(frequencies, neff, *, show=True)
 
-Plot Re(neff) and Im(neff), with a trace per mode on each panel.
+Scatter Re(neff) and Im(neff) on two panels without connecting mode samples.
+Mode numbers identify the returned order at each frequency, which may change
+through the sweep.
 
 .. list-table:: Arguments
    :header-rows: 1

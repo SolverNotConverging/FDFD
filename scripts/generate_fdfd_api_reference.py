@@ -75,10 +75,17 @@ def main():
         DESCRIPTIONS['neff_guess'] = (
             'Optional upper search value; lower values are raised to 1% above the largest assigned bulk-material index magnitude.'
             if family == 'waveguide_modes' else 'Dimensionless complex effective-index search target.')
+        DESCRIPTIONS['material'] = (
+            'Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.'
+            if family == 'scattering' else 'Predefined Material, PEC/PMC, or supported SIBC assignment.')
         out=section(package+' user API','=')
         out+='Version 1.1.1. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
         out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nMode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.\n\n'
+        if family == 'scattering':
+            out += ('Scattering supports bulk materials and ``materials.PEC`` objects. PEC constraints\n'
+                    'are applied on the staggered field locations, and the total-field source region\n'
+                    'must enclose the conductor. PMC objects and SIBC are unsupported.\n\n')
         for clsname,methods in solvers.items():
             cls=getattr(module,clsname)
             for method in methods:

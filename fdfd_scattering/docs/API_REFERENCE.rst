@@ -15,6 +15,10 @@ physical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape
 objects before assigning them. Grid-index geometry is private backend detail.
 Mode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.
 
+Scattering supports bulk materials and ``materials.PEC`` objects. PEC constraints
+are applied on the staggered field locations, and the total-field source region
+must enclose the conductor. PMC objects and SIBC are unsupported.
+
 ``ScatteringSolver2D``
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -88,7 +92,7 @@ Assign a predefined material to a continuous shape in metres.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Predefined Material, PEC/PMC, or supported SIBC assignment.
+     - Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.
    * - ``name``
      - ``array-like or scalar``
      - Optional
@@ -132,7 +136,7 @@ Returns: the documented data or None when storing state on the solver.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Predefined Material, PEC/PMC, or supported SIBC assignment.
+     - Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.
    * - ``name``
      - ``array-like or scalar``
      - Optional
@@ -176,7 +180,7 @@ Returns: the documented data or None when storing state on the solver.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Predefined Material, PEC/PMC, or supported SIBC assignment.
+     - Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.
    * - ``name``
      - ``array-like or scalar``
      - Optional
@@ -215,7 +219,7 @@ Returns: the documented data or None when storing state on the solver.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Predefined Material, PEC/PMC, or supported SIBC assignment.
+     - Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.
    * - ``name``
      - ``array-like or scalar``
      - Optional
@@ -256,7 +260,7 @@ Reassign a predefined material and invalidate mesh/result.
      - ``array-like or scalar``
      - Required
      - ``—``
-     - Predefined Material, PEC/PMC, or supported SIBC assignment.
+     - Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.
 
 Returns: the documented data or None when storing state on the solver.
 

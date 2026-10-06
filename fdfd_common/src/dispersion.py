@@ -3,11 +3,12 @@ import numpy as np
 from .errors import ConfigurationError
 
 
-def plot_dispersion(frequencies, neff, *, show=True):
+def plot_dispersion(frequencies, neff, *, show=True, connect=True):
     """Plot Re(neff) and Im(neff), with a trace per mode on each panel.
 
     Frequencies are in hertz. ``neff`` has shape (frequencies, modes), with
-    each column following the same mode through the supplied sweep.
+    each column giving a mode's values through the supplied sweep. Set
+    ``connect=False`` for unconnected samples when mode ordering can change.
     Return the Matplotlib figure; ``show=False`` supports saving without a window.
     """
     from matplotlib import pyplot as plt
@@ -23,6 +24,8 @@ def plot_dispersion(frequencies, neff, *, show=True):
         raise ConfigurationError('Use positive frequencies in Hz and finite neff with shape (frequencies, modes).')
     if not isinstance(show, bool):
         raise ConfigurationError('show must be a boolean.')
+    if not isinstance(connect, bool):
+        raise ConfigurationError('connect must be a boolean.')
     order = np.argsort(frequencies, kind='stable')
     if show:
         figure, axes = plt.subplots(2, 1, sharex=True, figsize=(8, 7))
@@ -31,10 +34,16 @@ def plot_dispersion(frequencies, neff, *, show=True):
         figure = Figure(figsize=(8, 7))
         axes = figure.subplots(2, 1, sharex=True)
     for index in range(values.shape[1]):
-        line, = axes[0].plot(frequencies[order]/1e9, values[order, index].real,
-                            'o-', label=f'Mode {index+1}')
-        axes[1].plot(frequencies[order]/1e9, values[order, index].imag,
-                     'o-', color=line.get_color(), label=f'Mode {index+1}')
+        if connect:
+            line, = axes[0].plot(frequencies[order]/1e9, values[order, index].real,
+                                'o-', label=f'Mode {index+1}')
+            axes[1].plot(frequencies[order]/1e9, values[order, index].imag,
+                         'o-', color=line.get_color(), label=f'Mode {index+1}')
+        else:
+            points = axes[0].scatter(frequencies[order]/1e9, values[order, index].real,
+                                     s=24, label=f'Mode {index+1}')
+            axes[1].scatter(frequencies[order]/1e9, values[order, index].imag,
+                            s=24, color=points.get_facecolor()[0], label=f'Mode {index+1}')
     axes[0].set(ylabel='Re(neff)', title='Mode dispersion')
     axes[1].set(xlabel='Frequency (GHz)', ylabel='Im(neff)')
     for axis in axes:

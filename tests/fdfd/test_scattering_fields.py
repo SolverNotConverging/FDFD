@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from fdfd_scattering import Material, ScatteringSolver2D, load_result
+from fdfd_scattering import Material, ScatteringSolver2D, load_result, materials
 from fdfd_scattering.solver_2d import _ScatteringSolver2D
 
 
@@ -57,7 +57,8 @@ def test_public_scattering_returns_three_staggered_fields(polarization, location
 
 
 @pytest.mark.parametrize('polarization', ('TE', 'TM'))
-def test_dielectric_cylinder_converges_to_cylindrical_wave_solution(polarization):
+@pytest.mark.parametrize('scatterer', ('dielectric', 'PEC'))
+def test_cylinder_converges_to_cylindrical_wave_solution(polarization, scatterer):
     from scipy.special import jv, jvp, hankel2, h2vp
 
     errors = []
@@ -65,7 +66,7 @@ def test_dielectric_cylinder_converges_to_cylindrical_wave_solution(polarization
         solver = ScatteringSolver2D(frequency=3e9, x_range=(-150e-3, 150e-3),
             y_range=(-150e-3, 150e-3), polarization=polarization)
         solver.add_circle(center=(0., 0.), radius=25e-3,
-                          material=Material(name='cylinder', epsilon=4.))
+                          material=materials.PEC if scatterer == 'PEC' else Material(name='cylinder', epsilon=4.))
         solver.add_pml(thickness=50e-3)
         solver.mesh(resolution=(cells, cells))
         solver.add_source()
@@ -82,11 +83,33 @@ def test_dielectric_cylinder_converges_to_cylindrical_wave_solution(polarization
         q = 2. if polarization == 'TE' else .5
         exact = np.exp(-1j*k*r*np.cos(angle))
         for n in range(-12, 13):
-            coefficient = (
-                q*jv(n, k*a)*jvp(n, 2*k*a)-jvp(n, k*a)*jv(n, 2*k*a)
-            ) / (h2vp(n, k*a)*jv(n, 2*k*a)-q*hankel2(n, k*a)*jvp(n, 2*k*a))
+            if scatterer == 'PEC':
+                # Ez = 0 for TE; the normal derivative of Hz is zero for TM.
+                coefficient = (-jv(n, k*a)/hankel2(n, k*a) if polarization == 'TE'
+                               else -jvp(n, k*a)/h2vp(n, k*a))
+            else:
+                coefficient = (
+                    q*jv(n, k*a)*jvp(n, 2*k*a)-jvp(n, k*a)*jv(n, 2*k*a)
+                ) / (h2vp(n, k*a)*jv(n, 2*k*a)-q*hankel2(n, k*a)*jvp(n, 2*k*a))
             exact += (-1j)**n*coefficient*hankel2(n, k*r)*np.exp(1j*n*angle)
         calculated = result.fields[component][..., 0][selected]
         errors.append(np.linalg.norm(calculated-exact)/np.linalg.norm(exact))
+        if scatterer == 'PEC':
+            assert np.any(result.metadata['material_background']['conductor'])
+            for name, field in result.fields.items():
+                x, y = np.meshgrid(*result.field_coordinates[name], indexing='ij')
+                # Strict interior samples have zero fields for both polarizations.
+                np.testing.assert_array_equal(field[..., 0][x*x+y*y < (20e-3)**2], 0.)
     assert errors[1] < .65*errors[0]
-    assert errors[1] < .025
+    assert errors[1] < (.03 if scatterer == 'PEC' else .025)
+
+
+def test_pec_object_must_be_inside_total_field_region():
+    from fdfd_common.errors import ConfigurationError
+    solver = ScatteringSolver2D(frequency=3e9, x_range=(-150e-3, 150e-3), y_range=(-150e-3, 150e-3))
+    solver.add_circle(center=(0., 0.), radius=25e-3, material=materials.PEC)
+    solver.mesh(resolution=(60, 60))
+    solver.add_source()
+    solver.set_source_region(inset=130e-3)
+    with pytest.raises(ConfigurationError, match='enclose the PEC'):
+        solver.solve()

@@ -20,6 +20,7 @@ dispersion and band-structure scripts perform many eigenproblems and can take
 substantially longer. 3D cases also require more memory.
 
 1. `2d_dielectric_cylinder.py <2d_dielectric_cylinder.py>`_ — Scattering from a dielectric cylinder. Single solve.
+2. `2d_pec_cylinder.py <2d_pec_cylinder.py>`_ — Scattering from a perfectly conducting cylinder. Change polarization to TE or TM to view its three active fields.
 
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use

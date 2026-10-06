@@ -20,7 +20,7 @@ def load_result(path):
 
 class ScatteringSolver2D(GridSceneMixin):
     _physical_axes = ('x', 'y')
-    _supports_conductors = False
+    _supports_conductors = True
     _supports_sibc = False
     _periodic = False
     def __init__(self, *, frequency, x_range, y_range, polarization='TE', background_material=materials.vacuum):
@@ -33,6 +33,10 @@ class ScatteringSolver2D(GridSceneMixin):
     def _make_backend(self, resolution):
         from .solver_2d import _ScatteringSolver2D
         return _ScatteringSolver2D(self.frequency, *(hi-lo for lo, hi in self._ranges), *resolution)
+    def _validate_record(self, record):
+        super()._validate_record(record)
+        if record.material == materials.PMC:
+            raise BackendCapabilityError('Scattering implements PEC objects; PMC objects are unsupported.')
     def _populate_backend(self, backend, resolution, subpixels):
         eps, mu = materials.bulk_values(self.background_material)
         backend.add_object(eps, mu, np.ones((resolution[1], resolution[0]), dtype=bool))
@@ -42,7 +46,13 @@ class ScatteringSolver2D(GridSceneMixin):
             occupancy, slices = fractions(record.shape, self._ranges, resolution, 1)
             mask = np.zeros(resolution, dtype=bool)
             mask[slices] = occupancy.astype(bool)
-            backend.add_object(*materials.bulk_values(record.material), mask.T)
+            if record.material == materials.PEC:
+                if not mask.any():
+                    from fdfd_common.errors import GeometryError
+                    raise GeometryError('PEC geometry contains no grid cells; refine the mesh.')
+                backend.add_pec(mask.T)
+            else:
+                backend.add_object(*materials.bulk_values(record.material), mask.T)
         for component in ('xx', 'yy', 'zz'):
             setattr(backend, 'cell_eps_r_' + component, getattr(backend, 'ER' + component).T.copy())
             setattr(backend, 'cell_mu_r_' + component, getattr(backend, 'MR' + component).T.copy())
@@ -92,6 +102,8 @@ class ScatteringSolver2D(GridSceneMixin):
         backend.set_total_field_region(self._mask_distance)
         if not np.any(backend.Q.diagonal() == 0):
             raise ConfigurationError('Source-region inset leaves no total-field cells.')
+        if np.any(backend.pec_field_masks()[backend.primary].ravel() & (backend.Q.diagonal() != 0)):
+            raise ConfigurationError('The total-field source region must enclose the PEC scatterer.')
         self._result=None
         operation = backend.solve_total_field_TE if self.polarization=='TE' else backend.solve_total_field_TM
         operation(reuse_factorisation=reuse_factorization)

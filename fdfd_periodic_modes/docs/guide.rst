@@ -79,9 +79,10 @@ Both dimensions retain material backgrounds in saved results.
 For frequency sweeps, import ``plot_dispersion`` from ``fdfd_periodic_modes``
 and call ``plot_dispersion(frequencies, neff_sweep)`` after the loop. Frequencies
 are in hertz; append ``result.neff`` to ``neff_sweep`` at each frequency.
-The figure shows real and imaginary ``neff`` on two panels, with one trace per
-mode on each panel. Each column follows the returned mode order through the
-sweep. Use ``show=False`` to return the figure for saving without opening it.
+The figure shows real and imaginary ``neff`` on two panels using unconnected
+scatter markers. Mode numbers refer to the returned order at each frequency;
+points are not joined because modes can exchange places. Use ``show=False``
+to return the figure for saving without opening it.
 
 Examples and API
 ----------------
