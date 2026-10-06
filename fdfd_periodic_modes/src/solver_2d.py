@@ -6,7 +6,9 @@ import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Rectangle
 from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
-from scipy.sparse.linalg import eigs
+from scipy.constants import epsilon_0, mu_0, speed_of_light
+from ._eigensolve import generalized_eigs as eigs, eigenpair_residuals
+from fdfd_common.yee import interior_nodes
 
 from periodic_eigensolver.refined import (
     solve_generalized,
@@ -35,12 +37,14 @@ class _PeriodicModeSolver2D:
             guess=0,
             tol=0,
             ncv=None,
+            boundary=None,
     ):
         polarization = str(polarization).upper()
         if polarization not in ("TE", "TM"):
             raise ValueError("polarization must be 'TE' or 'TM'.")
 
         self.polarization = polarization
+        self.boundary = boundary
         self.freq = freq
         self.frequency = freq
         self.x_range = x_range
@@ -53,9 +57,9 @@ class _PeriodicModeSolver2D:
         self.num_modes = int(num_modes)
         self.mode_filter = bool(mode_filter)
 
-        self.epsilon0 = 8.85e-12
-        self.mu0 = 1.26e-6
-        self.c = 1 / np.sqrt(self.epsilon0 * self.mu0)
+        self.epsilon0 = epsilon_0
+        self.mu0 = mu_0
+        self.c = speed_of_light
         self.omega = 2 * np.pi * freq
         self.k0 = self.omega / self.c
 
@@ -434,11 +438,11 @@ class _PeriodicModeSolver2D:
         return diags(values.ravel(order="F"), format="csr")
 
     def _average_periodic_z(self, values, no_average_mask=None):
-        out = 0.5 * (values + np.roll(values, -1, axis=1))
+        out = 0.5 * (values + np.roll(values, 1, axis=1))
         if no_average_mask is not None:
             ii, jj = np.nonzero(no_average_mask)
             out[ii, jj] = values[ii, jj]
-            out[ii, (jj - 1) % self.Nz] = values[ii, jj]
+            out[ii, (jj + 1) % self.Nz] = values[ii, jj]
         return out
 
     def _average_x(self, values, no_average_mask=None):
@@ -458,11 +462,11 @@ class _PeriodicModeSolver2D:
     def _material_on_fields(self, eps_r_xx, eps_r_yy, eps_r_zz, mu_r_xx, mu_r_yy, mu_r_zz, no_average_mask):
         return {
             "eps_xx": self._average_periodic_z(eps_r_xx, no_average_mask),
-            "eps_yy": self._average_x(eps_r_yy, no_average_mask),
+            "eps_yy": self._average_x(self._average_periodic_z(eps_r_yy, no_average_mask)),
             "eps_zz": self._average_x(eps_r_zz, no_average_mask),
             "mu_xx": self._average_x(mu_r_xx, no_average_mask),
-            "mu_yy": self._average_periodic_z(mu_r_yy, no_average_mask),
-            "mu_zz": mu_r_zz.copy(),
+            "mu_yy": mu_r_yy.copy(),
+            "mu_zz": self._average_periodic_z(mu_r_zz, no_average_mask),
         }
 
     def _set_component_materials(self, materials):
@@ -526,6 +530,13 @@ class _PeriodicModeSolver2D:
 
     def _constraint_masks_from_sources(self, pec_sources, pmc_sources):
         """Build orientation-aware field masks from component cell sources."""
+        # A full PEC volume is sampled at actual Yee sites. In particular,
+        # Hy is cell-centred and every Hy sample inside the metal is zero;
+        # a boundary cell is not itself a tangential face trace.
+        full_pec = pec_sources['xx'] & pec_sources['yy'] & pec_sources['zz']
+        full_pmc = pmc_sources['xx'] & pmc_sources['yy'] & pmc_sources['zz']
+        pec_sources = {component: mask & ~full_pec for component, mask in pec_sources.items()}
+        pmc_sources = {component: mask & ~full_pmc for component, mask in pmc_sources.items()}
         pec_masks = [
             np.zeros(self.shape_ex, dtype=bool),
             np.zeros(self.shape_ey, dtype=bool),
@@ -602,6 +613,26 @@ class _PeriodicModeSolver2D:
             x_boundary, field="electric"
         )[0]
 
+        def x_faces(mask):
+            result = np.zeros(self.shape_ez, dtype=bool)
+            result[:-1] |= mask
+            result[1:] |= mask
+            return result
+
+        z_faces = full_pec | np.roll(full_pec, 1, axis=1)
+        pec_masks[0] |= z_faces               # Ex: x centres, z nodes
+        pec_masks[1] |= x_faces(z_faces)      # Ey: x nodes, z nodes
+        pec_masks[2] |= x_faces(full_pec)     # Ez: x nodes, z centres
+        pmc_masks[0] |= x_faces(full_pec)     # Hx: x nodes, z centres
+        pmc_masks[1] |= full_pec              # Hy: x centres, z centres
+        pmc_masks[2] |= z_faces               # Hz: x centres, z nodes
+        z_inside = interior_nodes(full_pmc, 1, periodic=True)
+        pec_masks[0] |= z_inside
+        pec_masks[1] |= interior_nodes(z_inside, 0)
+        pec_masks[2] |= interior_nodes(full_pmc, 0)
+        pmc_masks[0] |= interior_nodes(full_pmc, 0)
+        pmc_masks[1] |= full_pmc
+        pmc_masks[2] |= z_inside
         return (*pec_masks, *pmc_masks)
 
     def _refresh_constraint_masks(self):
@@ -649,6 +680,13 @@ class _PeriodicModeSolver2D:
             pmc_yy_mask,
             pmc_zz_mask,
         ) = self._constraint_masks_from_sources(pec_sources, pmc_sources)
+
+        # Transverse outer PEC: tangential E and normal H vanish exactly.
+        # The legacy unconstrained closure is PMC (tangential H = 0).
+        if self.boundary == "pec":
+            pec_yy_mask[[0, -1], :] = True
+            pec_zz_mask[[0, -1], :] = True
+            pmc_xx_mask[[0, -1], :] = True
 
         materials = self._material_on_fields(
             eps_r_xx,
@@ -705,7 +743,12 @@ class _PeriodicModeSolver2D:
         D2 = 1j * self.omega * self.epsilon0 * eps_r_xx_diag
         A = bmat([[self.DEZ_EX, D1], [D2, self.DHZ_HY]], format="csr")
         B = bmat([[self.AZ_EX, zero], [zero, self.AZ_HY]], format="csr")
-        return A, B
+        # Equations are initially [Faraday(Hy), Ampere(Ex)] for TM, or
+        # [Ampere(Ey), Faraday(Hx)] for TE. Align rows with the unknown order
+        # before removing constrained DOFs; row and column masks then agree.
+        n = A.shape[0] // 2
+        rows = np.r_[np.arange(n, 2*n), np.arange(n)]
+        return A[rows, :], B[rows, :]
 
     def _build_te_system(self, eps_r_yy, mu_r_xx, mu_r_zz, pmc_zz_mask=None):
         eps_r_yy_diag = self._diag(eps_r_yy)
@@ -723,7 +766,12 @@ class _PeriodicModeSolver2D:
         D2 = -1j * self.omega * self.mu0 * mu_r_xx_diag
         A = bmat([[self.DHZ_HX, D1], [D2, self.DEZ_EY]], format="csr")
         B = bmat([[self.AZ_HX, zero], [zero, self.AZ_EY]], format="csr")
-        return A, B
+        # Equations are initially [Faraday(Hy), Ampere(Ex)] for TM, or
+        # [Ampere(Ey), Faraday(Hx)] for TE. Align rows with the unknown order
+        # before removing constrained DOFs; row and column masks then agree.
+        n = A.shape[0] // 2
+        rows = np.r_[np.arange(n, 2*n), np.arange(n)]
+        return A[rows, :], B[rows, :]
 
     def _free_mask(self, pec_xx_mask, pec_yy_mask, pmc_xx_mask, pmc_yy_mask):
         if self.polarization == "TM":
@@ -819,6 +867,8 @@ class _PeriodicModeSolver2D:
             self.refined_backend = resolve_kernel_backend(kernel_backend)
         else:
             raise ValueError("method must be 'eigs' or 'refined'.")
+
+        self.eigenpair_residuals = eigenpair_residuals(A, B, eigenvalues, eigenvectors_reduced)
 
         eigenvectors = np.zeros((free.size, self.num_modes), dtype=complex)
         eigenvectors[free, :] = eigenvectors_reduced

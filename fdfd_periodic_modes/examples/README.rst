@@ -19,7 +19,7 @@ Runtime depends on hardware and mesh size. Single solves are the starting point;
 dispersion and band-structure scripts perform many eigenproblems and can take
 substantially longer. 3D cases also require more memory.
 
-1. `2d_surface_wave_antenna.py <2d_surface_wave_antenna.py>`_ — A dielectric-loaded periodic surface-wave cell. Single solve.
+1. `2d_surface_wave_antenna.py <2d_surface_wave_antenna.py>`_ — The same grounded-slab and PEC-patch cell as the FEM leaky-wave example. Single solve.
 2. `3d_image_guide_leaky_wave_antenna.py <3d_image_guide_leaky_wave_antenna.py>`_ — A 3D image-guide cell with an outgoing PML. Single solve.
 3. `2d_surface_wave_antenna_dispersion.py <2d_surface_wave_antenna_dispersion.py>`_ — A 2D periodic frequency sweep. Frequency sweep.
 4. `3d_image_guide_leaky_wave_antenna_dispersion.py <3d_image_guide_leaky_wave_antenna_dispersion.py>`_ — A 3D periodic frequency sweep. Frequency sweep.
@@ -39,3 +39,5 @@ Plots are saved beside their source data.
 * `2d_plot_dispersion.py <postprocessing/2d_plot_dispersion.py>`_
 
 Sweeps show a ``tqdm`` progress bar as each frequency finishes.
+The 2D antenna uses a fine grid to resolve its 50e-6 m PEC patch. See the
+`FEM comparison <../docs/fem_comparison.rst>`_ for parameters and convergence.

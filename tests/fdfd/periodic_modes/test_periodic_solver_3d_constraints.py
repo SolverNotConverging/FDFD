@@ -53,109 +53,52 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
     def deterministic_vector(size):
         return np.arange(1, size + 1, dtype=float).reshape(-1, 1).astype(complex)
 
+    def assert_volume_locations(self, solver, bounds, *, strict):
+        masks = self.effective_materials_and_masks(solver)[1]
+        offsets = ((.5, 0., 0.), (0., .5, 0.), (0., 0., .5),
+                   (0., .5, .5), (.5, 0., .5), (.5, .5, 0.))
+        for mask, offset in zip(masks, offsets):
+            expected = np.ones(mask.shape, dtype=bool)
+            for axis, ((lo, hi), shift) in enumerate(zip(bounds, offset)):
+                positions = np.arange(mask.shape[axis])+shift
+                inside = ((positions > lo) & (positions < hi) if strict
+                          else (positions >= lo) & (positions <= hi))
+                if axis == 2 and lo == 0 and hi == solver.Nz:
+                    inside[:] = True  # no physical surface at the periodic seam
+                shape = [1]*3
+                shape[axis] = len(positions)
+                expected &= inside.reshape(shape)
+            np.testing.assert_array_equal(mask, expected)
+
     def test_x_normal_pmc_face_constrains_tangential_h_and_normal_e_only(self):
         solver = self.make_solver()
-        solver.add_pmc(
-            (1, 2),
-            (0, solver.Ny),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Sample away from the y-domain edges.  The slab spans periodic z, so
-        # these samples see an x-normal face only: Hy = Hz = Ex = 0.
-        np.testing.assert_array_equal(pec_xx[1, 1, :], True)
-        np.testing.assert_array_equal(pmc_yy[1, 1, :], True)
-        np.testing.assert_array_equal(pmc_zz[1, 1, :], True)
-        np.testing.assert_array_equal(pmc_xx[1:3, 1, :], False)
-        np.testing.assert_array_equal(pec_yy[1:3, 1, :], False)
-        np.testing.assert_array_equal(pec_zz[1:3, 1, :], False)
+        bounds = ((1, 2), (0, 3), (0, 2))
+        solver.add_pmc(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=True)
 
     def test_y_normal_pmc_face_constrains_tangential_h_and_normal_e_only(self):
         solver = self.make_solver()
-        solver.add_pmc(
-            (0, solver.Nx),
-            (1, 2),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Sample away from the x-domain edges: Hx = Hz = Ey = 0, whereas Hy
-        # is normal and Ex/Ez are tangential electric components.
-        np.testing.assert_array_equal(pmc_xx[1, 1, :], True)
-        np.testing.assert_array_equal(pmc_zz[1, 1, :], True)
-        np.testing.assert_array_equal(pec_yy[1, 1, :], True)
-        np.testing.assert_array_equal(pmc_yy[1, 1:3, :], False)
-        np.testing.assert_array_equal(pec_xx[1, 1:3, :], False)
-        np.testing.assert_array_equal(pec_zz[1, 1:3, :], False)
+        bounds = ((0, 3), (1, 2), (0, 2))
+        solver.add_pmc(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=True)
 
     def test_z_normal_pmc_face_constrains_tangential_h_and_normal_e_only(self):
         solver = self.make_solver()
-        solver.add_pmc(
-            (0, solver.Nx),
-            (0, solver.Ny),
-            (0, 1),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-        source = solver._pmc_cell_masks["zz"]
-        z_faces = np.flatnonzero(
-            solver._periodic_z_interface_mask(source)[1, 1, :]
-        )
-
-        self.assertGreater(z_faces.size, 0)
-        np.testing.assert_array_equal(pmc_xx[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pmc_yy[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pec_zz[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pmc_zz[1, 1, z_faces], False)
-        np.testing.assert_array_equal(pec_xx[1, 1, z_faces], False)
-        np.testing.assert_array_equal(pec_yy[1, 1, z_faces], False)
+        bounds = ((0, 3), (0, 3), (0, 1))
+        solver.add_pmc(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=True)
 
     def test_x_y_pmc_edge_unions_face_constraints(self):
         solver = self.make_solver()
-        solver.add_pmc(
-            (1, 2),
-            (1, 2),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # At the edge Hx is tangential to y, Hy is tangential to x, and Hz is
-        # tangential to both.  Ex/Ey are normal to one face; Ez is tangent to
-        # both and must remain unconstrained.
-        self.assertTrue(pmc_xx[1, 1, 0])
-        self.assertTrue(pmc_yy[1, 1, 0])
-        self.assertTrue(pmc_zz[1, 1, 0])
-        self.assertTrue(pec_xx[1, 1, 0])
-        self.assertTrue(pec_yy[1, 1, 0])
-        self.assertFalse(pec_zz[1, 1, 0])
+        bounds = ((1, 2), (1, 2), (0, 2))
+        solver.add_pmc(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=True)
 
     def test_x_y_z_pmc_corner_constrains_all_six_components(self):
         solver = self.make_solver()
-        solver.add_pmc(
-            (1, 2),
-            (1, 2),
-            (0, 1),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Every H component is tangential to at least one incident face, and
-        # every E component is normal to one incident face.
-        self.assertTrue(pmc_xx[1, 1, 0])
-        self.assertTrue(pmc_yy[1, 1, 0])
-        self.assertTrue(pmc_zz[1, 1, 0])
-        self.assertTrue(pec_xx[1, 1, 0])
-        self.assertTrue(pec_yy[1, 1, 0])
-        self.assertTrue(pec_zz[1, 1, 0])
+        bounds = ((1, 2), (1, 2), (0, 1))
+        solver.add_pmc(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=True)
 
     def test_finite_z_pec_uses_normal_hz_without_zeroing_tangential_hy(self):
         solver = self.make_solver()
@@ -178,106 +121,33 @@ class PeriodicModeSolver3DConstraintTests(unittest.TestCase):
 
     def test_z_normal_pec_face_constrains_tangential_e_and_normal_h_only(self):
         solver = self.make_solver()
-        solver.add_pec(
-            (0, solver.Nx),
-            (0, solver.Ny),
-            (0, 1),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-        source = solver._pec_cell_masks["zz"]
-        z_faces = np.flatnonzero(
-            solver._periodic_z_interface_mask(source)[1, 1, :]
-        )
-
-        self.assertGreater(z_faces.size, 0)
-        np.testing.assert_array_equal(pec_xx[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pec_yy[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pmc_zz[1, 1, z_faces], True)
-        np.testing.assert_array_equal(pmc_xx[1, 1, z_faces], False)
-        np.testing.assert_array_equal(pmc_yy[1, 1, z_faces], False)
-        np.testing.assert_array_equal(pec_zz[1, 1, z_faces], False)
+        bounds = ((0, 3), (0, 3), (0, 1))
+        solver.add_pec(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=False)
 
     def test_x_normal_pec_face_constrains_tangential_e_and_normal_h_only(self):
         solver = self.make_solver()
-        solver.add_pec(
-            (1, 2),
-            (0, solver.Ny),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Sample away from y-domain edges.  Ey = Ez = Hx = 0; Ex is normal
-        # and Hy/Hz are tangential magnetic components, so they stay free.
-        np.testing.assert_array_equal(pec_yy[1:3, 1, :], True)
-        np.testing.assert_array_equal(pec_zz[1:3, 1, :], True)
-        np.testing.assert_array_equal(pmc_xx[1:3, 1, :], True)
-        np.testing.assert_array_equal(pec_xx[1, 1, :], False)
-        np.testing.assert_array_equal(pmc_yy[1, 1, :], False)
-        np.testing.assert_array_equal(pmc_zz[1, 1, :], False)
+        bounds = ((1, 2), (0, 3), (0, 2))
+        solver.add_pec(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=False)
 
     def test_y_normal_pec_face_constrains_tangential_e_and_normal_h_only(self):
         solver = self.make_solver()
-        solver.add_pec(
-            (0, solver.Nx),
-            (1, 2),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Sample away from x-domain edges.  Ex = Ez = Hy = 0; Ey is normal
-        # and Hx/Hz are tangential magnetic components, so they stay free.
-        np.testing.assert_array_equal(pec_xx[1, 1:3, :], True)
-        np.testing.assert_array_equal(pec_zz[1, 1:3, :], True)
-        np.testing.assert_array_equal(pmc_yy[1, 1:3, :], True)
-        np.testing.assert_array_equal(pec_yy[1, 1, :], False)
-        np.testing.assert_array_equal(pmc_xx[1, 1, :], False)
-        np.testing.assert_array_equal(pmc_zz[1, 1, :], False)
+        bounds = ((0, 3), (1, 2), (0, 2))
+        solver.add_pec(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=False)
 
     def test_x_y_pec_edge_unions_face_constraints(self):
         solver = self.make_solver()
-        solver.add_pec(
-            (1, 2),
-            (1, 2),
-            (0, solver.Nz),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Ex/Ey are tangential to one incident face, Ez to both; Hx/Hy are
-        # each normal to one face.  Hz is tangential magnetic to both.
-        self.assertTrue(pec_xx[1, 1, 0])
-        self.assertTrue(pec_yy[1, 1, 0])
-        self.assertTrue(pec_zz[1, 1, 0])
-        self.assertTrue(pmc_xx[1, 1, 0])
-        self.assertTrue(pmc_yy[1, 1, 0])
-        self.assertFalse(pmc_zz[1, 1, 0])
+        bounds = ((1, 2), (1, 2), (0, 2))
+        solver.add_pec(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=False)
 
     def test_x_y_z_pec_corner_constrains_all_six_components(self):
         solver = self.make_solver()
-        solver.add_pec(
-            (1, 2),
-            (1, 2),
-            (0, 1),
-        )
-
-        _materials, masks = self.effective_materials_and_masks(solver)
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = masks
-
-        # Every E component is tangential to at least one incident face, and
-        # every H component is normal to one incident face.
-        self.assertTrue(pec_xx[1, 1, 0])
-        self.assertTrue(pec_yy[1, 1, 0])
-        self.assertTrue(pec_zz[1, 1, 0])
-        self.assertTrue(pmc_xx[1, 1, 0])
-        self.assertTrue(pmc_yy[1, 1, 0])
-        self.assertTrue(pmc_zz[1, 1, 0])
+        bounds = ((1, 2), (1, 2), (0, 1))
+        solver.add_pec(*bounds)
+        self.assert_volume_locations(solver, bounds, strict=False)
 
     def test_finite_z_pmc_uses_normal_ez_without_zeroing_tangential_ey(self):
         solver = self.make_solver()

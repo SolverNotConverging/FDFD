@@ -1,7 +1,7 @@
 fdfd_periodic_modes user API
 ============================
 
-Version 1.1.0. This reference covers the deliberately supported user API.
+Version 1.1.1. This reference covers the deliberately supported user API.
 All Python solvers use the same material-first ``mesh()``, ``solve()``, and
 ``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials
 have nonpositive imaginary values.
@@ -20,7 +20,7 @@ Mode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.
 
 .. code-block:: python
 
-    PeriodicModeSolver2D(*, frequency, x_range, z_range, polarization='TE', background_material=Material(name='vacuum', epsilon=(1+0j), mu=(1+0j)))
+    PeriodicModeSolver2D(*, frequency, x_range, z_range, polarization='TE', background_material=Material(name='vacuum', epsilon=(1+0j), mu=(1+0j)), boundary=materials.PEC)
 
 Store physical objects; family adapters implement native insertion/removal.
 
@@ -58,6 +58,12 @@ Store physical objects; family adapters implement native insertion/removal.
      - Optional
      - ``Material(name='vacuum', epsilon=(1+0j), mu=(1+0j))``
      - Predefined bulk Material assigned to unfilled grid cells.
+   * - ``boundary``
+     - ``materials.PEC | materials.PMC``
+     - Optional
+     - ``materials.PEC``
+     - Outer x boundary. PEC constrains tangential E; PMC constrains tangential H.
+
 
 Returns: a configured solver.
 
@@ -326,7 +332,7 @@ Returns: the documented data or None when storing state on the solver.
      - ``float``
      - Optional
      - ``5.0``
-     - Maximum PML-strength magnitude.
+     - Dimensionless stretch strength: s = 1 - i*sigma_max at the outer edge.
 
 Returns: the documented data or None when storing state on the solver.
 
@@ -799,7 +805,7 @@ Returns: the documented data or None when storing state on the solver.
      - ``float``
      - Optional
      - ``5.0``
-     - Maximum PML-strength magnitude.
+     - Dimensionless stretch strength: s = 1 - i*sigma_max at the outer edge.
 
 Returns: the documented data or None when storing state on the solver.
 

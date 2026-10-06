@@ -43,6 +43,14 @@ The dedicated band viewer displays all bands together. Its controls select
 TE/TM polarizations, real part, imaginary part, or magnitude, and frequency
 in GHz or normalized ``fa/c``.
 
+The operator uses separate Yee sites: Ex and Hy are at x cell centres / y
+nodes, Ey and Hx at x nodes / y cell centres, Ez at nodes in both directions,
+and Hz at cell centres in both directions. Periodicity gives each lattice
+``Nx * Ny`` distinct samples; equal array sizes do not put the fields at the
+same positions. Each material tensor is sampled at its corresponding site.
+Lossy complex materials use an ordinary eigenproblem after diagonal material
+inversion, so they do not require a Hermitian generalized mass matrix.
+
 Examples and API
 ----------------
 

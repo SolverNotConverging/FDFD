@@ -2,7 +2,7 @@
 import numpy as np
 from fdfd_common import materials, shapes
 from fdfd_common.grid import GridSceneMixin, GridResult, load_grid_result
-from fdfd_common._yee_scene import populate, apply_pml, field_coordinates, validate_solve, material_background
+from fdfd_common._yee_scene import populate, field_coordinates, validate_solve, material_background
 from fdfd_common.errors import ConfigurationError
 
 
@@ -25,34 +25,66 @@ class _PeriodicAPI(GridSceneMixin):
     def _populate_backend(self, backend, resolution, subpixels):
         populate(self, backend, resolution, subpixels)
     def _apply_pml(self, backend, resolution, spec):
-        apply_pml(self, backend, resolution, spec)
+        # Sample the same dimensionless physical stretch as FEM at Yee-cell
+        # centres, without rounding the PML thickness to a whole-cell count.
+        direction = spec['direction']
+        axes = self._physical_axes[:-1] if direction == 'all' else (direction[0],)
+        for axis in axes:
+            index = self._physical_axes.index(axis)
+            lo, hi = self._ranges[index]
+            positions = lo+(np.arange(resolution[index])+.5)*(hi-lo)/resolution[index]
+            depth = np.zeros_like(positions)
+            if direction in ('all', axis, axis+'-'):
+                depth += np.maximum(lo+spec['thickness']-positions, 0.)
+            if direction in ('all', axis, axis+'+'):
+                depth += np.maximum(positions-hi+spec['thickness'], 0.)
+            shape = [1]*len(resolution)
+            shape[index] = resolution[index]
+            stretch = (1.-1j*spec['sigma_max']*(depth/spec['thickness'])**spec['order']).reshape(shape)
+            factors = (1./stretch, stretch, stretch) if axis == 'x' else (stretch, 1./stretch, stretch)
+            for component, factor in zip(('xx', 'yy', 'zz'), factors):
+                for prefix, three_d_prefix in (('eps', 'Er'), ('mu', 'Mr')):
+                    name = ('cell_'+prefix+'_r_'+component if len(resolution) == 2
+                            else 'cell_'+three_d_prefix+component+'_3D')
+                    getattr(backend, name)[:] *= factor
+        backend.update_component_materials()
     def add_pml(self, *, thickness, direction='all', order=3, sigma_max=5.):
         self._record_pml(thickness=thickness, direction=direction, order=order, sigma_max=sigma_max)
     def mesh(self, *, resolution=None, max_element_size=None, subpixels=8):
         return self._mesh_grid(resolution=resolution, max_element_size=max_element_size, subpixels=subpixels)
     def _finish(self, fields, tolerance):
         backend = self._backend
+        coordinates = field_coordinates(self, fields)
+        # The periodic direction has Nz distinct node samples, without
+        # duplicating the seam; Ex/Ey/Hz are at nodes, not cell centres.
+        lo, hi = self.z_range
+        nodes = lo+np.arange(backend.Nz)*(hi-lo)/backend.Nz
+        for name in ('Ex', 'Ey', 'Hz'):
+            coordinates[name] = (*coordinates[name][:-1], nodes)
         self._result = PeriodicModeSet('fdfd_periodic_modes', self.mesh_data, self.frequency,
-            fields, field_coordinates(self, fields), np.array(backend.neff),
+            fields, coordinates, np.array(backend.neff),
             {'k0': backend.k0, 'material_background': material_background(self),
              'polarization': getattr(self, 'polarization', None),
              'field_representation': 'periodic-envelope; staggered-fields',
              'field_normalization': 'native eigenvector normalization', 'context': self._scene_context(),
-             'solve_info': {'eigensolver_tolerance': tolerance, 'residuals': getattr(backend, 'refined_residuals', None)}})
+             'solve_info': {'eigensolver_tolerance': tolerance, 'residuals': backend.eigenpair_residuals}})
         return self.result
 
 
 class PeriodicModeSolver2D(_PeriodicAPI):
     _physical_axes = ('x', 'z')
-    def __init__(self, *, frequency, x_range, z_range, polarization='TE', background_material=materials.vacuum):
+    def __init__(self, *, frequency, x_range, z_range, polarization='TE', background_material=materials.vacuum, boundary=materials.PEC):
         if polarization not in ('TE', 'TM'):
             raise ConfigurationError('polarization must be TE or TM.')
+        if boundary not in (materials.PEC, materials.PMC):
+            raise ConfigurationError('boundary must be materials.PEC or materials.PMC.')
         self.polarization = polarization
+        self.boundary = boundary
         self._init_grid(ranges=(x_range, z_range), background_material=background_material, frequency=frequency)
     def _make_backend(self, resolution):
         from .solver_2d import _PeriodicModeSolver2D
         return _PeriodicModeSolver2D(self.polarization, self.frequency,
-            self.x_range[1]-self.x_range[0], self.z_range[1]-self.z_range[0], *resolution, 1)
+            self.x_range[1]-self.x_range[0], self.z_range[1]-self.z_range[0], *resolution, 1, boundary=self.boundary.kind)
     def add_rectangle(self, *, x_range, z_range, material, name=None, clip=False):
         return self.add_geometry(shape=shapes.Rectangle(bounds=(x_range, z_range)), material=material, name=name, clip=clip)
     def add_circle(self, *, center, radius, material, name=None, clip=False):

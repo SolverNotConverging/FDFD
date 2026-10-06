@@ -47,6 +47,49 @@ TE results contain ``Ez``, ``Hx``, and ``Hy``; TM results contain ``Ex``, ``Ey``
 and ``Hz``. ``result.show()`` displays all three fields together with material
 geometry and a magnitude/real/imaginary/phase control. There is no mode selector.
 
+Yee field locations
+-------------------
+
+For ``resolution=(Nx, Ny)``, nodes include both domain ends and cells use
+half-cell centres. The last array axis is the single result index.
+
+.. list-table:: Complete component lattices
+   :header-rows: 1
+
+   * - Polarization
+     - Field
+     - x / y locations
+     - Spatial shape
+   * - TE
+     - Ez
+     - node / node
+     - (Nx+1, Ny+1)
+   * - TE
+     - Hx
+     - node / cell
+     - (Nx+1, Ny)
+   * - TE
+     - Hy
+     - cell / node
+     - (Nx, Ny+1)
+   * - TM
+     - Hz
+     - cell / cell
+     - (Nx, Ny)
+   * - TM
+     - Ex
+     - cell / node
+     - (Nx, Ny+1)
+   * - TM
+     - Ey
+     - node / cell
+     - (Nx+1, Ny)
+
+Materials and the total-field rectangle are evaluated on each component's
+lattice. Derivatives map between those lattices; fields retain their native
+samples in saved results and plots. Use ``result.field_coordinates[name]``
+when working with field arrays. The outer boundary is PEC, normally behind PML.
+
 Examples and API
 ----------------
 

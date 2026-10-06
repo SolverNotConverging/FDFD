@@ -837,11 +837,12 @@ class _ModeSolver2D:
 
     @staticmethod
     def _apply_transverse_cross_constraints(pec_xx_mask, pec_yy_mask, pmc_xx_mask, pmc_yy_mask):
-        """Close the collocated transverse PEC/PMC Yee-mask pairs in place.
+        """Close transverse PEC/PMC pairs at matching cross-section locations.
 
-        A tangential PEC constraint on Ex (Ey) also constrains the collocated
+        A tangential PEC constraint on Ex (Ey) also constrains the matching
         normal Hy (Hx) as PMC.  The dual PMC-to-PEC implication is required for
-        the same reason, so each collocated pair uses the union of both masks.
+        the same reason, so each pair uses the union of both masks. Propagation
+        along z is analytic; x/y derivatives retain the staggered Yee edges.
         """
         ex_hy_mask = pec_xx_mask | pmc_yy_mask
         ey_hx_mask = pec_yy_mask | pmc_xx_mask

@@ -62,37 +62,28 @@ class PeriodicModeSolver2DConstraintTests(unittest.TestCase):
     def test_z_normal_pmc_face_constrains_tangential_h_and_normal_e_only(self):
         solver = self.make_solver()
         solver.add_pmc((0, solver.Nx), (0, 1))
-
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = (
-            self.effective_masks(solver)
-        )
-        source = solver._pmc_cell_masks["zz"]
-        z_faces = np.flatnonzero(solver._periodic_z_interface_mask(source)[1])
-
-        self.assertGreater(z_faces.size, 0)
-        np.testing.assert_array_equal(pmc_xx[1, z_faces], True)
-        np.testing.assert_array_equal(pmc_yy[1, z_faces], True)
-        np.testing.assert_array_equal(pec_zz[1, z_faces], True)
-        np.testing.assert_array_equal(pmc_zz[1, z_faces], False)
-        np.testing.assert_array_equal(pec_xx[1, z_faces], False)
-        np.testing.assert_array_equal(pec_yy[1, z_faces], False)
+        ex, ey, ez, hx, hy, hz = self.effective_masks(solver)
+        # Hx/Hy/Ez are at z centres; sample 0 is inside, not on a z face.
+        for mask in (hx, ez):
+            np.testing.assert_array_equal(mask[1:-1, 0], True)
+            np.testing.assert_array_equal(mask[:, 1:], False)
+        np.testing.assert_array_equal(hy[:, 0], True)
+        np.testing.assert_array_equal(hy[:, 1:], False)
+        # Ex/Ey/Hz are at z nodes. Both surfaces are free on the PMC dual grid.
+        for mask in (ex, ey, hz):
+            self.assertFalse(np.any(mask))
 
     def test_x_z_pmc_corner_unions_face_constraints(self):
         solver = self.make_solver()
         solver.add_pmc((1, 2), (0, 1))
-
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = (
-            self.effective_masks(solver)
-        )
-
-        # At an x/z corner, Hx is tangential to z and Hz is tangential to x;
-        # Ex and Ez are each normal to one face.  Ey is tangential to both.
-        self.assertTrue(pmc_xx[1, 0])
-        self.assertTrue(pmc_yy[1, 0])
-        self.assertTrue(pmc_zz[1, 0])
-        self.assertTrue(pec_xx[1, 0])
-        self.assertTrue(pec_zz[1, 0])
-        self.assertFalse(pec_yy[1, 0])
+        masks = self.effective_masks(solver)
+        # The one-cell PMC block has one interior Hy sample. Every other
+        # component lies on a free normal-H or tangential-E boundary node.
+        for i, mask in enumerate(masks):
+            expected = np.zeros_like(mask)
+            if i == 4:
+                expected[1, 0] = True
+            np.testing.assert_array_equal(mask, expected)
 
     def test_finite_z_pec_uses_normal_hz_without_zeroing_tangential_hy(self):
         solver = self.make_solver()
@@ -112,58 +103,43 @@ class PeriodicModeSolver2DConstraintTests(unittest.TestCase):
             True,
         )
 
-    def test_z_normal_pec_face_constrains_tangential_e_and_normal_h_only(self):
+    def test_z_normal_pec_constraints_use_nodes_and_cell_centres(self):
         solver = self.make_solver()
         solver.add_pec((0, solver.Nx), (0, 1))
+        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = self.effective_masks(solver)
+        # Ex/Ey/Hz use z nodes: the cell occupies nodes 0 and 1.
+        for mask in (pec_xx, pec_yy, pmc_zz):
+            np.testing.assert_array_equal(mask[:, :2], True)
+            np.testing.assert_array_equal(mask[:, 2:], False)
+        # Ez/Hx/Hy use z centres: only centre 0 is inside the metal.
+        for mask in (pec_zz, pmc_xx, pmc_yy):
+            np.testing.assert_array_equal(mask[:, 0], True)
+            np.testing.assert_array_equal(mask[:, 1:], False)
 
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = (
-            self.effective_masks(solver)
-        )
-        source = solver._pec_cell_masks["zz"]
-        z_faces = np.flatnonzero(solver._periodic_z_interface_mask(source)[1])
-
-        self.assertGreater(z_faces.size, 0)
-        np.testing.assert_array_equal(pec_xx[1, z_faces], True)
-        np.testing.assert_array_equal(pec_yy[1, z_faces], True)
-        np.testing.assert_array_equal(pmc_zz[1, z_faces], True)
-        np.testing.assert_array_equal(pmc_xx[1, z_faces], False)
-        np.testing.assert_array_equal(pmc_yy[1, z_faces], False)
-        np.testing.assert_array_equal(pec_zz[1, z_faces], False)
-
-    def test_x_normal_pec_face_constrains_tangential_e_and_normal_h_only(self):
+    def test_x_normal_pec_constraints_remove_interior_cell_samples(self):
         solver = self.make_solver()
         solver.add_pec((1, 2), (0, solver.Nz))
+        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = self.effective_masks(solver)
+        # Ey/Ez/Hx use x nodes, including the two PEC faces.
+        for mask in (pec_yy, pec_zz, pmc_xx):
+            np.testing.assert_array_equal(mask[1:3], True)
+        # Ex/Hy/Hz at x centre 1 are inside PEC, not face traces.
+        for mask in (pec_xx, pmc_yy, pmc_zz):
+            np.testing.assert_array_equal(mask[1], True)
+            np.testing.assert_array_equal(mask[[0, 2, 3]], False)
 
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = (
-            self.effective_masks(solver)
-        )
-
-        # On either x-normal face PEC requires Ey = Ez = Hx = 0.  Ex is
-        # normal and Hy/Hz are tangential magnetic components, so they stay
-        # free in the face-adjacent boundary cells.
-        np.testing.assert_array_equal(pec_yy[1:3, :], True)
-        np.testing.assert_array_equal(pec_zz[1:3, :], True)
-        np.testing.assert_array_equal(pmc_xx[1:3, :], True)
-        np.testing.assert_array_equal(pec_xx[1, :], False)
-        np.testing.assert_array_equal(pmc_yy[1, :], False)
-        np.testing.assert_array_equal(pmc_zz[1, :], False)
-
-    def test_x_z_pec_corner_unions_face_constraints(self):
+    def test_pec_corner_masks_follow_the_six_yee_sample_locations(self):
         solver = self.make_solver()
         solver.add_pec((1, 2), (0, 1))
-
-        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = (
-            self.effective_masks(solver)
-        )
-
-        # Ex is tangential to z, Ez is tangential to x, Hx is normal to x,
-        # and Hz is normal to z.  Hy is tangential magnetic on both faces.
-        self.assertTrue(pec_xx[1, 0])
-        self.assertTrue(pec_yy[1, 0])
-        self.assertTrue(pec_zz[1, 0])
-        self.assertTrue(pmc_xx[1, 0])
-        self.assertFalse(pmc_yy[1, 0])
-        self.assertTrue(pmc_zz[1, 0])
+        pec_xx, pec_yy, pec_zz, pmc_xx, pmc_yy, pmc_zz = self.effective_masks(solver)
+        np.testing.assert_array_equal(pec_xx[1, :2], True)
+        np.testing.assert_array_equal(pec_yy[1:3, :2], True)
+        np.testing.assert_array_equal(pec_zz[1:3, 0], True)
+        np.testing.assert_array_equal(pmc_xx[1:3, 0], True)
+        self.assertTrue(pmc_yy[1, 0])
+        np.testing.assert_array_equal(pmc_zz[1, :2], True)
+        self.assertFalse(pec_xx[1, -1])
+        self.assertFalse(pmc_yy[1, 1])
 
     def test_finite_z_pmc_uses_normal_ez_without_zeroing_tangential_ey(self):
         solver = self.make_solver("TE")

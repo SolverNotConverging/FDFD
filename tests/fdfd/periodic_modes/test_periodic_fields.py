@@ -23,6 +23,12 @@ def test_all_periodic_components_and_longitudinal_maxwell_equation(polarization,
     if polarization == 'TM':
         derivative = backend.DHX_HY_TO_EZ @ backend.Hy
         field = 1j * backend.omega * backend.epsilon0 * backend.eps_r_zz.ravel(order='F')[:, None] * backend.Ez
+        # PEC surfaces carry a surface current; the bulk Ampere equation
+        # applies to the free longitudinal traces, with Ez = 0 on PEC.
+        constrained = backend._effective_materials_and_masks()[8].ravel(order='F')
+        np.testing.assert_array_equal(field[constrained], 0.)
+        derivative = derivative[~constrained]
+        field = field[~constrained]
         inactive = ('Ey', 'Hx', 'Hz')
     else:
         derivative = backend.DEX_EY_TO_HZ @ backend.Ey

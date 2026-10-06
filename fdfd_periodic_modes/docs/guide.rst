@@ -13,13 +13,14 @@ Material-first workflow
 
    from fdfd_periodic_modes import PeriodicModeSolver2D, load_result, Material, materials
 
-   substrate = Material(name="substrate", epsilon=4.0)
+   substrate = Material(name="substrate", epsilon=10.2)
    solver = PeriodicModeSolver2D(
        frequency=20e9,
        x_range=(0.0, 10e-3),
        z_range=(0.0, 8e-3),
        polarization="TM",
        background_material=materials.air,
+       boundary=materials.PEC,
    )
    solver.add_rectangle(
        x_range=(0.0, 1.27e-3),
@@ -33,6 +34,15 @@ Material-first workflow
    result.save("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
    loaded = load_result("fdfd_periodic_modes/outputs/fdfd_periodic.h5")
    loaded.plot(component="Hy", quantity="magnitude", mode=1)
+
+For 2D, ``boundary=materials.PEC`` is the default at both x faces; use
+``materials.PMC`` explicitly for magnetic walls. The upper PEC face may sit
+behind an x+ PML. ``sigma_max`` is a dimensionless coordinate-stretch strength,
+matching the FEM periodic solver; it does not scale with frequency.
+
+Both eigensolvers work on the full periodic pencil without assuming a positive
+mass matrix. ``result.solve_info['residuals']`` reports the relative residual
+of each eigenpair in the original constrained Maxwell equations.
 
 The 3D class uses ``add_box()``, ``add_sphere()``, and ``add_cylinder()``
 convenience methods. Both dimensions also accept compatible shared shapes through
@@ -50,6 +60,14 @@ The 2D result includes all six components: ``Ex``, ``Ey``, ``Ez``, ``Hx``,
 ``Ey``, ``Hx``, and ``Hz``. The other components are zero for that polarization.
 The longitudinal fields are reconstructed from Maxwell's equations on their
 staggered grids. In 2D plots, ``z`` is horizontal and ``x`` is vertical.
+
+Ex, Ey, and Hz use z nodes ``z0 + j*dz``; Ez, Hx, and Hy use z centres
+``z0 + (j+0.5)*dz``. Both periodic lattices have Nz samples, with the upper
+node identified with the lower one. In 3D, Ex uses x centres / y nodes, Ey
+uses x nodes / y centres, Ez uses x/y nodes, Hx uses x nodes / y centres,
+Hy uses x centres / y nodes, and Hz uses x/y centres. Materials and conductor
+constraints follow these locations. Saved fields retain all native samples;
+use ``result.field_coordinates[name]`` for each component's physical axes.
 
 The 2D viewer shows the three active TE or TM components together with the
 material geometry in the background. The 3D viewer shows all six components.
@@ -73,3 +91,6 @@ or the `3D image-guide example <../examples/3d_image_guide_leaky_wave_antenna.py
 The `family example index <../examples/README.rst>`_
 lists dispersion and postprocessing scripts. See
 `API_REFERENCE.rst <API_REFERENCE.rst>`_ for the curated user surface.
+
+The `FEM comparison <fem_comparison.rst>`_ records the matched antenna geometry,
+frequency comparisons, numerical residuals, and a runnable benchmark.

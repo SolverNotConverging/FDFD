@@ -28,7 +28,7 @@ class ScatteringTimeConventionTests(unittest.TestCase):
     def test_positive_x_plane_wave_uses_negative_spatial_phase(self):
         solver = self.make_solver()
         solver.add_source(src_type="plane_wave", angle_deg=0.0)
-        field = solver.source.reshape(solver.Ny, solver.Nx)
+        field = solver.source.reshape(solver.primary_shape)
 
         expected_step = np.exp(-1j * solver.k0 * solver.dx)
         np.testing.assert_allclose(field[:, 1:] / field[:, :-1], expected_step)
@@ -40,13 +40,14 @@ class ScatteringTimeConventionTests(unittest.TestCase):
 
         solver.add_source(src_type="point", polarization="TE", location=location)
         np.testing.assert_allclose(
-            solver.source.reshape(solver.Ny, solver.Nx),
+            solver.source.reshape(solver.primary_shape),
             hankel2(0, solver.k0 * radius),
         )
 
         solver.add_source(src_type="point", polarization="TM", location=location)
+        radius = np.hypot(solver.X - location[0], solver.Y - location[1])
         np.testing.assert_allclose(
-            solver.source.reshape(solver.Ny, solver.Nx),
+            solver.source.reshape(solver.primary_shape),
             -1j / 4 * hankel2(0, solver.k0 * radius),
         )
 

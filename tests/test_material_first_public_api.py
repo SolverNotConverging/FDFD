@@ -142,7 +142,7 @@ def test_fdfd_periodic_band_and_scattering_public_workflows() -> None:
     )
     periodic.mesh(resolution=(8, 8))
     modes = periodic.solve(num_modes=1, neff_guess=1.5)
-    assert 0.0 < modes.neff[0].real <= 1.5
+    np.testing.assert_allclose(modes.neff, [1.5], atol=1e-9)
     assert abs(modes.neff[0].imag) < 1e-10
 
     bands = BandStructureSolver2D(x_range=1.0, y_range=1.0)
@@ -171,4 +171,4 @@ def test_fdfd_periodic_band_and_scattering_public_workflows() -> None:
     scattering.add_source(angle=0.0)
     scattering.set_source_region(inset=0.3)
     field = scattering.solve()
-    assert field.fields["Ez"].shape == (20, 20, 1)
+    assert field.fields["Ez"].shape == (21, 21, 1)

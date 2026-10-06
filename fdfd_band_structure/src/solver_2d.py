@@ -107,10 +107,10 @@ class _BandStructureSolver2D:
         self.dx2 = self.dx / 2
         self.dy2 = self.dy / 2
 
-        xa2 = np.arange(1, self.Nx2 + 1) * self.dx2
-        ya2 = np.arange(1, self.Ny2 + 1) * self.dy2
-        self.xa2 = xa2 - np.mean(xa2)
-        self.ya2 = ya2 - np.mean(ya2)
+        # Even helper indices are nodes; odd indices are cell centres.
+        # Periodicity identifies the upper node with the lower node.
+        self.xa2 = np.arange(self.Nx2) * self.dx2 - self.a/2
+        self.ya2 = np.arange(self.Ny2) * self.dy2 - self.b/2
         self.X2, self.Y2 = np.meshgrid(self.xa2, self.ya2, indexing="ij")
 
         # Material maps on the double-resolution grid
@@ -317,14 +317,16 @@ class _BandStructureSolver2D:
 
             if "TM" in polarisations:
                 A_tm = -DHX @ URyy_inv @ DEX - DHY @ URxx_inv @ DEY
-                vals_tm = eigs(A_tm, M=ERzz_diag, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
+                # Complex lossy diagonal materials are not Hermitian mass
+                # matrices. Solve the ordinary operator instead of using M.
+                vals_tm = eigs(ERzz_diag.power(-1) @ A_tm, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_tm = self._sort_eigenvalues(vals_tm, num_bands)
                 eigenvalues["TM"][:, idx] = eig_tm
                 frequencies["TM"][:, idx] = self._normalise_eigenvalues(eig_tm)
 
             if "TE" in polarisations:
                 A_te = -DEX @ ERyy_inv @ DHX - DEY @ ERxx_inv @ DHY
-                vals_te = eigs(A_te, M=URzz_diag, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
+                vals_te = eigs(URzz_diag.power(-1) @ A_te, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_te = self._sort_eigenvalues(vals_te, num_bands)
                 eigenvalues["TE"][:, idx] = eig_te
                 frequencies["TE"][:, idx] = self._normalise_eigenvalues(eig_te)
@@ -543,10 +545,10 @@ class _BandStructureSolver2D:
     def _yee_tensors(self) -> dict[str, np.ndarray]:
         ERxx = self.ER2[1::2, ::2]
         ERyy = self.ER2[::2, 1::2]
-        ERzz = self.ER2[::2, 1::2]
-        URxx = self.UR2[1::2, ::2]
-        URyy = self.UR2[::2, 1::2]
-        URzz = self.UR2[::2, 1::2]
+        ERzz = self.ER2[::2, ::2]
+        URxx = self.UR2[::2, 1::2]
+        URyy = self.UR2[1::2, ::2]
+        URzz = self.UR2[1::2, 1::2]
         return {
             "ERxx": ERxx,
             "ERyy": ERyy,

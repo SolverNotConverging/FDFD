@@ -2,7 +2,7 @@
 import numpy as np
 from fdfd_common import materials, shapes
 from fdfd_common.grid import GridSceneMixin, GridResult, fractions, load_grid_result
-from fdfd_common._yee_scene import material_background
+from fdfd_common._yee_scene import material_background, field_coordinates
 from fdfd_common.errors import ConfigurationError, BackendCapabilityError
 
 
@@ -37,7 +37,8 @@ class ScatteringSolver2D(GridSceneMixin):
         eps, mu = materials.bulk_values(self.background_material)
         backend.add_object(eps, mu, np.ones((resolution[1], resolution[0]), dtype=bool))
         for record, _ in self._objects.values():
-            # This backend previously used cell-centre masks without averaging.
+            # Geometry occupies cells; constitutive values are then sampled
+            # separately on each electric and magnetic Yee lattice.
             occupancy, slices = fractions(record.shape, self._ranges, resolution, 1)
             mask = np.zeros(resolution, dtype=bool)
             mask[slices] = occupancy.astype(bool)
@@ -88,23 +89,15 @@ class ScatteringSolver2D(GridSceneMixin):
             theta = np.deg2rad(config['angle_deg'])
             config['amplitude'] *= np.exp(-1j*backend.k0*np.dot(centre, (np.cos(theta), np.sin(theta))))
         backend.add_source(polarization=self.polarization, **config)
-        x, y = self.mesh_data.coordinates
-        xx, yy = np.meshgrid(x, y, indexing='xy')
-        (x0,x1),(y0,y1)=self._ranges
-        d=self._mask_distance
-        mask=(xx >= x0+d)&(xx <= x1-d)&(yy >= y0+d)&(yy <= y1-d)
-        if not mask.any():
+        backend.set_total_field_region(self._mask_distance)
+        if not np.any(backend.Q.diagonal() == 0):
             raise ConfigurationError('Source-region inset leaves no total-field cells.')
-        backend.add_mask((~mask).astype(float))
         self._result=None
         operation = backend.solve_total_field_TE if self.polarization=='TE' else backend.solve_total_field_TM
         operation(reuse_factorisation=reuse_factorization)
         fields = {name: np.array(field.T[..., None], copy=True)
                   for name, field in backend.transverse_fields(self.polarization).items()}
-        offsets = {'Ez': (0., 0.), 'Hx': (0., .5), 'Hy': (.5, 0.),
-                   'Hz': (0., 0.), 'Ex': (0., -.5), 'Ey': (-.5, 0.)}
-        coordinates = {name: (x + offsets[name][0]*backend.dx,
-                              y + offsets[name][1]*backend.dy) for name in fields}
+        coordinates = field_coordinates(self, fields)
         self._result=ScatteringResult('fdfd_scattering', self.mesh_data, self.frequency, fields,
             coordinates, np.array([],dtype=complex),
             {'k0':backend.k0,'field_representation':'TF/SF fields; staggered-grid',

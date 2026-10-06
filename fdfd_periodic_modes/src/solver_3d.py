@@ -6,7 +6,9 @@ import numpy as np
 import sys
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy.sparse import bmat, coo_matrix, csr_matrix, diags
-from scipy.sparse.linalg import eigs
+from scipy.constants import epsilon_0, mu_0, speed_of_light
+from ._eigensolve import generalized_eigs as eigs, eigenpair_residuals
+from fdfd_common.yee import node_average, occupied_nodes, interior_nodes
 
 from periodic_eigensolver.refined import solve_generalized, resolve_kernel_backend
 
@@ -33,9 +35,9 @@ class _PeriodicModeSolver3D:
 
         self.freq = freq
         self.omega = 2 * np.pi * freq
-        self.k0 = self.omega / 3e8
-        self.epsilon0 = 8.85e-12
-        self.mu0 = 1.26e-6
+        self.k0 = self.omega / speed_of_light
+        self.epsilon0 = epsilon_0
+        self.mu0 = mu_0
         self.num_modes = int(num_modes)
 
         if sigma_guess is not None:
@@ -531,13 +533,20 @@ class _PeriodicModeSolver3D:
         return out
 
     def _material_on_fields(self, erxx, eryy, erzz, mrxx, mryy, mrzz, no_average_mask):
+        def z_nodes(values):
+            out = node_average(values, 2, periodic=True)
+            if np.any(no_average_mask):
+                ii, jj, kk = np.nonzero(no_average_mask)
+                out[ii, jj, kk] = values[ii, jj, kk]
+                out[ii, jj, (kk+1) % self.Nz] = values[ii, jj, kk]
+            return out
         return {
-            "erxx": self._average_y(erxx, no_average_mask),
-            "eryy": self._average_x(eryy, no_average_mask),
+            "erxx": self._average_y(z_nodes(erxx), no_average_mask),
+            "eryy": self._average_x(z_nodes(eryy), no_average_mask),
             "erzz": self._average_xy(erzz, no_average_mask),
             "mrxx": self._average_x(mrxx, no_average_mask),
             "mryy": self._average_y(mryy, no_average_mask),
-            "mrzz": mrzz.copy(),
+            "mrzz": z_nodes(mrzz),
         }
 
     def _set_component_materials(self, materials):
@@ -622,6 +631,10 @@ class _PeriodicModeSolver3D:
 
     def _constraint_masks_from_sources(self, pec_sources, pmc_sources):
         """Build orientation-aware field masks from component cell sources."""
+        full_pec = pec_sources['xx'] & pec_sources['yy'] & pec_sources['zz']
+        full_pmc = pmc_sources['xx'] & pmc_sources['yy'] & pmc_sources['zz']
+        pec_sources = {component: mask & ~full_pec for component, mask in pec_sources.items()}
+        pmc_sources = {component: mask & ~full_pmc for component, mask in pmc_sources.items()}
         pec_masks = [
             np.zeros(self.shape_ex, dtype=bool),
             np.zeros(self.shape_ey, dtype=bool),
@@ -719,6 +732,24 @@ class _PeriodicModeSolver3D:
             y_boundary, field="electric"
         )[1]
 
+        # Full PEC volumes constrain every interior sample and each tangential
+        # electric / normal magnetic trace on their actual Yee locations.
+        z_nodes = occupied_nodes(full_pec, 2, periodic=True)
+        pec_masks[0] |= occupied_nodes(z_nodes, 1)
+        pec_masks[1] |= occupied_nodes(z_nodes, 0)
+        pec_masks[2] |= occupied_nodes(occupied_nodes(full_pec, 0), 1)
+        pmc_masks[0] |= occupied_nodes(full_pec, 0)
+        pmc_masks[1] |= occupied_nodes(full_pec, 1)
+        pmc_masks[2] |= z_nodes
+        # PMC leaves normal H and tangential E free on the boundary. On the
+        # dual lattice these are the nodes strictly inside the volume.
+        z_inside = interior_nodes(full_pmc, 2, periodic=True)
+        pec_masks[0] |= interior_nodes(z_inside, 1)
+        pec_masks[1] |= interior_nodes(z_inside, 0)
+        pec_masks[2] |= interior_nodes(interior_nodes(full_pmc, 0), 1)
+        pmc_masks[0] |= interior_nodes(full_pmc, 0)
+        pmc_masks[1] |= interior_nodes(full_pmc, 1)
+        pmc_masks[2] |= z_inside
         return (*pec_masks, *pmc_masks)
 
     def _refresh_constraint_masks(self):
@@ -868,7 +899,11 @@ class _PeriodicModeSolver3D:
             [None, None, zero_hy_hx, self.AZ_HY],
         ], format="csr")
 
-        return A, B
+        # Equation rows initially follow [Hy, Hx, Ey, Ex], while unknowns
+        # follow [Ex, Ey, Hx, Hy]. Reorder rows before constraint reduction.
+        offsets = np.cumsum([0, self.n_ex, self.n_ey, self.n_hx, self.n_hy])
+        rows = np.concatenate([np.arange(offsets[i], offsets[i+1]) for i in (3, 2, 1, 0)])
+        return A[rows, :], B[rows, :]
 
     def solve(
         self,
@@ -950,6 +985,8 @@ class _PeriodicModeSolver3D:
             self.refined_backend = resolve_kernel_backend(kernel_backend)
         else:
             raise ValueError("method must be 'eigs' or 'refined'.")
+
+        self.eigenpair_residuals = eigenpair_residuals(A, B, self.eigenvalues, eigenvectors_reduced)
 
         self.eigenvectors = np.zeros((free.size, self.num_modes), dtype=complex)
         self.eigenvectors[free, :] = eigenvectors_reduced
