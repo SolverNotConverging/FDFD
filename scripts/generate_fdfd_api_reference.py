@@ -79,7 +79,7 @@ def main():
             'Predefined bulk Material or materials.PEC assignment; PMC and SIBC are unsupported.'
             if family == 'scattering' else 'Predefined Material, PEC/PMC, or supported SIBC assignment.')
         out=section(package+' user API','=')
-        out+='Version 1.1.1. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
+        out+='Version 1.1.2. This reference covers the deliberately supported user API.\nAll Python solvers use the same material-first ``mesh()``, ``solve()``, and\n``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials\nhave nonpositive imaginary values.\n\n'
         out+=section('Configuration and units')
         out+='Constructor extents and shape coordinates use metres; frequencies use hertz.\n``mesh(resolution=...)`` gives Yee-cell counts, while ``max_element_size`` is a\nphysical grid-spacing limit. Define reusable ``fdfd_common.Material`` and shape\nobjects before assigning them. Grid-index geometry is private backend detail.\nMode and band numbers start at 1. NumPy arrays retain ordinary Python indexing.\n\n'
         if family == 'scattering':

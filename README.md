@@ -44,7 +44,7 @@ the NumPy fallback, and contains no Cython kernel. Install it directly without
 building FDFD:
 
 ```sh
-python -m pip install https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.1/fdfd-1.1.1-py3-none-any.whl
+python -m pip install https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.2/fdfd-1.1.2-py3-none-any.whl
 ```
 
 In an activated environment, you can use `uv pip install` with the same wheel URL.

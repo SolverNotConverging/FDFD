@@ -1,7 +1,7 @@
 fdfd_periodic_modes user API
 ============================
 
-Version 1.1.1. This reference covers the deliberately supported user API.
+Version 1.1.2. This reference covers the deliberately supported user API.
 All Python solvers use the same material-first ``mesh()``, ``solve()``, and
 ``show()`` lifecycle. Phasors use exp(+i omega t); passive relative materials
 have nonpositive imaginary values.

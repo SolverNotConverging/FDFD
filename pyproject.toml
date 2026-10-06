@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdfd"
-version = "1.1.1"
+version = "1.1.2"
 description = "FDFD electromagnetic solvers"
 readme = "README.md"
 requires-python = ">=3.10"

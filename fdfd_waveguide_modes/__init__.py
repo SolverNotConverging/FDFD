@@ -7,7 +7,7 @@ from fdfd_common import Material, GoodConductor, SurfaceImpedance, materials, sh
 
 from .api import ModeSolver1D, ModeSolver2D, ModeSet, load_result
 from fdfd_common.dispersion import plot_dispersion
-__version__ = "1.1.0"
+__version__ = "1.1.2"
 __all__ = ['ModeSolver1D', 'ModeSolver2D', 'ModeSet', 'load_result', 'plot_dispersion']
 
 __all__ += ["Material", "GoodConductor", "SurfaceImpedance", "materials", "shapes"]

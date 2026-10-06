@@ -1,7 +1,7 @@
 fdfd_common user API
 ====================
 
-This reference lists the deliberately supported shared values for version 1.1.1.
+This reference lists the deliberately supported shared values for version 1.1.2.
 
 Materials
 ---------

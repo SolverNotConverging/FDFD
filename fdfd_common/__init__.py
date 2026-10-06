@@ -10,5 +10,5 @@ from .materials import Material, GoodConductor, SurfaceImpedance
 from . import materials, shapes
 
 TIME_CONVENTION = "exp(+i*omega*t)"
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __all__ = ["Material", "GoodConductor", "SurfaceImpedance", "materials", "shapes", "CEMError", "BackendCapabilityError", "ConfigurationError", "GeometryError", "MeshError", "SolverError", "NoResultError", "PersistenceError", "ViewerError", "MeshSnapshot"]
