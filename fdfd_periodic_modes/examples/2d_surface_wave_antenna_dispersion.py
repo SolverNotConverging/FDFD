@@ -26,7 +26,7 @@ for case, frequency in enumerate(tqdm(frequencies, desc="Frequency sweep", unit=
                          material=materials.PEC, name="top_pec_perturbation")
     solver.add_pml(thickness=2.5e-3, direction="x+")
     solver.mesh(resolution=(100, 80))
-    result = solver.solve(num_modes=4, neff_guess=0., eigensolver_tolerance=1e-9, ncv=36)
+    result = solver.solve(backend="cpu", num_modes=4, neff_guess=0., eigensolver_tolerance=1e-9, ncv=36)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"case_{case:03d}_{frequency / 1e9:.6g}GHz.h5")
     neff_sweep.append(result.neff)

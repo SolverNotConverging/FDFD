@@ -43,3 +43,6 @@ Plots are saved beside their source data.
 * `2d_plot_dispersion.py <postprocessing/2d_plot_dispersion.py>`_
 
 Sweeps show a ``tqdm`` progress bar as each frequency finishes.
+
+Examples explicitly use ``backend="cpu"``. Change to ``backend="cuda"``
+for cuDSS acceleration after installing the optional CUDA dependencies.

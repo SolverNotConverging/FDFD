@@ -260,6 +260,17 @@ class _BandStructureSolver2D:
     # ------------------------------------------------------------------
     # Solver core
     # ------------------------------------------------------------------
+    def _solve_band_eigenpairs(self, operator, **options):
+        if getattr(self, "_execution_backend", "cpu") == "cuda":
+            from fdfd_common.cuda import eigenpairs
+            return eigenpairs(operator, **options)
+        # The Gamma-point zero mode makes an exact zero shift singular.
+        # Perturb the search shift, retaining eigenvalues of the original operator.
+        options = dict(options)
+        sigma = complex(options.get("sigma", 0.))
+        options["sigma"] = sigma + 1e-7 * max(1., abs(sigma)) * (1. + .37j)
+        return eigs(operator, **options)
+
     def compute_band_structure(
             self,
             beta_path: np.ndarray,
@@ -319,14 +330,14 @@ class _BandStructureSolver2D:
                 A_tm = -DHX @ URyy_inv @ DEX - DHY @ URxx_inv @ DEY
                 # Complex lossy diagonal materials are not Hermitian mass
                 # matrices. Solve the ordinary operator instead of using M.
-                vals_tm = eigs(ERzz_diag.power(-1) @ A_tm, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
+                vals_tm = self._solve_band_eigenpairs(ERzz_diag.power(-1) @ A_tm, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_tm = self._sort_eigenvalues(vals_tm, num_bands)
                 eigenvalues["TM"][:, idx] = eig_tm
                 frequencies["TM"][:, idx] = self._normalise_eigenvalues(eig_tm)
 
             if "TE" in polarisations:
                 A_te = -DEX @ ERyy_inv @ DHX - DEY @ ERxx_inv @ DHY
-                vals_te = eigs(URzz_diag.power(-1) @ A_te, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
+                vals_te = self._solve_band_eigenpairs(URzz_diag.power(-1) @ A_te, k=num_bands, sigma=eig_sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))[0]
                 eig_te = self._sort_eigenvalues(vals_te, num_bands)
                 eigenvalues["TE"][:, idx] = eig_te
                 frequencies["TE"][:, idx] = self._normalise_eigenvalues(eig_te)

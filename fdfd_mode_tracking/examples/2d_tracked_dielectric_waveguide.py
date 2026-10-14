@@ -21,7 +21,7 @@ tracker = ModeTracker2D(
 tracker.add_circle(center=(0., 0.), radius=1.5e-3, material=core, name='core')
 tracker.mesh(resolution=(20, 20), subpixels=3)
 sweep = tracker.solve(
-    num_modes=3,
+    backend="cpu", num_modes=3,
     tracking_config=TrackingConfig(max_depth=3, max_solves=80,
                                    verification_overlap=.995,
                                    verification_beta_tolerance=.006,

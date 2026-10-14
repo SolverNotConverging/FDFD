@@ -778,7 +778,7 @@ class _ModeSolver1D:
         Omega = Omega[free_mask, :][:, free_mask]
         if Omega.shape[0] <= self.num_modes:
             raise ValueError(f"Not enough unconstrained DOFs ({Omega.shape[0]}) to solve {self.num_modes} modes.")
-        eigenvalues, eigenvectors_reduced = solve_eigenpairs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.))
+        eigenvalues, eigenvectors_reduced = solve_eigenpairs(Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.), backend=getattr(self, "_execution_backend", "cpu"))
         order = np.argsort(np.real(eigenvalues))
         eigenvalues = eigenvalues[order]
         eigenvectors_reduced = eigenvectors_reduced[:, order]

@@ -187,3 +187,11 @@ provided by ``fdfd_common``; examples need only the solver package import.
 See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
 for their definitions. Each solver supports the material and shape types
 listed in its guide.
+
+CUDA backend
+------------
+
+The ``backend`` keyword on tracker ``solve`` and ``track_modes`` selects
+``"cpu"`` (default), ``"auto"`` (CPU), or ``"cuda"``. CUDA is forwarded to
+every waveguide solve, including mesh/padding verification. Install the
+optional CuPy and cuDSS dependencies described in the repository README.

@@ -18,7 +18,7 @@ solver.add_pml(thickness=50e-3)
 solver.add_source(kind="plane_wave", angle=0., amplitude=1.)
 solver.set_source_region(inset=75e-3)
 solver.mesh(resolution=(240, 240))
-result = solver.solve()
+result = solver.solve(backend="cpu", )
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "scattering.h5")

@@ -401,7 +401,7 @@ Returns: the initial GridData stored on solver.mesh_data.
 
 .. code-block:: python
 
-    PeriodicModeSolver2D.solve(*, num_modes=4, neff_guess=1.0, eigensolver_tolerance=0.0, eigensolver='eigs', ncv=None, max_restarts=12, random_seed=0, arnoldi_backend='auto')
+    PeriodicModeSolver2D.solve(*, num_modes=4, neff_guess=1.0, eigensolver_tolerance=0.0, eigensolver='eigs', ncv=None, max_restarts=12, random_seed=0, backend='cpu')
 
 .. list-table:: Arguments
    :header-rows: 1
@@ -447,7 +447,7 @@ Returns: the initial GridData stored on solver.mesh_data.
      - Optional
      - ``0``
      - Deterministic initial-vector seed.
-   * - ``arnoldi_backend``
+   * - ``backend``
      - ``str``
      - Optional
      - ``'auto'``
@@ -874,7 +874,7 @@ Returns: the initial GridData stored on solver.mesh_data.
 
 .. code-block:: python
 
-    PeriodicModeSolver3D.solve(*, num_modes=4, neff_guess=1.0, eigensolver_tolerance=0.0, eigensolver='refined', ncv=None, max_restarts=12, random_seed=0, arnoldi_backend='auto')
+    PeriodicModeSolver3D.solve(*, num_modes=4, neff_guess=1.0, eigensolver_tolerance=0.0, eigensolver='refined', ncv=None, max_restarts=12, random_seed=0, backend='cpu')
 
 .. list-table:: Arguments
    :header-rows: 1
@@ -920,7 +920,7 @@ Returns: the initial GridData stored on solver.mesh_data.
      - Optional
      - ``0``
      - Deterministic initial-vector seed.
-   * - ``arnoldi_backend``
+   * - ``backend``
      - ``str``
      - Optional
      - ``'auto'``
@@ -1134,3 +1134,17 @@ provided by ``fdfd_common``; examples need only the solver package import.
 See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
 for their definitions. Each solver supports the material and shape types
 listed in its guide.
+
+CUDA backend
+------------
+
+The ``backend`` keyword accepts ``"cpu"`` (default), ``"auto"`` (CPU), or
+``"cuda"``. CUDA uses optional CuPy and cuDSS >= 0.8 for sparse numerical
+factorization and direct/shifted solves. ARPACK/refined Arnoldi iteration,
+assembly, field reconstruction and small projected computations stay on the
+CPU. Eigenvalue solves include vector transfers each iteration.
+
+Install ``fdfd[cuda13]`` or ``fdfd[cuda12]`` for your CUDA toolkit. cuDSS
+library discovery checks system paths, NVIDIA packages in the Python
+environment, and ``build/cuda-deps``. ``CUDSS_LIBRARY`` overrides discovery.
+Explicit CUDA requests fail with an actionable error if unavailable.

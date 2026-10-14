@@ -67,7 +67,7 @@ class _PeriodicAPI(GridSceneMixin):
              'polarization': getattr(self, 'polarization', None),
              'field_representation': 'periodic-envelope; staggered-fields',
              'field_normalization': 'native eigenvector normalization', 'context': self._scene_context(),
-             'solve_info': {'eigensolver_tolerance': tolerance, 'residuals': backend.eigenpair_residuals}})
+             'solve_info': {'backend': getattr(backend, '_execution_backend', 'cpu'), 'eigensolver_tolerance': tolerance, 'residuals': backend.eigenpair_residuals}})
         return self.result
 
 
@@ -92,14 +92,17 @@ class PeriodicModeSolver2D(_PeriodicAPI):
     def add_polygon(self, *, points, material, name=None, clip=False):
         return self.add_geometry(shape=shapes.Polygon(points=points), material=material, name=name, clip=clip)
     def solve(self, *, num_modes=4, neff_guess=1., eigensolver_tolerance=0., eigensolver='eigs',
-              ncv=None, max_restarts=12, random_seed=0, arnoldi_backend='auto'):
+              ncv=None, max_restarts=12, random_seed=0, backend='cpu'):
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         validate_solve(num_modes, neff_guess, eigensolver_tolerance)
         self._ensure_grid()
         backend = self._backend
         backend.num_modes = int(num_modes)
+        backend._execution_backend = execution
         self._result = None
         backend.solve(guess=1j*backend.k0*neff_guess, tol=eigensolver_tolerance, ncv=ncv,
-                      method=eigensolver, max_restarts=max_restarts, random_seed=random_seed, kernel_backend=arnoldi_backend)
+                      method=eigensolver, max_restarts=max_restarts, random_seed=random_seed, kernel_backend="cuda" if execution == "cuda" else "auto")
         names = ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
         fields = {name: np.asarray(getattr(backend, name)).reshape((*getattr(backend, 'shape_'+name.lower()), num_modes), order='F').copy() for name in names}
         return self._finish(fields, eigensolver_tolerance)
@@ -119,13 +122,16 @@ class PeriodicModeSolver3D(_PeriodicAPI):
     def add_cylinder(self, *, center, radius, z_range, material, name=None, clip=False):
         return self.add_geometry(shape=shapes.Cylinder(center=center, radius=radius, z_range=z_range), material=material, name=name, clip=clip)
     def solve(self, *, num_modes=4, neff_guess=1., eigensolver_tolerance=0., eigensolver='refined',
-              ncv=None, max_restarts=12, random_seed=0, arnoldi_backend='auto'):
+              ncv=None, max_restarts=12, random_seed=0, backend='cpu'):
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         validate_solve(num_modes, neff_guess, eigensolver_tolerance)
         self._ensure_grid()
         backend = self._backend
         backend.num_modes = int(num_modes)
+        backend._execution_backend = execution
         self._result = None
         backend.solve(sigma_guess=1j*backend.k0*neff_guess, tol=eigensolver_tolerance, ncv=ncv,
-                      method=eigensolver, max_restarts=max_restarts, random_seed=random_seed, kernel_backend=arnoldi_backend)
+                      method=eigensolver, max_restarts=max_restarts, random_seed=random_seed, kernel_backend="cuda" if execution == "cuda" else "auto")
         fields = {name: np.moveaxis(np.array(value, copy=True), 0, -1) for name, value in backend.fields.items()}
         return self._finish(fields, eigensolver_tolerance)

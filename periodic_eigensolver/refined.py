@@ -14,9 +14,9 @@ from scipy.sparse.linalg import splu
 
 from . import _numpy_kernels
 
-PublicBackend = Literal["auto", "cython", "python"]
+PublicBackend = Literal["auto", "cython", "python", "cuda"]
 KernelBackend = Literal["auto", "cython", "python", "numpy"]
-ResolvedBackend = Literal["cython", "python"]
+ResolvedBackend = Literal["cython", "python", "cuda"]
 
 try:
     _cython_kernels = import_module(f"{__package__}._cython_kernels")
@@ -74,8 +74,8 @@ class ArnoldiResult:
             raise ValueError("Residual counts must match the eigenvalue count.")
         if int(self.restart_count) < 0 or int(self.step_count) < 0:
             raise ValueError("Arnoldi work counts must be nonnegative.")
-        if self.resolved_backend not in {"cython", "python"}:
-            raise ValueError("resolved_backend must be 'cython' or 'python'.")
+        if self.resolved_backend not in {"cython", "python", "cuda"}:
+            raise ValueError("resolved_backend must be 'cython', 'python', or 'cuda'.")
 
         object.__setattr__(self, "eigenvalues", eigenvalues)
         object.__setattr__(self, "eigenvectors", eigenvectors)
@@ -122,7 +122,7 @@ def resolve_kernel_backend(backend: KernelBackend = "auto") -> str:
                 "backend='python' (legacy kernel_backend='numpy')."
             )
         return backend
-    if backend in {"python", "numpy"}:
+    if backend in {"python", "numpy", "cuda"}:
         return "numpy"
     raise ValueError(
         "kernel_backend must be 'auto', 'cython', 'python', or the legacy "
@@ -133,8 +133,10 @@ def resolve_kernel_backend(backend: KernelBackend = "auto") -> str:
 def resolve_backend(backend: PublicBackend = "auto") -> ResolvedBackend:
     """Resolve the public backend name to ``python`` or ``cython``."""
     backend = str(backend).lower()
+    if backend == "cuda":
+        return "cuda"
     if backend not in {"auto", "cython", "python"}:
-        raise ValueError("backend must be 'auto', 'cython', or 'python'.")
+        raise ValueError("backend must be 'auto', 'cython', 'python', or 'cuda'.")
     resolved = resolve_kernel_backend(backend)
     return "cython" if resolved == "cython" else "python"
 
@@ -565,83 +567,91 @@ def solve_generalized(
 
     shifted = (A - shift * B).tocsc()
     try:
-        lu = splu(shifted)
+        if resolved_backend == "cuda":
+            from fdfd_common.cuda import CudaFactor
+            lu = CudaFactor(shifted)
+        else:
+            lu = splu(shifted)
     except (RuntimeError, ValueError) as exc:
         raise ValueError(
             f"The shifted pencil A - sigma*B could not be factorized at "
             f"sigma={shift!r}; choose a shift away from an eigenvalue."
         ) from exc
 
-    def apply_shift_invert(vector):
-        right_hand_side = np.asarray(B @ vector, dtype=np.complex128)
-        return lu.solve(right_hand_side)
+    try:
+        def apply_shift_invert(vector):
+            right_hand_side = np.asarray(B @ vector, dtype=np.complex128)
+            return lu.solve(right_hand_side)
 
-    rng = np.random.default_rng(random_seed)
-    v0 = np.ones(n, dtype=np.complex128)
-    v0 += 1e-3 * (
-        rng.standard_normal(n) + 1j * rng.standard_normal(n)
-    )
-
-    best = None
-    total_steps = 0
-    for restart_count in range(max_restarts + 1):
-        basis, hessenberg = _arnoldi_factorization(
-            apply_shift_invert,
-            n,
-            ncv,
-            v0,
-            kernel_backend=resolved_backend,
-            continue_after_breakdown=num_modes > 1,
-            augmentation_rng=rng,
+        rng = np.random.default_rng(random_seed)
+        v0 = np.ones(n, dtype=np.complex128)
+        v0 += 1e-3 * (
+            rng.standard_normal(n) + 1j * rng.standard_normal(n)
         )
-        completed_steps = int(hessenberg.shape[1])
-        total_steps += completed_steps
-        if completed_steps < num_modes:
-            raise RuntimeError(
-                "Arnoldi breakdown occurred after "
-                f"{completed_steps} step(s), before {num_modes} requested "
-                "modes could be extracted."
-            )
 
-        candidate = _refined_candidate_data(
-            A,
-            B,
-            basis,
-            hessenberg,
-            shift,
-            num_modes,
-            kernel_backend=resolved_backend,
+        best = None
+        total_steps = 0
+        for restart_count in range(max_restarts + 1):
+            basis, hessenberg = _arnoldi_factorization(
+                apply_shift_invert,
+                n,
+                ncv,
+                v0,
+                kernel_backend=resolved_backend,
+                continue_after_breakdown=num_modes > 1,
+                augmentation_rng=rng,
+            )
+            completed_steps = int(hessenberg.shape[1])
+            total_steps += completed_steps
+            if completed_steps < num_modes:
+                raise RuntimeError(
+                    "Arnoldi breakdown occurred after "
+                    f"{completed_steps} step(s), before {num_modes} requested "
+                    "modes could be extracted."
+                )
+
+            candidate = _refined_candidate_data(
+                A,
+                B,
+                basis,
+                hessenberg,
+                shift,
+                num_modes,
+                kernel_backend=resolved_backend,
+            )
+            physical_residuals = candidate[2]
+            if not np.all(np.isfinite(physical_residuals)):
+                raise RuntimeError("Refined extraction produced nonfinite residuals.")
+
+            if best is None or _candidate_score(candidate) < _candidate_score(best):
+                best = candidate
+            if np.all(physical_residuals <= tolerance):
+                return _result_from_candidate(
+                    candidate,
+                    restart_count=restart_count,
+                    step_count=total_steps,
+                    converged=True,
+                    backend=resolved_backend,
+                )
+
+            if restart_count < max_restarts:
+                best_physical = best[2]
+                unconverged = best_physical > tolerance
+                restart_vectors = best[1][:, unconverged]
+                if restart_vectors.shape[1] == 0:
+                    restart_vectors = best[1]
+                v0 = _restart_vector(restart_vectors, rng, n)
+
+        return _result_from_candidate(
+            best,
+            restart_count=max_restarts,
+            step_count=total_steps,
+            converged=False,
+            backend=resolved_backend,
         )
-        physical_residuals = candidate[2]
-        if not np.all(np.isfinite(physical_residuals)):
-            raise RuntimeError("Refined extraction produced nonfinite residuals.")
-
-        if best is None or _candidate_score(candidate) < _candidate_score(best):
-            best = candidate
-        if np.all(physical_residuals <= tolerance):
-            return _result_from_candidate(
-                candidate,
-                restart_count=restart_count,
-                step_count=total_steps,
-                converged=True,
-                backend=resolved_backend,
-            )
-
-        if restart_count < max_restarts:
-            best_physical = best[2]
-            unconverged = best_physical > tolerance
-            restart_vectors = best[1][:, unconverged]
-            if restart_vectors.shape[1] == 0:
-                restart_vectors = best[1]
-            v0 = _restart_vector(restart_vectors, rng, n)
-
-    return _result_from_candidate(
-        best,
-        restart_count=max_restarts,
-        step_count=total_steps,
-        converged=False,
-        backend=resolved_backend,
-    )
+    finally:
+        if resolved_backend == "cuda":
+            lu.close()
 
 
 

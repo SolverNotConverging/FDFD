@@ -21,7 +21,7 @@ path = solver.make_bloch_path(
     points=((0.,0.), (np.pi/a,0.), (np.pi/a,np.pi/b), (0.,0.)),
     num_points=100,
 )
-result = solver.solve(beta_path=path, num_modes=4)
+result = solver.solve(backend="cpu", beta_path=path, num_modes=4)
 print("First TE band (Hz):", result.frequencies["TE"][0])
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "bands.h5")

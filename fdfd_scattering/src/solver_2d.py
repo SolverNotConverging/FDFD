@@ -86,12 +86,12 @@ class _ScatteringSolver2D:
         for prefix, tensor in (('ER', er_tensor), ('MR', mr_tensor)):
             for component, value in zip(('xx', 'yy', 'zz'), tensor):
                 getattr(self, prefix+component)[region_mask] = value
-        self._systems.clear()
+        self._clear_systems()
 
     def add_pec(self, region_mask):
         """Constrain a metal volume and its boundary at actual Yee sites."""
         self.pec_cells |= region_mask
-        self._systems.clear()
+        self._clear_systems()
 
     def pec_field_masks(self):
         x_nodes = occupied_nodes(self.pec_cells, 1)
@@ -143,7 +143,7 @@ class _ScatteringSolver2D:
         for prefix in ('ER', 'MR'):
             for component, scale in zip(('xx', 'yy', 'zz'), (sy/sx, sx/sy, sx*sy)):
                 getattr(self, prefix+component)[:] *= scale
-        self._systems.clear()
+        self._clear_systems()
 
     def set_total_field_region(self, inset):
         """Compile the same physical rectangle on each component lattice."""
@@ -213,29 +213,50 @@ class _ScatteringSolver2D:
         free &= ~self.pec_field_masks()[self.primary]
         return matrix.tocsr(), free.ravel()
 
-    def _solve(self, polarization, reuse_factorisation):
+    def _clear_systems(self):
+        for _, _, factor in self._systems.values():
+            if hasattr(factor, "close"):
+                factor.close()
+        self._systems.clear()
+
+    def _solve(self, polarization, reuse_factorisation, backend="cpu"):
         if self.polarization != polarization:
             raise ValueError('The source polarization must match the solve.')
-        if polarization not in self._systems:
+        key = polarization if backend != "cuda" else (polarization, "cuda")
+        if key not in self._systems:
             matrix, free = self._build_system()
-            self._systems[polarization] = matrix, free, None
-        matrix, free, factor = self._systems[polarization]
+            self._systems[key] = matrix, free, None
+        matrix, free, factor = self._systems[key]
         rhs = (self.Q @ matrix-matrix @ self.Q) @ self.source
         reduced = matrix[free][:, free].tocsc()
         if reuse_factorisation and factor is None:
-            factor = spla.factorized(reduced)
-            self._systems[polarization] = matrix, free, factor
+            if backend == "cuda":
+                from fdfd_common.cuda import CudaFactor
+                factor = CudaFactor(reduced)
+            else:
+                factor = spla.factorized(reduced)
+            self._systems[key] = matrix, free, factor
         values = np.zeros(self.N, dtype=complex)
-        values[free] = factor(rhs[free]) if reuse_factorisation else spla.spsolve(reduced, rhs[free])
+        if backend == "cuda" and not reuse_factorisation:
+            from fdfd_common.cuda import CudaFactor
+            with CudaFactor(reduced) as direct:
+                values[free] = direct(rhs[free])
+        else:
+            values[free] = factor(rhs[free]) if reuse_factorisation else spla.spsolve(reduced, rhs[free])
+        residual = reduced @ values[free] - rhs[free]
+        scale = np.linalg.norm(abs(reduced) @ abs(values[free])) + np.linalg.norm(rhs[free])
+        self.relative_residual = float(np.linalg.norm(residual) / max(scale, np.finfo(float).tiny))
+        if not np.isfinite(values).all() or self.relative_residual > 1e-8:
+            raise ValueError("Scattering solve failed the original-system residual check.")
         field = values.reshape(self.primary_shape)
         setattr(self, self.primary, field)
         return field
 
-    def solve_total_field_TE(self, reuse_factorisation=True):
-        return self._solve('TE', reuse_factorisation)
+    def solve_total_field_TE(self, reuse_factorisation=True, backend="cpu"):
+        return self._solve('TE', reuse_factorisation, backend)
 
-    def solve_total_field_TM(self, reuse_factorisation=True):
-        return self._solve('TM', reuse_factorisation)
+    def solve_total_field_TM(self, reuse_factorisation=True, backend="cpu"):
+        return self._solve('TM', reuse_factorisation, backend)
 
     def transverse_fields(self, polarization):
         dex, dey, dhx, dhy = self._yeeder2d()

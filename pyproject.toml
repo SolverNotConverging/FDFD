@@ -27,6 +27,8 @@ Releases = "https://github.com/SolverNotConverging/FDFD/releases"
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "docutils"]
+cuda12 = ["cupy-cuda12x>=13.6,<15"]
+cuda13 = ["cupy-cuda13x>=14,<15"]
 
 [dependency-groups]
 dev = [

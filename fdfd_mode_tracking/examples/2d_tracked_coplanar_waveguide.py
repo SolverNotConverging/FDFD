@@ -52,7 +52,7 @@ resolution = tuple(int(np.ceil((hi-lo)/cell_size - 1e-10))
 tracker.mesh(resolution=resolution, subpixels=1)
 
 sweep = tracker.solve(
-    num_modes=6,  # All returned candidates are tracked; index guess is automatic.
+    backend="cpu", num_modes=6,  # All returned candidates are tracked; index guess is automatic.
     tracking_config=TrackingConfig(
         max_depth=3, max_solves=160,
         verification_overlap=.9,

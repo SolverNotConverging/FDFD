@@ -3,11 +3,14 @@ import numpy as np
 from scipy.sparse.linalg import eigs
 
 
-def solve_eigenpairs(operator, *, k, sigma, tol, wide_search=False):
+def solve_eigenpairs(operator, *, k, sigma, tol, wide_search=False, backend="cpu"):
     """Retry an exactly singular shift without perturbing the physical operator."""
     # A larger Krylov space helps retain repeated eigenvalues in automatic
     # multi-mode sweeps. This does not increase the returned eigenpair count.
     options = {'ncv': min(operator.shape[0], max(6*k+1, 64))} if wide_search else {}
+    if backend == "cuda":
+        from fdfd_common.cuda import eigenpairs
+        return eigenpairs(operator, k=k, sigma=sigma, tol=tol, **options)
     try:
         return eigs(operator, k=k, sigma=sigma, tol=tol, **options)
     except RuntimeError as exc:

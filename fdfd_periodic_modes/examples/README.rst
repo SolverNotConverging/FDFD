@@ -41,3 +41,6 @@ Plots are saved beside their source data.
 Sweeps show a ``tqdm`` progress bar as each frequency finishes.
 The 2D antenna uses a fine grid to resolve its 50e-6 m PEC patch. See the
 `FEM comparison <../docs/fem_comparison.rst>`_ for parameters and convergence.
+
+Examples explicitly use ``backend="cpu"``. Change to ``backend="cuda"``
+for cuDSS acceleration after installing the optional CUDA dependencies.

@@ -57,7 +57,7 @@ class _WaveguideAPI(GridSceneMixin):
                     'pml': tuple(dict(p) for p in self._pmls),
                     'boundaries': boundary_provenance(self._backend),
                     'source_indices': tuple(source_indices),
-                    'solve_info': {'eigensolver_tolerance': self._backend._eigensolver_tolerance,
+                    'solve_info': {'backend': getattr(self._backend, '_execution_backend', 'cpu'), 'eigensolver_tolerance': self._backend._eigensolver_tolerance,
                                    'neff_guess': self._neff_search_guess,
                                    'residuals': np.asarray(residuals),
                                    'field_residuals': np.asarray(field_residuals),
@@ -81,8 +81,10 @@ class ModeSolver1D(_WaveguideAPI):
         return self.add_geometry(shape=shapes.Interval(bounds=x_range), material=material, name=name, clip=clip)
     def mesh(self, *, resolution=None, max_element_size=None, subpixels=100):
         return self._mesh_grid(resolution=resolution, max_element_size=max_element_size, subpixels=subpixels)
-    def solve(self, *, num_modes=4, neff_guess=None, polarization='both', eigensolver_tolerance=0.):
+    def solve(self, *, num_modes=4, neff_guess=None, polarization='both', eigensolver_tolerance=0., backend="cpu"):
         """Return num_modes total modes; select TE, TM, or both polarizations."""
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         validate_solve(num_modes, neff_guess, eigensolver_tolerance)
         if polarization not in ('TE', 'TM', 'both'):
             raise ConfigurationError('polarization must be TE, TM, or both.')
@@ -91,6 +93,7 @@ class ModeSolver1D(_WaveguideAPI):
         backend = self._backend
         backend.num_modes = int(num_modes)
         backend._eigensolver_tolerance = eigensolver_tolerance
+        backend._execution_backend = execution
         self._result = None
         backend.solve(sigma=-self._resolve_neff_guess(neff_guess)**2)
         candidates = [(pol, i, getattr(backend, 'neff_'+pol)[i]) for pol in ('TE', 'TM')
@@ -123,11 +126,14 @@ class ModeSolver2D(_WaveguideAPI):
         return self.add_geometry(shape=shapes.Polygon(points=points), material=material, name=name, clip=clip)
     def mesh(self, *, resolution=None, max_element_size=None, subpixels=8):
         return self._mesh_grid(resolution=resolution, max_element_size=max_element_size, subpixels=subpixels)
-    def solve(self, *, num_modes=4, neff_guess=None, eigensolver_tolerance=0.):
+    def solve(self, *, num_modes=4, neff_guess=None, eigensolver_tolerance=0., backend="cpu"):
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         validate_solve(num_modes, neff_guess, eigensolver_tolerance)
         self._ensure_grid()
         self._backend.num_modes = int(num_modes)
         self._backend._eigensolver_tolerance = eigensolver_tolerance
+        self._backend._execution_backend = execution
         self._result = None
         self._backend.solve(sigma=-self._resolve_neff_guess(neff_guess)**2)
         fields = {name: np.array(getattr(self._backend, name), copy=True) for name in ('Ex','Ey','Ez','Hx','Hy','Hz')}

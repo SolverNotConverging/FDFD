@@ -85,7 +85,7 @@ class _ModeTrackerAPI(GridSceneMixin):
 
     def solve(self, *, num_modes=4, neff_guess=None, polarization='both',
               eigensolver_tolerance=1e-10,
-              reference_frequency=None, tracking_config=None, progress=True):
+              reference_frequency=None, tracking_config=None, progress=True, backend="cpu"):
         """Solve and automatically track num_modes candidates per frequency."""
         if isinstance(num_modes, bool) or int(num_modes) != num_modes or num_modes < 1:
             raise ConfigurationError('num_modes must be a positive integer.')
@@ -102,7 +102,7 @@ class _ModeTrackerAPI(GridSceneMixin):
         self._result = track_modes(self._factory, self.frequencies, port=self.port,
                                    config=config, seed_modes=None,
                                    reference_frequency=reference_frequency,
-                                   progress=progress)
+                                   progress=progress, backend=backend)
         return self.result
 
     def show(self, *, component='E', quantity='magnitude', block=True):

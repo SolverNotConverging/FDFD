@@ -85,6 +85,65 @@ After installation, you can use imports such as these from any folder in that en
 from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D, Material, materials, shapes
 ```
 
+## Optional CUDA build
+
+CUDA acceleration is optional. All six solvers support `backend="cuda"`:
+waveguide modes (1D/2D), periodic modes (2D/3D), band structure, and scattering.
+Both mode-tracking wrappers and `track_modes` also accept `backend="cuda"`
+and forward it to their verification solves. CPU execution remains the
+default; examples explicitly use `backend="cpu"`.
+
+Install the CuPy extra matching your NVIDIA CUDA toolkit:
+
+```powershell
+# From the repository, using uv and the project environment:
+uv sync --extra cuda13
+# For CUDA 12 instead:
+uv sync --extra cuda12
+```
+
+For a package installation, use `python -m pip install ".[cuda13]"` or
+`python -m pip install ".[cuda12]"`. These extras install CuPy; no Cython build
+is needed for CUDA execution. An NVIDIA GPU, compatible driver/toolkit, and
+cuDSS >= 0.8 are required. NVIDIA runtime binaries are not bundled in wheels.
+
+Install the cuDSS shared library separately. Discovery checks system paths,
+NVIDIA packages in the Python environment, and `build/cuda-deps`. You can
+extract a cuDSS distribution beneath that directory or select an installation
+explicitly:
+
+```powershell
+$env:CUDSS_LIBRARY = "C:/path/to/cudss/bin/cudss64_0.dll"
+uv run --extra cuda13 python fdfd_waveguide_modes/examples/2d_rectangular_waveguide.py
+```
+
+Change the example's solve call to `backend="cuda"` before running. On Linux,
+set `CUDSS_LIBRARY` to `/path/to/libcudss.so` and ensure its CUDA dependencies
+are on the dynamic loader's search path.
+
+```python
+waveguide.solve(backend="cuda", num_modes=4, neff_guess=1.5)
+periodic.solve(backend="cuda", num_modes=4, neff_guess=1.5,
+               eigensolver="refined")  # eigensolver="eigs" also supports CUDA
+bands.solve(backend="cuda", beta_path=path, num_modes=4)
+scattering.solve(backend="cuda", reuse_factorization=True)
+```
+
+cuDSS performs sparse numerical factorization and direct/shifted solves on
+CUDA. ARPACK/refined Arnoldi iteration, assembly, field reconstruction, and
+small projected calculations stay on the CPU; eigenvalue iteration transfers
+vectors between host and device. Scattering factors can be reused for new
+sources and are invalidated when materials, PEC geometry, or PMLs change.
+Explicit CUDA requests report missing dependencies instead of falling back.
+GPU acceleration does not guarantee a speedup on small grids.
+
+To run the optional CPU/GPU agreement tests in PowerShell:
+
+```powershell
+$env:FDFD_TEST_CUDA = "1"
+uv run --extra cuda13 python -m pytest tests/test_cuda_solvers.py -q
+```
+
 ## Optional Cython build
 
 The Cython kernel is **completely optional**. It accelerates the periodic eigenmodes calculation by speeding up parts of `periodic_eigensolver`. If it is not built, the solver automatically uses the NumPy fallback. Normal use and installation require no compiler; building this optional kernel requires a C compiler.

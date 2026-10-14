@@ -22,7 +22,7 @@ for case, frequency in enumerate(tqdm(frequencies, desc="Frequency sweep", unit=
     solver = ModeSolver1D(frequency=frequency, x_range=10e-3)
     solver.add_layer(x_range=(3e-3, 7e-3), material=core)
     solver.mesh(resolution=200)
-    result = solver.solve(num_modes=3)
+    result = solver.solve(backend="cpu", num_modes=3)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     result.save(OUTPUT / f"case_{case:03d}_{frequency/1e9:.6g}GHz.h5")
     neff_sweep.append(result.neff)

@@ -27,3 +27,6 @@ Scripts that save results use
 ``fdfd_band_structure/outputs/examples/<example>/`` in the repository.
 
 Sweeps show a ``tqdm`` progress bar as each Bloch wavevector finishes.
+
+Examples explicitly use ``backend="cpu"``. Change to ``backend="cuda"``
+for cuDSS acceleration after installing the optional CUDA dependencies.

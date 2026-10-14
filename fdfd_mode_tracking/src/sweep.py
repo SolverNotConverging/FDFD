@@ -15,7 +15,7 @@ class _BudgetExhausted(RuntimeError):
 
 
 def track_modes(make_solver, frequencies, *, port=None, config=None, seed_modes=(0,),
-                reference_frequency=None, progress=True):
+                reference_frequency=None, progress=True, backend="cpu"):
     """Track modes from a factory ``make_solver(frequency_hz, VerificationSpec)``.
 
     The factory returns a newly configured and meshed 1D/2D waveguide solver.
@@ -27,15 +27,17 @@ def track_modes(make_solver, frequencies, *, port=None, config=None, seed_modes=
     progress=False hides the frequency progress bar. Adaptive frequencies grow
     its total; verification stages are shown without double-counting a frequency.
     """
+    from fdfd_common.cuda import resolve_backend
+    backend = resolve_backend(backend)
     with tqdm(desc='Mode tracking', unit='freq', disable=not progress,
               dynamic_ncols=True) as progress_bar:
         return _track_modes(make_solver, frequencies, port=port, config=config,
                             seed_modes=seed_modes, reference_frequency=reference_frequency,
-                            progress_bar=progress_bar)
+                            progress_bar=progress_bar, backend=backend)
 
 
 def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
-                 reference_frequency, progress_bar):
+                 reference_frequency, progress_bar, backend="cpu"):
     port, config = port or PortSpec(), config or TrackingConfig()
     requested = np.asarray(frequencies, float)
     if requested.ndim != 1 or not len(requested) or not np.isfinite(requested).all() or np.any(requested <= 0):
@@ -81,6 +83,8 @@ def _track_modes(make_solver, frequencies, *, port, config, seed_modes,
             guess = material_index_guess(solver)
         kwargs = dict(num_modes=count, neff_guess=guess, eigensolver_tolerance=config.eigensolver_tolerance)
         if len(solver.mesh_data.axes) == 1: kwargs['polarization'] = config.polarization
+        if backend == "cuda":
+            kwargs["backend"] = backend
         solves += 1
         result = solver.solve(**kwargs)
         result.metadata['neff_guess'] = guess

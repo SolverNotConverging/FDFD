@@ -86,7 +86,9 @@ class ScatteringSolver2D(GridSceneMixin):
         """Set the rectangular total-field region's physical inset in metres."""
         self._mask_distance = materials._positive(inset, 'inset')
         self._result = None
-    def solve(self, *, reuse_factorization=True):
+    def solve(self, *, reuse_factorization=True, backend="cpu"):
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         if self._source_settings is None or self._mask_distance is None:
             raise ConfigurationError('Define add_source() and set_source_region(inset=...) before solving.')
         self._ensure_grid()
@@ -106,7 +108,7 @@ class ScatteringSolver2D(GridSceneMixin):
             raise ConfigurationError('The total-field source region must enclose the PEC scatterer.')
         self._result=None
         operation = backend.solve_total_field_TE if self.polarization=='TE' else backend.solve_total_field_TM
-        operation(reuse_factorisation=reuse_factorization)
+        operation(reuse_factorisation=reuse_factorization, backend=execution)
         fields = {name: np.array(field.T[..., None], copy=True)
                   for name, field in backend.transverse_fields(self.polarization).items()}
         coordinates = field_coordinates(self, fields)
@@ -114,5 +116,5 @@ class ScatteringSolver2D(GridSceneMixin):
             coordinates, np.array([],dtype=complex),
             {'k0':backend.k0,'field_representation':'TF/SF fields; staggered-grid',
              'material_background': material_background(self),
-             'context':self._scene_context(),'solve_info':{'polarization':self.polarization}})
+             'context':self._scene_context(),'solve_info':{'polarization':self.polarization,'backend':execution,'relative_residual':backend.relative_residual}})
         return self.result

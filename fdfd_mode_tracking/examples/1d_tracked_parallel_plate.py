@@ -25,7 +25,7 @@ tracker.add_layer(x_range=(-dx, 0.), material=materials.PEC, name='left plate')
 tracker.add_layer(x_range=(width, width+dx), material=materials.PEC, name='right plate')
 tracker.mesh(resolution=cells+2, subpixels=1)
 sweep = tracker.solve(
-    num_modes=4, polarization='TE',
+    backend="cpu", num_modes=4, polarization='TE',
     tracking_config=TrackingConfig(max_depth=6, verification_overlap=.995,
                                    verification_beta_tolerance=.004),
 )

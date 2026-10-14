@@ -22,7 +22,7 @@ solver.add_box(x_range=(4e-3, 8e-3), y_range=(4e-3, 5e-3), z_range=(2e-3, 4e-3),
                name="loading tooth")
 solver.add_pml(thickness=1.5e-3, direction="x", sigma_max=1.)
 solver.mesh(resolution=(12, 8, 8))
-result = solver.solve(num_modes=4, neff_guess=0, eigensolver="eigs")
+result = solver.solve(backend="cpu", num_modes=4, neff_guess=0, eigensolver="eigs")
 print("Bloch effective indices:", result.neff)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "modes.h5")

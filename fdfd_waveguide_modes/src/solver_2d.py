@@ -1137,7 +1137,7 @@ class _ModeSolver2D:
             )
 
         eigenvalues, eigenvectors_reduced = solve_eigenpairs(
-            Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.),
+            Omega, k=self.num_modes, sigma=sigma, tol=getattr(self, "_eigensolver_tolerance", 0.), backend=getattr(self, "_execution_backend", "cpu"),
             wide_search=getattr(self, "_tracking_wide_search", False))
         eigenvectors = np.zeros((self.n_e, self.num_modes), dtype=complex)
         eigenvectors[free_exy, :] = eigenvectors_reduced

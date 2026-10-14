@@ -34,7 +34,7 @@ tracker.add_rectangle(x_range=(0., width), y_range=(width, width + dx),
                       material=materials.PEC, name='top wall')
 tracker.mesh(resolution=(cells + 2, cells + 2), subpixels=1)
 sweep = tracker.solve(
-    num_modes=12,
+    backend="cpu", num_modes=12,
     tracking_config=TrackingConfig(
         cluster_gap=2e-4,
         max_depth=4,

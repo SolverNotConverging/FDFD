@@ -27,7 +27,7 @@ def solver_for_frequency(frequency, verification):
 
 cutoff = C/(2*width)
 sweep = track_modes(solver_for_frequency, cutoff*np.array([.75, .85, 1.15, 1.25]),
-                    port=PortSpec(boundary='enclosed'),
+                    backend="cpu", port=PortSpec(boundary='enclosed'),
                     config=TrackingConfig(num_candidates=2, max_candidates=4,
                         polarization='TE', neff_guess=-.8j, max_depth=6))
 OUTPUT.mkdir(parents=True, exist_ok=True)

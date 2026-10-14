@@ -372,7 +372,7 @@ Returns: the documented data or None when storing state on the solver.
 
 .. code-block:: python
 
-    BandStructureSolver2D.solve(*, beta_path, num_modes=4, polarizations=('TE', 'TM'), eigenvalue_guess=0.0, eigensolver_tolerance=0.0)
+    BandStructureSolver2D.solve(*, beta_path, num_modes=4, polarizations=('TE', 'TM'), eigenvalue_guess=0.0, eigensolver_tolerance=0.0, backend='cpu')
 
 Solve complex eigenfrequencies; dispersive/SIBC materials are unsupported.
 
@@ -571,3 +571,17 @@ provided by ``fdfd_common``; examples need only the solver package import.
 See the `shared API reference <../../fdfd_common/docs/API_REFERENCE.rst>`_
 for their definitions. Each solver supports the material and shape types
 listed in its guide.
+
+CUDA backend
+------------
+
+The ``backend`` keyword accepts ``"cpu"`` (default), ``"auto"`` (CPU), or
+``"cuda"``. CUDA uses optional CuPy and cuDSS >= 0.8 for sparse numerical
+factorization and direct/shifted solves. ARPACK/refined Arnoldi iteration,
+assembly, field reconstruction and small projected computations stay on the
+CPU. Eigenvalue solves include vector transfers each iteration.
+
+Install ``fdfd[cuda13]`` or ``fdfd[cuda12]`` for your CUDA toolkit. cuDSS
+library discovery checks system paths, NVIDIA packages in the Python
+environment, and ``build/cuda-deps``. ``CUDSS_LIBRARY`` overrides discovery.
+Explicit CUDA requests fail with an actionable error if unavailable.

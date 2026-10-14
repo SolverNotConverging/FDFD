@@ -12,7 +12,7 @@ def eigenpair_residuals(A, B, values, vectors):
     return np.linalg.norm(left-right, axis=0) / np.maximum(scale, np.finfo(float).tiny)
 
 
-def generalized_eigs(A, M, *, k, sigma, tol, ncv, v0=None):
+def generalized_eigs(A, M, *, k, sigma, tol, ncv, v0=None, backend="cpu"):
     """Solve A v = gamma M v without assuming M is Hermitian or positive.
 
     Periodic Yee averages do not satisfy SciPy's generalized-M contract.
@@ -20,14 +20,18 @@ def generalized_eigs(A, M, *, k, sigma, tol, ncv, v0=None):
     inner product; gamma = sigma + 1 / theta restores the physical values.
     This also permits singular M for an even number of periodic cells.
     """
-    try:
-        factor = splu((A-sigma*M).tocsc())
-    except RuntimeError as exc:
-        raise SolverError('The periodic shifted pencil is singular; choose a nearby neff_guess.') from exc
-    operator = LinearOperator(A.shape, dtype=np.complex128,
-        matvec=lambda vector: factor.solve(M @ vector))
-    transformed, vectors = _arpack_eigs(operator, k=k, which='LM', tol=tol, ncv=ncv, v0=v0)
-    values = sigma + 1.0/transformed
+    if backend == "cuda":
+        from fdfd_common.cuda import eigenpairs
+        values, vectors = eigenpairs(A, M, k=k, sigma=sigma, tol=tol, ncv=ncv, v0=v0)
+    else:
+        try:
+            factor = splu((A-sigma*M).tocsc())
+        except RuntimeError as exc:
+            raise SolverError('The periodic shifted pencil is singular; choose a nearby neff_guess.') from exc
+        operator = LinearOperator(A.shape, dtype=np.complex128,
+            matvec=lambda vector: factor.solve(M @ vector))
+        transformed, vectors = _arpack_eigs(operator, k=k, which='LM', tol=tol, ncv=ncv, v0=v0)
+        values = sigma + 1.0/transformed
     residuals = eigenpair_residuals(A, M, values, vectors)
     limit = max(1e-8, 100.0*float(tol))
     if not np.isfinite(values).all() or not np.isfinite(residuals).all() or np.max(residuals) > limit:

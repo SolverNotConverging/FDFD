@@ -30,7 +30,7 @@ tracker = ModeTracker1D(
 tracker.add_layer(x_range=(12e-3, 18e-3), material=medium)
 tracker.mesh(resolution=cells + 2, subpixels=10)
 sweep = tracker.solve(
-    num_modes=5,
+    backend="cpu", num_modes=5,
     polarization='both',
     tracking_config=TrackingConfig(
         max_depth=6,

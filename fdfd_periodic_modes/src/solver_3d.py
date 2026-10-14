@@ -951,6 +951,7 @@ class _PeriodicModeSolver3D:
             self.eigenvalues, eigenvectors_reduced = eigs(
                 A,
                 M=B,
+                **({"backend": "cuda"} if kernel_backend == "cuda" else {}),
                 k=self.num_modes,
                 sigma=sigma_guess,
                 tol=tol,
@@ -982,7 +983,7 @@ class _PeriodicModeSolver3D:
             eigenvectors_reduced = refined_result.eigenvectors
             self.refined_residuals = refined_result.physical_residuals
             self.refined_restarts = refined_result.restart_count
-            self.refined_backend = resolve_kernel_backend(kernel_backend)
+            self.refined_backend = "cuda" if kernel_backend == "cuda" else resolve_kernel_backend(kernel_backend)
         else:
             raise ValueError("method must be 'eigs' or 'refined'.")
 

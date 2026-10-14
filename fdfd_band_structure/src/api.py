@@ -111,12 +111,15 @@ class BandStructureSolver2D(GridSceneMixin):
         for _ in range(num_points-1-len(lengths)):
             counts[np.argmax(lengths/counts)]+=1
         return np.vstack([*(np.linspace(a,b,n,endpoint=False) for a,b,n in zip(pts[:-1],pts[1:],counts)),pts[-1:]]).T
-    def solve(self, *, beta_path, num_modes=4, polarizations=('TE','TM'), eigenvalue_guess=0., eigensolver_tolerance=0.):
+    def solve(self, *, beta_path, num_modes=4, polarizations=('TE','TM'), eigenvalue_guess=0., eigensolver_tolerance=0., backend="cpu"):
         """Solve complex eigenfrequencies; dispersive/SIBC materials are unsupported."""
         from fdfd_common._yee_scene import validate_solve
+        from fdfd_common.cuda import resolve_backend
+        execution = resolve_backend(backend)
         validate_solve(num_modes,eigenvalue_guess,eigensolver_tolerance)
         self._ensure_grid()
         self._backend._eigensolver_tolerance=eigensolver_tolerance
+        self._backend._execution_backend=execution
         self._result=None
         native=self._backend.compute_band_structure(np.asarray(beta_path),num_bands=num_modes,
             polarisations=polarizations,eig_sigma=eigenvalue_guess)
@@ -124,5 +127,5 @@ class BandStructureSolver2D(GridSceneMixin):
         self._result=BandStructureResult(self.mesh_data,np.array(native.beta_path),
             {key:value*299792458./period for key,value in native.frequencies.items()},native.eigenvalues,
             {'x_period':period,'context':self._scene_context(),
-             'solve_info':{'eigensolver_tolerance':eigensolver_tolerance,'eigenvalue_guess':eigenvalue_guess}})
+             'solve_info':{'backend':execution,'eigensolver_tolerance':eigensolver_tolerance,'eigenvalue_guess':eigenvalue_guess}})
         return self.result

@@ -20,7 +20,7 @@ solver.add_rectangle(x_range=(1.27e-3, 1.37e-3), z_range=(1e-3, 2e-3),
 solver.add_pml(thickness=2.5e-3, direction="x+")
 # Resolve the 50 um PEC patch and slab interfaces; the benchmark shows refinement.
 solver.mesh(resolution=(100, 80))
-result = solver.solve(num_modes=4, neff_guess=0., eigensolver_tolerance=1e-9, ncv=36)
+result = solver.solve(backend="cpu", num_modes=4, neff_guess=0., eigensolver_tolerance=1e-9, ncv=36)
 print("Bloch effective indices:", result.neff)
 print("Maxwell residuals:", result.solve_info["residuals"])
 OUTPUT.mkdir(parents=True, exist_ok=True)

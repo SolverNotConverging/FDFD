@@ -25,3 +25,6 @@ substantially longer. 3D cases also require more memory.
 Run a script from this directory, or pass its path from the repository root.
 Scripts that save results use
 ``fdfd_scattering/outputs/examples/<example>/`` in the repository.
+
+Examples explicitly use ``backend="cpu"``. Change to ``backend="cuda"``
+for cuDSS acceleration after installing the optional CUDA dependencies.

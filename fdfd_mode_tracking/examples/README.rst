@@ -50,3 +50,6 @@ remains visible, although its singular exact-cutoff profile cannot be exported.
 
 Generated artifacts live under ``fdfd_mode_tracking/outputs/examples/``.
 See the `tracking guide <../docs/guide.rst>`_.
+
+Examples explicitly select ``backend="cpu"``; use ``backend="cuda"`` to
+accelerate the underlying waveguide and verification solves with cuDSS.
