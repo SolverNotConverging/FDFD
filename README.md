@@ -1,168 +1,60 @@
-# FDFD
+# fdfd
 
-This repository provides finite-difference frequency-domain (FDFD) solvers for electromagnetic problems, including waveguide modes, periodic eigenmodes, photonic band structures, scattering, and mode tracking. Each solver family includes its source code, documentation, and runnable examples.
-
-You can run examples directly from the downloaded source after installing the required Python packages, or optionally install FDFD to use the solvers from any folder in the same environment.
-
-## Choose a solver
-
-| Solver | What it solves | Import | Documentation | Examples |
-|---|---|---|---|---|
-| band structure | Finds eigenfrequencies versus Bloch wavevector in 2D periodic structures, for photonic bands and band gaps. | `fdfd_band_structure` | [Guide](fdfd_band_structure/docs/guide.rst) | [Examples](fdfd_band_structure/examples/README.rst) |
-| mode tracking | Follows the same waveguide modes across a frequency sweep, including crossings, degeneracies, and cutoff; provides bound-mode fields for ports. | `fdfd_mode_tracking` | [Guide](fdfd_mode_tracking/docs/guide.rst) | [Examples](fdfd_mode_tracking/examples/README.rst) |
-| periodic modes | Finds Bloch propagation constants and fields at a chosen frequency in 2D or 3D structures that repeat along the propagation direction, such as loaded guides and leaky-wave antennas. | `fdfd_periodic_modes` | [Guide](fdfd_periodic_modes/docs/guide.rst) | [Examples](fdfd_periodic_modes/examples/README.rst) |
-| scattering | Computes total and scattered fields for 2D TE or TM illumination problems, such as a plane wave incident on a dielectric or PEC cylinder. | `fdfd_scattering` | [Guide](fdfd_scattering/docs/guide.rst) | [Examples](fdfd_scattering/examples/README.rst) |
-| waveguide modes | Finds propagation constants, effective indices, and mode fields at a chosen frequency for layered 1D guides or 2D waveguide cross sections. | `fdfd_waveguide_modes` | [Guide](fdfd_waveguide_modes/docs/guide.rst) | [Examples](fdfd_waveguide_modes/examples/README.rst) |
-
-Each solver folder contains its own `src/`, `docs/`, and `examples/`. Shared materials and geometry live in `fdfd_common/`.
-
-## Download, install required packages, and run
-
-Download the repository using **Code → Download ZIP** on [GitHub](https://github.com/SolverNotConverging/FDFD), extract it, and open a terminal in the extracted folder. You can also download it with Git:
-
-```sh
-git clone https://github.com/SolverNotConverging/FDFD.git
-cd FDFD
-```
-
-Install the required Python packages and run an example:
-
-```sh
-python -m pip install -r requirements.txt
-python fdfd_waveguide_modes/examples/1d_parallel_plate_waveguide.py
-```
-
-The examples import the solver source directly. **Installing FDFD itself is not required.** Choose other examples from the table above.
-
-## Optional installation: import from any folder
-
-Installing FDFD mainly lets you import and use the solvers from any folder in the same Python environment, including your own scripts and notebooks. The installation also installs the required Python packages. You can install the release wheel directly, or install from the downloaded source.
-
-The [release wheel](https://github.com/SolverNotConverging/FDFD/releases/latest)
-works on Windows, macOS, and Linux. It is pure Python (`py3-none-any`), includes
-the NumPy fallback, and contains no Cython kernel. Install it directly without
-building FDFD:
-
-```sh
-python -m pip install https://github.com/SolverNotConverging/FDFD/releases/download/v1.1.2/fdfd-1.1.2-py3-none-any.whl
-```
-
-In an activated environment, you can use `uv pip install` with the same wheel URL.
-In a conda environment, use that environment's `python -m pip install` command.
-The methods below install from the downloaded source instead.
-
-### pip
-
-With your Python environment active:
-
-```sh
-python -m pip install .
-```
-
-### uv
-
-With your environment active, [uv](https://docs.astral.sh/uv/pip/packages/) can install FDFD:
-
-```sh
-uv pip install .
-```
-
-To create an environment first, run `uv venv`. Activate it with `.\.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on Linux or macOS, then run the installation command above. Keep that environment active when using FDFD from another folder.
-
-### Conda environment
-
-Create and activate a [Conda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-pkgs.html#using-pip-in-an-environment), then install FDFD with its pip:
-
-```sh
-conda create -n fdfd python pip
-conda activate fdfd
-python -m pip install .
-```
-
-After installation, you can use imports such as these from any folder in that environment:
+Finite-difference frequency-domain (FDFD) electromagnetic solvers on Yee
+grids: waveguide modes, periodic (Bloch) modes, photonic band structures,
+2D scattering, and mode tracking across frequency. Every solver shares one
+workflow, one set of materials and shapes, and one result format.
 
 ```python
-from fdfd_waveguide_modes import ModeSolver1D, ModeSolver2D, Material, materials, shapes
+import fdfd
+
+solver = fdfd.ModeSolver2D(frequency=100e9, x_range=(0, 10e-3), y_range=(0, 10e-3))
+solver.add_circle(center=(5e-3, 5e-3), radius=3e-3, material=fdfd.Material(name="core", epsilon=6))
+solver.mesh(resolution=(50, 50))
+result = solver.solve(num_modes=4, device="auto")  # GPU if available, else CPU
+print(result.neff)
+result.save("modes.h5")  # fdfd.load("modes.h5") reads any result
+result.show()
 ```
 
-## Optional CUDA build
+| Solver | Problem |
+| --- | --- |
+| `ModeSolver1D`, `ModeSolver2D` | Guided modes of slabs and waveguide cross-sections, including metal wall loss |
+| `PeriodicModeSolver2D`, `PeriodicModeSolver3D` | Complex Bloch modes of structures periodic along z, e.g. leaky-wave antennas |
+| `BandStructureSolver2D` | Photonic bands of a cell periodic in x and y |
+| `ScatteringSolver2D` | TE/TM plane-wave or line-source scattering |
+| `ModeTracker1D`, `ModeTracker2D` | Modes followed through crossings and cutoff over a frequency sweep, with verification |
 
-CUDA acceleration is optional. All six solvers support `backend="cuda"`:
-waveguide modes (1D/2D), periodic modes (2D/3D), band structure, and scattering.
-Both mode-tracking wrappers and `track_modes` also accept `backend="cuda"`
-and forward it to their verification solves. CPU execution remains the
-default; examples explicitly use `backend="cpu"`.
+## Install
 
-Install the CuPy extra matching your NVIDIA CUDA toolkit:
-
-```powershell
-# From the repository, using uv and the project environment:
-uv sync --extra cuda13
-# For CUDA 12 instead:
-uv sync --extra cuda12
-```
-
-For a package installation, use `python -m pip install ".[cuda13]"` or
-`python -m pip install ".[cuda12]"`. These extras install CuPy; no Cython build
-is needed for CUDA execution. An NVIDIA GPU, compatible driver/toolkit, and
-cuDSS >= 0.8 are required. NVIDIA runtime binaries are not bundled in wheels.
-
-Install the cuDSS shared library separately. Discovery checks system paths,
-NVIDIA packages in the Python environment, and `build/cuda-deps`. You can
-extract a cuDSS distribution beneath that directory or select an installation
-explicitly:
-
-```powershell
-$env:CUDSS_LIBRARY = "C:/path/to/cudss/bin/cudss64_0.dll"
-uv run --extra cuda13 python fdfd_waveguide_modes/examples/2d_rectangular_waveguide.py
-```
-
-Change the example's solve call to `backend="cuda"` before running. On Linux,
-set `CUDSS_LIBRARY` to `/path/to/libcudss.so` and ensure its CUDA dependencies
-are on the dynamic loader's search path.
-
-```python
-waveguide.solve(backend="cuda", num_modes=4, neff_guess=1.5)
-periodic.solve(backend="cuda", num_modes=4, neff_guess=1.5,
-               eigensolver="refined")  # eigensolver="eigs" also supports CUDA
-bands.solve(backend="cuda", beta_path=path, num_modes=4)
-scattering.solve(backend="cuda", reuse_factorization=True)
-```
-
-cuDSS performs sparse numerical factorization and direct/shifted solves on
-CUDA. ARPACK/refined Arnoldi iteration, assembly, field reconstruction, and
-small projected calculations stay on the CPU; eigenvalue iteration transfers
-vectors between host and device. Scattering factors can be reused for new
-sources and are invalidated when materials, PEC geometry, or PMLs change.
-Explicit CUDA requests report missing dependencies instead of falling back.
-GPU acceleration does not guarantee a speedup on small grids.
-
-To run the optional CPU/GPU agreement tests in PowerShell:
-
-```powershell
-$env:FDFD_TEST_CUDA = "1"
-uv run --extra cuda13 python -m pytest tests/test_cuda_solvers.py -q
-```
-
-## Optional Cython build
-
-The Cython kernel is **completely optional**. It accelerates the periodic eigenmodes calculation by speeding up parts of `periodic_eigensolver`. If it is not built, the solver automatically uses the NumPy fallback. Normal use and installation require no compiler; building this optional kernel requires a C compiler.
-
-For examples using the downloaded source, build the kernel in the repository folder:
+Python 3.10 or later. From a checkout:
 
 ```sh
-python -m pip install "Cython>=3,<4" "setuptools>=77,<83"
-python setup_cython.py build_ext --inplace
+pip install -e .
 ```
 
-The solver automatically uses the compiled kernel when available, and otherwise uses NumPy. To include the kernel in an installed FDFD package, use these PowerShell commands from the repository folder:
+or `uv sync`, which also installs the test and lint tools. Optional extras:
+`pip install -e .[cuda12]` (or `cuda13`) for GPU factorization with NVIDIA
+cuDSS; see `docs/acceleration.rst`.
 
-```powershell
-$env:FDFD_BUILD_CYTHON = "1"
-python -m pip install --force-reinstall .
-Remove-Item Env:FDFD_BUILD_CYTHON
+## Use
+
+- `examples/` has runnable scripts for every solver; each saves its results to
+  an `outputs/` folder next to it.
+- Documentation: `docs/` (build with `sphinx-build docs docs/_build/html`).
+  Start with *Getting started* and *Conventions* (SI units, `exp(+iωt)`,
+  `exp(-iβz)`, Yee staggering).
+- `CHANGELOG.md` lists the 2.0 changes and a migration table from 1.x.
+
+## Develop
+
+```sh
+uv sync
+uv run pytest                 # FDFD_TEST_CUDA=1: GPU tests; FDFD_RUN_EXAMPLES=1 (or =all, incl. slow 3D): examples
+uv run ruff check . && uv run ruff format --check .
+uv run pre-commit install
 ```
 
-On Linux or macOS, use `FDFD_BUILD_CYTHON=1 python -m pip install --force-reinstall .`.
+## License
 
-Generated results are saved in the `outputs/` folder inside each solver family, such as `fdfd_waveguide_modes/outputs/`. Source is [MIT licensed](LICENSE).
+MIT; see `LICENSE`.

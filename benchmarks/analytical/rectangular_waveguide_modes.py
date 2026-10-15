@@ -1,18 +1,11 @@
-"""Compare FDFD TE10 modes against a rectangular PEC waveguide.
+"""Grid convergence of the TE10 mode of a rectangular PEC waveguide.
 
-The exact vacuum solution is beta = sqrt(k0**2 - (pi / width)**2).
-Refine spatial resolution while keeping frequency, dimensions, and the mode fixed.
+The exact solution is beta = sqrt(k0**2 - (pi / width)**2). Frequency,
+dimensions and mode are fixed while the grid is refined.
+
+    python benchmarks/analytical/rectangular_waveguide_modes.py --check
 """
 
-# Run directly from the checkout without installing solver packages.
-import sys as _sys
-from pathlib import Path as _Path
-_ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "fdfd_common" / "__init__.py").is_file())
-if str(_ROOT) not in _sys.path:
-    _sys.path.insert(0, str(_ROOT))
-
-from fdfd_common import materials, shapes
 import argparse
 import csv
 from pathlib import Path
@@ -21,87 +14,97 @@ from time import perf_counter
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.ticker import FormatStrFormatter
-from scipy.constants import c
-from fdfd_waveguide_modes import ModeSolver2D as FDFDModeSolver2D
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / 'fdfd_waveguide_modes/outputs/benchmarks/analytical/rectangular_waveguide_modes'
+import fdfd
+from fdfd import materials, shapes
+from fdfd.core.constants import C0
+
+DEFAULT_OUTPUT = Path(__file__).parent / "outputs" / Path(__file__).stem
 
 
 def compare(levels=(8, 12, 16)):
     width, height, frequency = 22.86e-3, 10.16e-3, 10e9
-    k0 = 2 * np.pi * frequency / c
-    exact_beta = np.sqrt(k0**2 - (np.pi / width)**2)
+    k0 = 2 * np.pi * frequency / C0
+    exact_beta = np.sqrt(k0**2 - (np.pi / width) ** 2)
     exact_neff = exact_beta / k0
     rows = []
     for cells_x in levels:
         cells_y = max(4, round(cells_x * height / width))
-        for method in ('FDFD',):
-            start = perf_counter()
-            # One solid cell on each side places the PEC inner faces at
-            # exactly the requested clear width/height for every resolution.
-            nx, ny = cells_x + 2, cells_y + 2
-            dx, dy = width / cells_x, height / cells_y
-            total_x, total_y = nx * dx, ny * dy
-            solver = FDFDModeSolver2D(
-                frequency=frequency, x_range=total_x,
-                y_range=total_y,
-            )
-            wall = shapes.Difference(
-                shape=shapes.Rectangle(bounds=((0., total_x), (0., total_y))),
-                tool=shapes.Rectangle(bounds=((dx, (nx-1)*dx), (dy, (ny-1)*dy))),
-            )
-            solver.add_geometry(shape=wall, material=materials.PEC, name='wall')
-            solver.mesh(resolution=(nx, ny))
-            result = solver.solve(num_modes=1, neff_guess=exact_neff)
-            neff = result.neff[0]
-            elements = cells_x * cells_y
-            algebraic_residual = ''  # Not exposed by this FDFD solve API.
-            row = dict(
-                method=method, cells_x=cells_x, cells_y=cells_y, elements=elements,
-                nominal_h_m=max(width / cells_x, height / cells_y), frequency_hz=frequency,
-                exact_neff=exact_neff, neff_real=neff.real, neff_imag=neff.imag,
-                exact_beta_rad_per_m=exact_beta, beta_real_rad_per_m=k0 * neff.real,
-                relative_neff_error=abs(neff - exact_neff) / abs(exact_neff),
-                algebraic_residual=algebraic_residual, elapsed_seconds=perf_counter() - start,
-            )
-            rows.append(row)
-            print(f'{method:4} nx={cells_x:2}: neff={neff:.8g}; relative error={row["relative_neff_error"]:.3e}', flush=True)
+        start = perf_counter()
+        # One solid cell on each side puts the PEC inner faces exactly at the
+        # requested clear width and height for every resolution.
+        dx, dy = width / cells_x, height / cells_y
+        bounds = ((-dx, width + dx), (-dy, height + dy))
+        solver = fdfd.ModeSolver2D(frequency=frequency, x_range=bounds[0], y_range=bounds[1])
+        wall = shapes.Difference(
+            shape=shapes.Rectangle(bounds=bounds), tool=shapes.Rectangle(bounds=((0.0, width), (0.0, height)))
+        )
+        solver.add_geometry(shape=wall, material=materials.PEC, name="wall")
+        solver.mesh(resolution=(cells_x + 2, cells_y + 2), subpixels=1)
+        result = solver.solve(num_modes=1, guess=exact_neff)
+        neff = result.neff[0]
+        row = dict(
+            cells_x=cells_x,
+            cells_y=cells_y,
+            nominal_h_m=max(dx, dy),
+            frequency_hz=frequency,
+            exact_neff=exact_neff,
+            neff_real=neff.real,
+            neff_imag=neff.imag,
+            relative_neff_error=abs(neff - exact_neff) / abs(exact_neff),
+            backward_error=float(result.info.residuals[0]),
+            elapsed_seconds=perf_counter() - start,
+        )
+        rows.append(row)
+        print(f"nx={cells_x:3}: neff={neff:.8g}; relative error={row['relative_neff_error']:.3e}", flush=True)
     return rows
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--levels', type=int, nargs='+', default=[8, 12, 16])
-    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument('--check', action='store_true', help='Require finite passive modes and <1%% error on the finest grid.')
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--levels", type=int, nargs="+", default=[8, 12, 16])
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="require a finite passive mode with <1%% error on the finest grid",
+    )
     args = parser.parse_args()
     if min(args.levels) < 4:
-        parser.error('Each level must have at least four cells across the width.')
+        parser.error("Each level must have at least four cells across the width.")
     rows = compare(sorted(set(args.levels)))
     args.output.mkdir(parents=True, exist_ok=True)
-    with (args.output / 'comparison.csv').open('w', newline='', encoding='utf-8') as stream:
+    with (args.output / "comparison.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
     figure = Figure(figsize=(7, 4.5))
     ax = figure.subplots()
-    for method in ('FDFD',):
-        selected = [row for row in rows if row['method'] == method]
-        ax.semilogy([r['nominal_h_m'] * 1e3 for r in selected], [max(r['relative_neff_error'], 1e-16) for r in selected], 'o-', label=method)
-    ax.set_xticks(sorted({r['nominal_h_m'] * 1e3 for r in rows}))
-    ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-    ax.set(xlabel='Nominal mesh spacing (mm)', ylabel='Relative effective-index error', title='Rectangular PEC waveguide: TE10 at 10 GHz')
-    ax.grid(True, which='both', alpha=.3)
-    ax.legend()
+    ax.semilogy(
+        [r["nominal_h_m"] * 1e3 for r in rows], [max(r["relative_neff_error"], 1e-16) for r in rows], "o-"
+    )
+    ax.set_xticks(sorted({r["nominal_h_m"] * 1e3 for r in rows}))
+    ax.xaxis.set_major_formatter(FormatStrFormatter("%.2f"))
+    ax.set(
+        xlabel="Nominal mesh spacing (mm)",
+        ylabel="Relative effective-index error",
+        title="Rectangular PEC waveguide: TE10 at 10 GHz",
+    )
+    ax.grid(True, which="both", alpha=0.3)
     figure.tight_layout()
-    figure.savefig(args.output / 'convergence.png', dpi=160)
+    figure.savefig(args.output / "convergence.png", dpi=160)
     if args.check:
-        for method in ('FDFD',):
-            finest = [r for r in rows if r['method'] == method][-1]
-            if not (np.isfinite(finest['relative_neff_error']) and finest['relative_neff_error'] < .01 and abs(finest['neff_imag']) < 1e-8):
-                raise SystemExit(f'{method} failed the TE10 analytical check: {finest}')
-    print(f'Report: {args.output.resolve()}')
+        finest = rows[-1]
+        if not (
+            np.isfinite(finest["relative_neff_error"])
+            and finest["relative_neff_error"] < 0.01
+            and abs(finest["neff_imag"]) < 1e-8
+        ):
+            raise SystemExit(f"TE10 analytical check failed: {finest}")
+    print(f"Report: {args.output.resolve()}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

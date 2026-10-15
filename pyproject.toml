@@ -1,57 +1,79 @@
 [build-system]
-requires = [
-  "setuptools>=77,<83",
-  "Cython>=3,<4",
-  "numpy>=1.26,<3",
-  "scipy>=1.12,<2",
-]
+requires = ["setuptools>=77,<83"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdfd"
-version = "1.1.2"
-description = "FDFD electromagnetic solvers"
+version = "2.0.0"
+description = "Finite-difference frequency-domain electromagnetic solvers"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-  "numpy>=1.26,<3", "scipy>=1.12,<2", "matplotlib>=3.8,<4",
+  "numpy>=1.26,<3",
+  "scipy>=1.12,<2",
+  "matplotlib>=3.8,<4",
   "h5py>=3.15,<4",
   "tqdm>=4.66,<5",
 ]
 
 [project.urls]
 Repository = "https://github.com/SolverNotConverging/FDFD"
-Releases = "https://github.com/SolverNotConverging/FDFD/releases"
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "docutils"]
 cuda12 = ["cupy-cuda12x>=13.6,<15"]
 cuda13 = ["cupy-cuda13x>=14,<15"]
-
-[dependency-groups]
-dev = [
-  "pytest>=8,<10",
-  "docutils",
-  "pandas",
-]
 
 [project.scripts]
 fdfd = "fdfd.__main__:main"
 
-[tool.uv]
-package = false
-default-groups = ["dev"]
-cache-keys = [
-  { env = "FDFD_BUILD_CYTHON" },
-  { file = "pyproject.toml" },
-  { file = "setup.py" },
-  { file = "setup_cython.py" },
-  { file = "**/src/*.py" },
-  { file = "periodic_eigensolver/*.py" },
-  { file = "periodic_eigensolver/*.pyx" },
+[dependency-groups]
+test = ["pytest>=8,<10"]
+lint = ["ruff>=0.13", "pre-commit>=4"]
+docs = ["sphinx>=8", "myst-parser>=4"]
+dev = [
+  { include-group = "test" },
+  { include-group = "lint" },
 ]
 
-[tool.setuptools]
-include-package-data = false
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"fdfd.core" = ["*.pyx"]
+
+[tool.uv]
+default-groups = ["dev"]
+cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { env = "FDFD_BUILD_CYTHON" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "-ra"]
+filterwarnings = ["error::DeprecationWarning:fdfd.*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-exclude = ["docs/_build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "RUF"]
+ignore = [
+  "E741",    # physics notation (l, I) is intentional
+  "RUF001",  # Greek letters in docstrings and plot labels
+  "RUF002",
+  "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Closures there are called within the same loop iteration that defines them.
+"src/fdfd/waveguide/_impedance_2d.py" = ["B023"]
+# Thread-count environment variables must be set before NumPy is imported.
+"benchmarks/periodic_eigensolver/*.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fdfd"]
+
+[tool.ruff.format]
+quote-style = "double"

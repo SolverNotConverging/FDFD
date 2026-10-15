@@ -1,18 +1,21 @@
-"""Install Python solvers, optionally including the Cython kernel."""
-import os
-from setuptools import Extension, setup
-from pathlib import Path
+"""Optional Cython kernel for the refined Arnoldi eigensolver.
 
-ROOT = Path(__file__).resolve().parent
-packages = [p.name for p in ROOT.iterdir()
-            if (p / "__init__.py").is_file() and (p.name in ("fdfd", "periodic_eigensolver") or (p / "src").is_dir())]
-build_kernel = os.environ.get("FDFD_BUILD_CYTHON") == "1"
+All metadata lives in pyproject.toml. Set ``FDFD_BUILD_CYTHON=1`` (with Cython
+and NumPy installed) to compile ``fdfd.core._arnoldi_cython``; otherwise the
+pure-Python kernel is used and the wheel stays platform independent.
+"""
+
+import os
+
+from setuptools import Extension, setup
+
 extensions = []
-if build_kernel:
+if os.environ.get("FDFD_BUILD_CYTHON") == "1":
     from Cython.Build import cythonize
-    extensions = cythonize([Extension("periodic_eigensolver._cython_kernels",
-          ["periodic_eigensolver/_cython_kernels.pyx"])],
-          language_level=3, build_dir="build/cython")
-setup(packages=packages, package_data={name: ["src/*.py"] for name in packages},
-      options={"build": {"build_base": "build/fdfd-cython" if build_kernel else "build/fdfd-python"}},
-      ext_modules=extensions)
+
+    extensions = cythonize(
+        [Extension("fdfd.core._arnoldi_cython", ["src/fdfd/core/_arnoldi_cython.pyx"])],
+        language_level=3,
+    )
+
+setup(ext_modules=extensions)

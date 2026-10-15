@@ -8,15 +8,6 @@ median paired Cython/Python runtime ratio above 1.05.
 
 from __future__ import annotations
 
-# Run directly from the checkout without installing solver packages.
-import sys as _sys
-from pathlib import Path as _Path
-_ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "fdfd_common" / "__init__.py").is_file())
-if str(_ROOT) not in _sys.path:
-    _sys.path.insert(0, str(_ROOT))
-
-
 import argparse
 import gc
 import json
@@ -38,8 +29,7 @@ from scipy.linalg import subspace_angles
 from scipy.sparse import csc_matrix, diags, eye, kron
 from scipy.sparse.linalg import splu
 
-from periodic_eigensolver import native_backend_available, solve_generalized
-
+from fdfd.core._refined import native_kernels_available, solve_generalized
 
 RELEASE_SIDE = 128
 RELEASE_NCV = 16
@@ -62,16 +52,12 @@ def _build_problem(side: int) -> tuple[csc_matrix, csc_matrix, complex]:
         dtype=np.complex128,
     )
     identity = eye(side, dtype=np.complex128, format="csc")
-    laplacian = kron(identity, one_dimensional, format="csc") + kron(
-        one_dimensional, identity, format="csc"
-    )
+    laplacian = kron(identity, one_dimensional, format="csc") + kron(one_dimensional, identity, format="csc")
 
     size = side * side
     indices = np.arange(size, dtype=np.float64)
     # Break grid symmetries and keep the target factorization away from a pole.
-    diagonal_perturbation = (
-        1.0e-3 * np.sin(indices * 0.6180339887498948) + 2.0e-2j
-    )
+    diagonal_perturbation = 1.0e-3 * np.sin(indices * 0.6180339887498948) + 2.0e-2j
     matrix_a = csc_matrix(
         laplacian + diags(diagonal_perturbation, format="csc"),
         dtype=np.complex128,
@@ -99,13 +85,11 @@ def _solve_once(
         ncv=ncv,
         max_restarts=0,
         random_seed=20260831,
-        backend=backend,
+        kernels=backend,
     )
 
 
-def _time_factorization(
-    shifted: csc_matrix, repeats: int
-) -> tuple[float, list[float]]:
+def _time_factorization(shifted: csc_matrix, repeats: int) -> tuple[float, list[float]]:
     timings: list[float] = []
     for attempt in range(repeats + 1):
         gc.collect()
@@ -124,7 +108,7 @@ def benchmark(
     repeats: int,
 ) -> dict[str, float | int | bool | str]:
     """Measure paired Python/Cython solves and return JSON-ready metrics."""
-    if not native_backend_available():
+    if not native_kernels_available():
         raise RuntimeError("The Cython extension must be built for this benchmark.")
     repeats = int(repeats)
     if repeats < 1:
@@ -143,7 +127,7 @@ def benchmark(
             sigma,
             num_modes=num_modes,
             ncv=ncv,
-            backend=backend,
+            kernels=backend,
         )
         for backend in ("python", "cython")
     }
@@ -161,7 +145,7 @@ def benchmark(
                 sigma,
                 num_modes=num_modes,
                 ncv=ncv,
-                backend=backend,
+                kernels=backend,
             )
             elapsed = perf_counter() - started
             timings[backend].append(elapsed)
@@ -174,14 +158,8 @@ def benchmark(
     python_result = last_results["python"]
     cython_result = last_results["cython"]
     eigenvalue_error = max(
-        max(
-            np.min(np.abs(cython_result.eigenvalues - value))
-            for value in python_result.eigenvalues
-        ),
-        max(
-            np.min(np.abs(python_result.eigenvalues - value))
-            for value in cython_result.eigenvalues
-        ),
+        max(np.min(np.abs(cython_result.eigenvalues - value)) for value in python_result.eigenvalues),
+        max(np.min(np.abs(python_result.eigenvalues - value)) for value in cython_result.eigenvalues),
     )
     largest_subspace_angle = float(
         np.max(
@@ -227,17 +205,13 @@ def enforce_release_gate(
         RELEASE_NCV,
         RELEASE_NUM_MODES,
     ):
-        raise RuntimeError(
-            "--enforce requires side=128, ncv=16, and num_modes=2."
-        )
+        raise RuntimeError("--enforce requires side=128, ncv=16, and num_modes=2.")
     if repeats < MIN_ENFORCED_REPEATS:
         raise RuntimeError("--enforce requires at least 5 paired repeats.")
     if float(result["eigenvalue_max_matching_error"]) > 1.0e-9:
         raise RuntimeError("Python/Cython eigenvalues differ by more than 1e-9.")
     if float(result["max_subspace_angle_radians"]) > 1.0e-7:
-        raise RuntimeError(
-            "Python/Cython invariant subspaces differ by more than 1e-7."
-        )
+        raise RuntimeError("Python/Cython invariant subspaces differ by more than 1e-7.")
     if float(result["cython_to_python_ratio"]) > MAX_RUNTIME_RATIO:
         classification = result["classification"]
         raise RuntimeError(

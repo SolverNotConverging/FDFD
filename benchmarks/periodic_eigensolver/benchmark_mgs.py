@@ -7,15 +7,6 @@ plan at ``n=100000, ncv=32``.
 
 from __future__ import annotations
 
-# Run directly from the checkout without installing solver packages.
-import sys as _sys
-from pathlib import Path as _Path
-_ROOT = next(parent for parent in _Path(__file__).resolve().parents
-             if (parent / "fdfd_common" / "__init__.py").is_file())
-if str(_ROOT) not in _sys.path:
-    _sys.path.insert(0, str(_ROOT))
-
-
 import argparse
 import json
 import os
@@ -33,8 +24,8 @@ for variable in (
 
 import numpy as np
 
-from periodic_eigensolver import native_backend_available
-from periodic_eigensolver import _numpy_kernels
+from fdfd.core import _arnoldi_python
+from fdfd.core._refined import native_kernels_available
 
 
 def _time_kernel(kernel, basis: np.ndarray, template: np.ndarray, column: int, repeats: int) -> float:
@@ -53,9 +44,9 @@ def _time_kernel(kernel, basis: np.ndarray, template: np.ndarray, column: int, r
 
 
 def benchmark(n: int, ncv: int, repeats: int) -> dict[str, float | int]:
-    if not native_backend_available():
+    if not native_kernels_available():
         raise RuntimeError("The Cython extension must be built for this benchmark.")
-    from periodic_eigensolver import _cython_kernels
+    from fdfd.core import _arnoldi_cython as _cython_kernels
 
     rng = np.random.default_rng(20260831)
     values = rng.standard_normal((n, ncv + 1)) + 1j * rng.standard_normal((n, ncv + 1))
@@ -66,8 +57,8 @@ def benchmark(n: int, ncv: int, repeats: int) -> dict[str, float | int]:
     column = ncv - 1
 
     native = _time_kernel(_cython_kernels, basis_f, work, column, repeats)
-    python_fortran = _time_kernel(_numpy_kernels, basis_f, work, column, repeats)
-    python_c = _time_kernel(_numpy_kernels, basis_c, work, column, repeats)
+    python_fortran = _time_kernel(_arnoldi_python, basis_f, work, column, repeats)
+    python_c = _time_kernel(_arnoldi_python, basis_c, work, column, repeats)
     return {
         "n": n,
         "ncv": ncv,
