@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.0
+
+- Separate persistent degenerate mode groups from resolved branches and accidental
+  crossings, including identifiable subgroups within larger crossing eigenspaces.
+- Resolve degenerate seed bases into longitudinal E/H and invariant mirror-parity
+  sectors; preserve these profiles through frequency continuation.
+- Display the tracked basis and sector labels rather than arbitrary raw
+  eigensolver mixtures, including when reopening saved sweeps.
+- Apply consistent degeneracy rules to mesh and padding verification, and restrict
+  reverse-audit permutations to their matched subspaces.
+- Raise the default minimum squared tracking overlap from 0.8 to 0.9. Add
+  `degeneracy_tolerance=1e-8` and `subspace_margin=0.02`.
+- Remove the superseded connected-component eigenvalue clustering implementation.
+
+
 ## 2.0.0
 
 A breaking release that turns seven loosely coupled packages into one `fdfd`

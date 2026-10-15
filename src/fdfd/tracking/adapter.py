@@ -5,8 +5,16 @@ from dataclasses import replace
 
 import numpy as np
 
+from .assignment import mode_groups
 from .contracts import CandidateSet
-from .metrics import align_subspaces, edge_fractions, normalize_fields, resampled_vectors
+from .metrics import (
+    align_subspaces,
+    compatible_character,
+    edge_fractions,
+    field_character,
+    normalize_fields,
+    resampled_vectors,
+)
 
 
 def require_no_pml(solver):
@@ -25,6 +33,7 @@ def candidates_from_result(result, config):
     if not np.isfinite(result.metadata.get("eta0", np.nan)) or result.metadata["eta0"] <= 0:
         raise ValueError("Missing physical impedance convention.")
     fields, vectors, scales, power, finite = normalize_fields(result)
+    characters = field_character(result, fields)
     residuals = np.asarray(result.info.residuals)
     field_residuals = np.asarray(result.info.field_residuals)
     if residuals.shape != (len(result),):
@@ -57,6 +66,7 @@ def candidates_from_result(result, config):
         propagation.append(state)
         evidence.append(
             {
+                "character": characters[i],
                 "residual": float(residuals[i]),
                 "field_residual": float(field_residuals[i]),
                 "edge_fraction": float(edge[i]),
@@ -178,21 +188,30 @@ def verify_candidates(base, variants, port, config):
             j = int(np.argmax(overlaps[i] - np.minimum(delta, 1.0)))
             overlap = float(overlaps[i, j])
             # Compare whole nearly degenerate spans when the eigensolver rotates them.
-            left = np.flatnonzero(
-                abs(base.eigenvalues - base.eigenvalues[i])
-                <= config.cluster_gap * max(1.0, abs(base.eigenvalues[i]))
+            labels = base.result.metadata["polarizations"]
+            other_labels = other.result.metadata["polarizations"]
+            left = next(g for g in mode_groups(base.eigenvalues, config, labels=labels) if i in g)
+            right = next(g for g in mode_groups(other.eigenvalues, config, labels=other_labels) if j in g)
+            members = (j,)
+            sector_ok = labels[i] == other_labels[j] and compatible_character(
+                base.evidence[i]["character"], other.evidence[j]["character"]
             )
-            right = np.flatnonzero(
-                abs(other.eigenvalues - other.eigenvalues[j])
-                <= config.cluster_gap * max(1.0, abs(other.eigenvalues[j]))
-            )
-            if len(left) > 1 and len(left) == len(right):
+            if (
+                len(left) > 1
+                and len(left) == len(right)
+                and labels[i] == other_labels[j]
+                and np.all(base.numerical_valid[list(left)])
+            ):
                 sub = align_subspaces(base.vectors[:, left], vectors[:, right])
                 if sub["old_rank"] == len(left) == sub["new_rank"]:
                     overlap = float(np.min(sub["singular_values"]) ** 2)
+                    members = right
+                    sector_ok = True  # Only the complete span has a basis-independent character.
+            valid_members = np.all(other.numerical_valid[list(members)])
             ok = bool(
-                other.numerical_valid[j]
-                and delta[j] <= config.verification_beta_tolerance
+                valid_members
+                and sector_ok
+                and np.max(delta[list(members)]) <= config.verification_beta_tolerance
                 and overlap >= config.verification_overlap
             )
             if enclosed:
@@ -200,13 +219,14 @@ def verify_candidates(base, variants, port, config):
                     other.result.metadata.get("boundaries", {}).get("closed_conductor_boundary", False)
                 )
             else:
-                ok &= other.evidence[j]["edge_fraction"] <= config.edge_fraction_max
+                ok &= all(other.evidence[k]["edge_fraction"] <= config.edge_fraction_max for k in members)
             checks.append(
                 {
                     "kind": key,
                     "overlap": overlap,
                     "beta_drift": float(delta[j]),
                     "candidate": j,
+                    "members": members,
                     "passed": ok,
                     "fingerprint": fingerprint(other.result),
                 }

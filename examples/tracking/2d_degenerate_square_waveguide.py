@@ -1,7 +1,9 @@
 """Track the exactly degenerate TE10/TE01 subspace of a square PEC guide.
 
 There is no PML; the two lowest vector modes span the TE10/TE01 eigenspace,
-which the tracker carries as a subspace rather than as two arbitrary vectors.
+The tracker carries the degenerate eigenspaces as subspaces. The viewer shows
+their separated E/H and mirror-parity basis, with continuous basis transport
+across frequency, rather than the raw arbitrary eigensolver mixtures.
 """
 
 from pathlib import Path

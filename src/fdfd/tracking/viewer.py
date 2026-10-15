@@ -1,10 +1,11 @@
 """Interactive dispersion and all-candidate field viewer."""
 
 from colorsys import hsv_to_rgb
+from textwrap import fill
 
 import numpy as np
 
-from .assignment import eigen_clusters
+from .assignment import mode_groups
 
 
 def _track_colors(count):
@@ -45,12 +46,12 @@ class ModeTrackingViewer:
         rows, columns = (1, max_modes) if max_modes <= 3 else (2, int(np.ceil(max_modes / 2)))
         self.figure = plt.figure(figsize=(max(11, 3.1 * columns), 5.2 + 2.5 * rows))
         outer = self.figure.add_gridspec(
-            2, 1, height_ratios=(1.25, 1.5 * rows), left=0.08, right=0.98, top=0.94, bottom=0.18, hspace=0.28
+            2, 1, height_ratios=(1.25, 1.5 * rows), left=0.08, right=0.98, top=0.94, bottom=0.18, hspace=0.42
         )
         dispersion = outer[0].subgridspec(1, 2, wspace=0.28)
         self.phase_axis = self.figure.add_subplot(dispersion[0, 0])
         self.decay_axis = self.figure.add_subplot(dispersion[0, 1], sharex=self.phase_axis)
-        field_grid = outer[1].subgridspec(rows, columns, wspace=0.28, hspace=0.38)
+        field_grid = outer[1].subgridspec(rows, columns, wspace=0.28, hspace=0.58)
         self.field_axes = [
             self.figure.add_subplot(field_grid[i // columns, i % columns]) for i in range(rows * columns)
         ]
@@ -124,7 +125,15 @@ class ModeTrackingViewer:
 
     def status(self, sample_index, candidate):
         sample = self.sweep.samples[sample_index]
-        groups = eigen_clusters(sample.candidates.eigenvalues, self.sweep.config.cluster_gap)
+        cluster, column, _ = self._basis(sample, candidate)
+        character = sample.candidates.evidence[candidate].get("character", {})
+        if cluster is not None and cluster.get("characters"):
+            character = cluster["characters"][column]
+        groups = mode_groups(
+            sample.candidates.eigenvalues,
+            self.sweep.config,
+            labels=sample.candidates.result.metadata["polarizations"],
+        )
         degenerate = any(candidate in group and len(group) > 1 for group in groups)
         cutoff = (sample.frequency, candidate) in self._cutoff
         residual = sample.candidates.evidence[candidate]["residual"]
@@ -143,6 +152,8 @@ class ModeTrackingViewer:
         return {
             "invalid": invalid,
             "degenerate": degenerate,
+            "character": character,
+            "field_basis": "tracked subspace" if cluster is not None else "individual mode",
             "cutoff": cutoff,
             "invalid_kind": invalid_kind,
             "tracking_valid": bool(sample.candidates.numerical_valid[candidate] or cutoff_identity),
@@ -242,10 +253,28 @@ class ModeTrackingViewer:
             axis.set_xlabel("frequency (GHz)")
             axis.grid(True, alpha=0.25)
 
+    @staticmethod
+    def _basis(sample, candidate):
+        tracks = np.flatnonzero(sample.candidate_indices == candidate)
+        if not len(tracks):
+            return None, None, 1.0
+        track = int(tracks[0])
+        for cluster in sample.clusters:
+            if track in cluster["tracks"]:
+                return cluster, list(cluster["tracks"]).index(track), 1.0
+        return None, None, sample.phases[track]
+
     def _field_values(self, sample, candidate):
-        fields = sample.candidates.fields
+        cluster, column, phase = self._basis(sample, candidate)
+        raw = sample.candidates.fields
+        if cluster is None:
+            fields = {name: value[..., candidate : candidate + 1] * phase for name, value in raw.items()}
+        else:
+            members = list(cluster["candidates"])
+            coefficients = cluster["transform"][:, column : column + 1]
+            fields = {name: value[..., members] @ coefficients for name, value in raw.items()}
         if self.component in fields:
-            value = fields[self.component][..., candidate]
+            value = fields[self.component][..., 0]
             coordinates = sample.candidates.result.field_coordinates[self.component]
             label = self.component
             shown_quantity = self.quantity
@@ -255,7 +284,7 @@ class ModeTrackingViewer:
             from .metrics import cell_fields
 
             centred = cell_fields(sample.candidates.result, {name: fields[name] for name in names})
-            value = np.sqrt(sum(abs(centred[name][..., candidate]) ** 2 for name in names))
+            value = np.sqrt(sum(abs(centred[name][..., 0]) ** 2 for name in names))
             coordinates = sample.candidates.result.grid.coordinates
             label = "|" + self.component + "|"
             shown_quantity = "magnitude"
@@ -291,14 +320,22 @@ class ModeTrackingViewer:
                 )
             status = self.status(self.sample_index, candidate)
             flags = []
-            if status["degenerate"]:
+            character = status["character"]
+            if character:
+                flags.append(character["family"])
+                parity = character.get("mirror_parity", ())
+                if parity:
+                    flags.append("parity " + "/".join({-1: "−", 0: "?", 1: "+"}[p] for p in parity))
+            if status["degenerate"] and status["field_basis"] != "tracked subspace":
                 flags.append("DEGENERATE")
+            if status["field_basis"] == "tracked subspace":
+                flags.append("tracked basis")
             if status["cutoff"]:
                 flags.append("CUTOFF")
             if status["invalid"]:
                 flags.append(status["invalid_kind"] + " ×")
             track = f" · track {tracked[candidate] + 1}" if candidate in tracked else ""
-            suffix = " · " + " / ".join(flags) if flags else ""
+            suffix = "\n" + fill(" · ".join(flags), width=38) if flags else ""
             axis.set_title(
                 f"mode {candidate + 1}{track}\n{label} {shown_quantity}{suffix}",
                 fontsize=9,

@@ -3,30 +3,7 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from .metrics import align_subspaces
-
-
-def eigen_clusters(values, gap):
-    """Connected components of the local eigenvalue-gap graph."""
-    remaining = set(range(len(values)))
-    groups = []
-    while remaining:
-        group = {min(remaining)}
-        while True:
-            extra = {
-                j
-                for j in remaining - group
-                if any(
-                    abs(values[j] - values[i]) <= gap * max(1.0, abs(values[j]), abs(values[i]))
-                    for i in group
-                )
-            }
-            if not extra:
-                break
-            group.update(extra)
-        remaining -= group
-        groups.append(tuple(sorted(group)))
-    return groups
+from .metrics import align_subspaces, orthonormal_basis
 
 
 def assign_modes(old_vectors, new_vectors, old_values, new_values, config, *, prediction=None, allowed=None):
@@ -54,39 +31,101 @@ def assign_modes(old_vectors, new_vectors, old_values, new_values, config, *, pr
     return matches, overlap, margins
 
 
-def match_clusters(old_vectors, new_vectors, old_values, new_values, config):
-    """Match equal-rank eigenvalue clusters jointly; reserve all their members."""
-    old = [g for g in eigen_clusters(old_values, config.cluster_gap) if len(g) > 1]
-    new = [g for g in eigen_clusters(new_values, config.cluster_gap) if len(g) > 1]
-    if not old or not new:
-        return ()
-    cost = np.full((len(old), len(new) + len(old)), config.unmatched_cost)
-    details = {}
-    for i, a in enumerate(old):
-        for j, b in enumerate(new):
-            cost[i, j] = 1e6
-            if len(a) != len(b):
+def mode_groups(values, config, *, prediction=None, labels=None):
+    """Complete-link numerical degeneracies, separated by known solver sectors.
+
+    A close eigenvalue neighbourhood alone does not authorize basis rotation.
+    Every pair must remain degenerate in the prediction as well as the anchor.
+    """
+    records = np.atleast_2d(values) if prediction is None else np.stack((values, prediction))
+    tolerance = min(config.cluster_gap, config.degeneracy_tolerance)
+    groups = []
+    for i in range(records.shape[1]):
+        for group in groups:
+            if labels is not None and any(labels[i] != labels[j] for j in group):
                 continue
-            record = align_subspaces(old_vectors[:, a], new_vectors[:, b])
-            if record["old_rank"] != len(a) or record["new_rank"] != len(b):
+            a, b = records[:, i, None], records[:, group]
+            scale = np.maximum(1.0, np.maximum(abs(a), abs(b)))
+            if np.all(np.isfinite(a)) and np.all(abs(a - b) <= tolerance * scale):
+                group.append(i)
+                break
+        else:
+            groups.append([i])
+    return tuple(tuple(g) for g in groups)
+
+
+def _subset(reference, vectors, members, margin):
+    rank = reference.shape[1]
+    q, _ = orthonormal_basis(reference)
+    if q.shape[1] != rank or len(members) < rank:
+        return None
+    columns = vectors[:, members]
+    norms = np.sum(abs(columns) ** 2, axis=0)
+    if np.any(norms <= 0) or not np.all(np.isfinite(columns)):
+        return None
+    scores = np.sum(abs(q.conj().T @ columns) ** 2, axis=0) / norms
+    order = np.argsort(-scores, kind="stable")
+    if len(members) > rank and scores[order[rank - 1]] - scores[order[rank]] <= margin:
+        return None
+    return tuple(sorted(members[k] for k in order[:rank]))
+
+
+def match_clusters(
+    old_vectors,
+    new_vectors,
+    old_values,
+    new_values,
+    config,
+    *,
+    prediction=None,
+    old_labels=None,
+    new_labels=None,
+):
+    """Transport persistent spans, including identifiable subsets at crossings.
+
+    Proposals competing for any member must have a clear cost margin. A fully
+    mixed larger span has no identifiable raw-column subset: abstain there.
+    """
+    prediction = old_values if prediction is None else prediction
+    old = [g for g in mode_groups(old_values, config, prediction=prediction, labels=old_labels) if len(g) > 1]
+    new = [g for g in mode_groups(new_values, config, labels=new_labels) if len(g) > 1]
+    proposals = []
+    for a in old:
+        for b in new:
+            if old_labels is not None and new_labels is not None and old_labels[a[0]] != new_labels[b[0]]:
                 continue
-            score = float(np.min(record["singular_values"]) ** 2)
-            if score < config.overlap_min:
+            left, right = a, b
+            if len(a) <= len(b):
+                right = _subset(old_vectors[:, a], new_vectors, b, config.subspace_margin)
+            else:
+                left = _subset(new_vectors[:, b], old_vectors, a, config.subspace_margin)
+            if left is None or right is None:
                 continue
-            drift = abs(np.mean(old_values[list(a)]) - np.mean(new_values[list(b)])) / max(
-                1.0, abs(np.mean(old_values[list(a)]))
-            )
-            cost[i, j] = 1 - score + 0.1 * min(drift**2, 4.0)
-            details[i, j] = {**record, "old_members": a, "new_members": b, "overlap": score}
-    rows, columns = linear_sum_assignment(cost)
-    best = cost[rows, columns].sum()
+            record = align_subspaces(old_vectors[:, left], new_vectors[:, right])
+            if record["old_rank"] != len(left) or record["new_rank"] != len(right):
+                continue
+            score = float(np.clip(np.min(record["singular_values"]) ** 2, 0, 1))
+            drift = abs(np.mean(prediction[list(left)]) - np.mean(new_values[list(right)]))
+            drift /= max(1.0, abs(np.mean(old_values[list(left)])))
+            cost = 1 - score + 0.1 * min(drift**2, 4.0)
+            if score >= config.overlap_min and cost < config.unmatched_cost:
+                proposals.append(
+                    (float(cost), {**record, "old_members": left, "new_members": right, "overlap": score})
+                )
     result = []
-    for i, j in zip(rows, columns, strict=True):
-        if (i, j) not in details or cost[i, j] >= config.unmatched_cost:
+    used_old, used_new = set(), set()
+    for cost, record in sorted(proposals, key=lambda item: item[0]):
+        a, b = set(record["old_members"]), set(record["new_members"])
+        if a & used_old or b & used_new:
             continue
-        alt = cost.copy()
-        alt[i, j] = 1e6
-        ar, ac = linear_sum_assignment(alt)
-        if alt[ar, ac].sum() - best >= config.assignment_margin:
-            result.append(details[i, j])
-    return tuple(result)
+        competitors = [
+            c
+            for c, r in proposals
+            if r is not record and (a.intersection(r["old_members"]) or b.intersection(r["new_members"]))
+        ]
+        if min([config.unmatched_cost, *competitors]) - cost < config.assignment_margin:
+            continue
+        result.append(record)
+        used_old.update(a)
+        used_new.update(b)
+    return tuple(sorted(result, key=lambda record: record["old_members"]))

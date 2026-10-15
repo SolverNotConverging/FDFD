@@ -50,10 +50,12 @@ class TrackingConfig:
     tol: float = 0.0
     residual_tolerance: float = 1e-8
     cutoff_neff: float = 1e-6
-    overlap_min: float = 0.8
+    overlap_min: float = 0.9
     assignment_margin: float = 0.02
     unmatched_cost: float = 0.65
     cluster_gap: float = 1e-5
+    degeneracy_tolerance: float = 1e-8
+    subspace_margin: float = 0.02
     verification_beta_tolerance: float = 1e-3
     verification_overlap: float = 0.999
     edge_fraction_max: float = 1e-3
@@ -75,12 +77,20 @@ class TrackingConfig:
             "cutoff_neff",
             "unmatched_cost",
             "cluster_gap",
+            "degeneracy_tolerance",
             "verification_beta_tolerance",
             "min_relative_step",
         ):
             if not np.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
                 raise ConfigurationError(f"{name} must be finite and positive.")
-        for name in ("overlap_min", "assignment_margin", "verification_overlap", "edge_fraction_max", "tol"):
+        for name in (
+            "overlap_min",
+            "assignment_margin",
+            "subspace_margin",
+            "verification_overlap",
+            "edge_fraction_max",
+            "tol",
+        ):
             if not np.isfinite(getattr(self, name)) or not 0 <= getattr(self, name) <= 1:
                 raise ConfigurationError(f"{name} must be in [0, 1].")
         if self.polarization not in ("both", "TE", "TM"):

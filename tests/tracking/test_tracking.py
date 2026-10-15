@@ -354,7 +354,7 @@ def test_open_box_modes_fail_domain_verification():
     assert len(_dispersion_edges(viewer, style="--")) == 1
 
 
-def test_square_degeneracy_requires_explicit_excitation():
+def test_square_degeneracy_requires_explicit_excitation(tmp_path):
     def square(f, spec):
         width, n = 0.02, 20
         dx = width / n
@@ -382,6 +382,33 @@ def test_square_degeneracy_requires_explicit_excitation():
     assert all(t.metadata["representation"] == "eigenmode_superposition_term" for t in terms)
     viewer = sweep.plot(component="E")._mode_tracking_viewer
     assert viewer.status(0, 0)["degenerate"]
+
+    # The viewer must show the separated tracked basis, including after reload,
+    # rather than the raw arbitrary eigensolver columns.
+    sweep.save(tmp_path / "square.h5")
+    for displayed in (sweep, load_sweep(tmp_path / "square.h5")):
+        view = displayed.plot(component="Ex", quantity="real")._mode_tracking_viewer
+        for sample_index, sample in enumerate(displayed.samples):
+            for cluster in sample.clusters:
+                members = list(cluster["candidates"])
+                aligned = {
+                    n: value[..., members] @ cluster["transform"]
+                    for n, value in sample.candidates.fields.items()
+                }
+                for column, track in enumerate(cluster["tracks"]):
+                    candidate = sample.candidate_indices[track]
+                    view.component, view.quantity = "Ex", "real"
+                    actual = view._field_values(sample, candidate)[0]
+                    np.testing.assert_allclose(actual, aligned["Ex"][..., column].real, atol=1e-12)
+                    view.component = "E"
+                    from fdfd.tracking.metrics import cell_fields
+
+                    centred = cell_fields(sample.candidates.result, aligned)
+                    expected = np.sqrt(sum(abs(centred[n][..., column]) ** 2 for n in ("Ex", "Ey", "Ez")))
+                    np.testing.assert_allclose(view._field_values(sample, candidate)[0], expected, atol=1e-12)
+                    status = view.status(sample_index, candidate)
+                    assert status["character"] == cluster["characters"][column]
+                    assert status["field_basis"] == "tracked subspace"
 
 
 def test_budget_exhaustion_is_explicit():
@@ -566,7 +593,7 @@ def test_automatic_tracking_can_start_with_no_valid_seed(monkeypatch):
 
 
 def test_automatic_square_spectrum_retains_fourfold_degeneracy():
-    from fdfd.tracking.assignment import eigen_clusters
+    from fdfd.tracking.assignment import mode_groups
 
     width, cells = 0.02, 20
     dx = width / cells
@@ -589,11 +616,14 @@ def test_automatic_square_spectrum_retains_fourfold_degeneracy():
     assert sweep.metadata["num_tracks"] == 12
     assert not any(e["type"] == "branch_discovered" for e in sweep.events)
     for sample in sweep.samples:
-        groups = eigen_clusters(sample.candidates.eigenvalues, sweep.config.cluster_gap)
+        groups = mode_groups(sample.candidates.eigenvalues, sweep.config)
         assert [len(group) for group in groups] == [2, 2, 2, 4, 2]
         assert set(sample.candidate_indices) == set(range(12))
         assert len(sample.candidates.result) == 12
         assert [len(c["tracks"]) for c in sample.clusters] == [2, 2, 2, 4, 2]
+        for cluster in sample.clusters:
+            assert all(c["family"] in ("TE", "TM") for c in cluster["characters"])
+            assert all(0 not in c["mirror_parity"] for c in cluster["characters"])
 
 
 def test_material_first_2d_geometry_helpers_and_validation():
@@ -698,7 +728,7 @@ def test_progress_adaptive_total_and_cached_frequencies(progress_bars):
         [0.8 * FC, 1.2 * FC],
         seed_modes=None,
         port=PortSpec(boundary="enclosed"),
-        config=config(polarization="TE", max_depth=2),
+        config=config(polarization="TE", max_depth=2, overlap_min=0.8),
     )
     (bar,) = progress_bars
     assert len(set(frequencies_solved)) > 2
@@ -916,3 +946,53 @@ def test_reliable_exact_cutoff_keeps_spectral_line_not_export(display_sweep, con
     assert viewer.status(2, 0)["invalid"] == (confinement != "bound")
     with pytest.raises(ValueError, match="not injection eligible"):
         display_sweep.export(frequencies=[sample.frequency])
+
+
+def test_physical_eh_character_and_parity_survive_archive(tmp_path):
+    sweep = track_modes(
+        slab,
+        [1.4 * FC, 1.5 * FC],
+        seed_modes=None,
+        port=PortSpec(boundary="enclosed"),
+        config=config(num_candidates=4, max_candidates=4),
+        progress=False,
+    )
+    for sample in sweep.samples:
+        for label, evidence in zip(
+            sample.candidates.result.metadata["polarizations"], sample.candidates.evidence, strict=True
+        ):
+            character = evidence["character"]
+            assert character["family"] in (label, "TEM")
+            assert character["mirror_parity"][0] in (-1, 1)
+        # Equal eigenvalues belonging to distinct scalar solver sectors do not
+        # force arbitrary excitation mixtures or block individual export.
+        assert not sample.clusters
+    sweep.save(tmp_path / "sectors.h5")
+    loaded = load_sweep(tmp_path / "sectors.h5")
+    for before, after in zip(sweep.samples, loaded.samples, strict=True):
+        assert [e["character"] for e in before.candidates.evidence] == [
+            e["character"] for e in after.candidates.evidence
+        ]
+
+
+def test_canonical_seed_recovers_eh_sectors_from_rotated_fields():
+    from fdfd.tracking.metrics import canonical_subspace
+
+    raw = slab(1.5 * FC).solve(num_modes=4, polarization="both")
+    pol = raw.metadata["polarizations"]
+    pair = next(
+        (i, j)
+        for i in range(len(raw))
+        for j in range(i + 1, len(raw))
+        if pol[i] != pol[j] and abs(raw.neff[i] - raw.neff[j]) < 1e-8
+    )
+    candidates = candidates_from_result(raw, config())
+    rotation = np.array([[1, 1j], [1j, 1]]) / np.sqrt(2)
+    fields = {name: value[..., list(pair)] @ rotation for name, value in candidates.fields.items()}
+    proxy = replace(raw, neff=raw.neff[list(pair)])
+    transform, characters = canonical_subspace(proxy, fields, [0, 1])
+    assert {c["family"] for c in characters} == {"TE", "TM"}
+    assert all(c["mirror_parity"][0] in (-1, 1) for c in characters)
+    vectors, _ = measure(proxy, fields)
+    aligned = vectors @ transform
+    np.testing.assert_allclose(aligned.conj().T @ aligned, np.eye(2), atol=1e-12)

@@ -139,3 +139,126 @@ def align_subspaces(old, new):
         "transform": tn @ rotation,
         "aligned": qn @ rotation,
     }
+
+
+def field_character(result, fields, tolerance=1e-8):
+    """Measured longitudinal character and full-vector mirror parity.
+
+    E is a polar vector and H an axial vector. A mixed eigensolver basis can
+    have indefinite parity even when its span is symmetry invariant.
+    """
+    vectors, norms = measure(result, fields)
+    energy = {}
+    for name in COMPONENTS:
+        factor = result.metadata["eta0"] ** 2 if name.startswith("H") else 1.0
+        axes = tuple(range(fields[name].ndim - 1))
+        energy[name] = factor * np.sum(abs(fields[name]) ** 2 * weights(result, name)[..., None], axis=axes)
+    electric = sum(energy[n] for n in COMPONENTS[:3])
+    magnetic = sum(energy[n] for n in COMPONENTS[3:])
+    ez = np.divide(energy["Ez"], electric, out=np.zeros_like(electric), where=electric > 0)
+    hz = np.divide(energy["Hz"], magnetic, out=np.zeros_like(magnetic), where=magnetic > 0)
+    parities = []
+    for axis in range(len(result.grid.resolution)):
+        reflected = {}
+        for name in COMPONENTS:
+            normal = name[1] == "xyz"[axis]
+            sign = (-1 if normal else 1) * (-1 if name.startswith("H") else 1)
+            reflected[name] = sign * np.flip(fields[name], axis=axis)
+        mirror, _ = measure(result, reflected)
+        parity = np.divide(
+            np.sum(vectors.conj() * mirror, axis=0).real, norms**2, out=np.zeros_like(norms), where=norms > 0
+        )
+        parities.append(parity)
+    records = []
+    for i in range(len(result)):
+        family = (
+            "TEM"
+            if ez[i] <= tolerance and hz[i] <= tolerance
+            else "TE"
+            if ez[i] <= tolerance
+            else "TM"
+            if hz[i] <= tolerance
+            else "hybrid"
+        )
+        if not np.isfinite(norms[i]) or norms[i] <= 0:
+            family = "unresolved"
+        records.append(
+            {
+                "family": family,
+                "electric_longitudinal_fraction": float(ez[i]),
+                "magnetic_longitudinal_fraction": float(hz[i]),
+                "mirror_parity": tuple(
+                    1 if abs(p[i] - 1) <= tolerance else -1 if abs(p[i] + 1) <= tolerance else 0
+                    for p in parities
+                ),
+            }
+        )
+    return tuple(records)
+
+
+def compatible_character(left, right):
+    """Forbid contradictory definite sectors; hybrid/indefinite labels abstain."""
+    pure = {"TE", "TM", "TEM"}
+    if left["family"] in pure and right["family"] in pure and left["family"] != right["family"]:
+        return False
+    return all(
+        a == b or a == 0 or b == 0 for a, b in zip(left["mirror_parity"], right["mirror_parity"], strict=True)
+    )
+
+
+def canonical_subspace(result, fields, indices, tolerance=1e-8):
+    """Resolve longitudinal nullspaces, then invariant mirror sectors of a seed.
+
+    All operations stay inside an already certified numerical degeneracy.
+    Mirrors are used only when they preserve each previously resolved sector.
+    No geometric symmetry is inferred from eigenvalue proximity.
+    """
+    from dataclasses import replace
+
+    vectors, _ = measure(result, fields)
+    q, transform = orthonormal_basis(vectors[:, indices])
+    rank = len(indices)
+    if q.shape[1] != rank:
+        return transform, ()
+    groups = [np.arange(rank)]
+    offsets = np.cumsum([0, *(int(np.prod(fields[n].shape[:-1])) for n in COMPONENTS)])
+    # The nullspace of Ez is TE; the nullspace of Hz is TM. Their common
+    # nullspace is TEM. Resolve null/non-null only, not arbitrary energy levels.
+    for name in ("Ez", "Hz"):
+        block = COMPONENTS.index(name)
+        updated = []
+        for group in groups:
+            part = q[offsets[block] : offsets[block + 1], group]
+            values, rotation = np.linalg.eigh(part.conj().T @ part)
+            q[:, group] = q[:, group] @ rotation
+            transform[:, group] = transform[:, group] @ rotation
+            for mask in (values <= tolerance, values > tolerance):
+                if np.any(mask):
+                    updated.append(group[mask])
+        groups = updated
+    for axis in range(len(result.grid.resolution)):
+        reflected = np.empty_like(q)
+        for block, name in enumerate(COMPONENTS):
+            shape = fields[name].shape[:-1]
+            section = slice(offsets[block], offsets[block + 1])
+            normal = name[1] == "xyz"[axis]
+            sign = (-1 if normal else 1) * (-1 if name.startswith("H") else 1)
+            reflected[section] = sign * np.flip(q[section].reshape(*shape, rank), axis=axis).reshape(-1, rank)
+        updated = []
+        for group in groups:
+            basis = q[:, group]
+            compressed = basis.conj().T @ reflected[:, group]
+            error = np.linalg.norm(reflected[:, group] - basis @ compressed)
+            if error > tolerance * np.sqrt(len(group)):
+                updated.append(group)
+                continue
+            values, rotation = np.linalg.eigh((compressed + compressed.conj().T) / 2)
+            q[:, group] = basis @ rotation
+            transform[:, group] = transform[:, group] @ rotation
+            for mask in (values < 0, values >= 0):
+                if np.any(mask):
+                    updated.append(group[mask])
+        groups = updated
+    aligned = {name: fields[name][..., indices] @ transform for name in COMPONENTS}
+    proxy = replace(result, neff=result.neff[list(indices)])
+    return transform, field_character(proxy, aligned, tolerance)

@@ -11,9 +11,9 @@ from ..core import eigs
 from ..core.constants import SPATIAL_CONVENTION, TIME_CONVENTION
 from ..core.results import SolveInfo
 from .adapter import candidates_from_result, fingerprint, require_no_pml, verify_candidates
-from .assignment import assign_modes, eigen_clusters, match_clusters
+from .assignment import assign_modes, match_clusters, mode_groups
 from .contracts import PortSpec, TrackedSweep, TrackingConfig, TrackingSample, VerificationSpec
-from .metrics import orthonormal_basis
+from .metrics import canonical_subspace, compatible_character, field_character
 
 
 class _BudgetExhausted(RuntimeError):
@@ -173,7 +173,7 @@ def _track_modes(
         raise ValueError("Seed index outside candidate set.")
     # Include complete clusters: selecting one arbitrary vector is not a stable seed.
     seeds = list(range(len(initial.result))) if automatic else list(seed_modes)
-    for group in eigen_clusters(initial.eigenvalues, config.cluster_gap):
+    for group in mode_groups(initial.eigenvalues, config, labels=initial.result.metadata["polarizations"]):
         if any(i in seeds for i in group):
             seeds += [i for i in group if i not in seeds]
 
@@ -197,10 +197,16 @@ def _track_modes(
         v = initial.vectors[:, i]
         phases[t] = np.exp(-1j * np.angle(v[np.argmax(abs(v))]))
     seed_clusters = []
-    for group in eigen_clusters(initial.eigenvalues[seeds], config.cluster_gap):
+    for group in mode_groups(
+        initial.eigenvalues[seeds],
+        config,
+        labels=[initial.result.metadata["polarizations"][i] for i in seeds],
+    ):
         if len(group) > 1 and np.all(initial.numerical_valid[np.array(seeds)[list(group)]]):
             indices = np.array(seeds)[list(group)]
-            _, transform = orthonormal_basis(initial.vectors[:, indices])
+            transform, characters = canonical_subspace(initial.result, initial.fields, indices)
+            if transform.shape[1] != len(group):
+                continue
             seed_clusters.append(
                 {
                     "tracks": group,
@@ -208,6 +214,7 @@ def _track_modes(
                     "transform": transform,
                     "singular_values": np.ones(len(group)),
                     "kind": "seed_subspace",
+                    "characters": characters,
                 }
             )
     root = TrackingSample(
@@ -257,6 +264,10 @@ def _track_modes(
         phases = np.ones(len(ids), complex)
         overlaps = np.zeros(len(ids))
         records, occupied = [], set(blocked)
+        old_characters = {t: left.candidates.evidence[i]["character"] for t, i in enumerate(ids) if i >= 0}
+        for cluster in left.clusters:
+            for track, character in zip(cluster["tracks"], cluster.get("characters", ()), strict=False):
+                old_characters[track] = character
         old_finite = np.flatnonzero(present & np.isfinite(ov).all(axis=0))
         new_finite = np.array(
             [i for i in np.flatnonzero(right.numerical_valid) if i not in occupied], dtype=int
@@ -267,6 +278,9 @@ def _track_modes(
             old_values[old_finite],
             right.eigenvalues[new_finite],
             config,
+            prediction=prediction[old_finite],
+            old_labels=[left.candidates.result.metadata["polarizations"][ids[i]] for i in old_finite],
+            new_labels=[right.result.metadata["polarizations"][i] for i in new_finite],
         )
         for cluster in clusters:
             a = tuple(int(old_finite[i]) for i in cluster["old_members"])
@@ -281,6 +295,13 @@ def _track_modes(
                     "transform": cluster["transform"],
                     "singular_values": cluster["singular_values"],
                     "kind": "tracked_subspace",
+                    "characters": field_character(
+                        replace(right.result, neff=right.result.neff[list(b)]),
+                        {
+                            name: field[..., list(b)] @ cluster["transform"]
+                            for name, field in right.fields.items()
+                        },
+                    ),
                 }
             )
         active = np.flatnonzero(present & (indices < 0) & np.isfinite(ov).all(axis=0))
@@ -292,6 +313,10 @@ def _track_modes(
             for i, track in enumerate(active):
                 for j, candidate in enumerate(remaining):
                     allowed[i, j] &= old_pol[ids[track]] == new_pol[candidate]
+                    allowed[i, j] &= compatible_character(
+                        old_characters[track],
+                        right.evidence[candidate]["character"],
+                    )
             assigned, overlap, _ = assign_modes(
                 ov[:, active],
                 nv[:, remaining],
@@ -405,10 +430,16 @@ def _track_modes(
                     "candidate": candidate,
                 }
             )
-        for group in eigen_clusters(sample.candidates.eigenvalues[born], config.cluster_gap):
+        for group in mode_groups(
+            sample.candidates.eigenvalues[born],
+            config,
+            labels=[sample.candidates.result.metadata["polarizations"][i] for i in born],
+        ):
             candidates = tuple(born[i] for i in group)
             if len(group) > 1 and np.all(sample.candidates.numerical_valid[list(candidates)]):
-                _, transform = orthonormal_basis(sample.candidates.vectors[:, candidates])
+                transform, characters = canonical_subspace(
+                    sample.candidates.result, sample.candidates.fields, list(candidates)
+                )
                 if transform.shape[1] == len(group):
                     records.append(
                         {
@@ -417,6 +448,7 @@ def _track_modes(
                             "transform": transform,
                             "singular_values": np.ones(len(group)),
                             "kind": "discovered_subspace",
+                            "characters": characters,
                         }
                     )
         sample.clusters = tuple(records)
@@ -530,9 +562,17 @@ def _track_modes(
             continue
         reverse = match(None, right, left.candidates)
         same = np.array_equal(reverse.candidate_indices[common], left.candidate_indices[common])
-        clustered = bool(left.clusters or right.clusters)
-        if clustered:
-            same = set(reverse.candidate_indices[common]) == set(left.candidate_indices[common])
+        if not same:
+            checked = np.zeros(len(common), dtype=bool)
+            same = True
+            for cluster in reverse.clusters:
+                tracks = list(cluster["tracks"])
+                if not np.all(common[tracks]):
+                    continue
+                same &= set(reverse.candidate_indices[tracks]) == set(left.candidate_indices[tracks])
+                checked[tracks] = True
+            scalar = common & ~checked
+            same &= np.array_equal(reverse.candidate_indices[scalar], left.candidate_indices[scalar])
         if not same:
             interval = (left.frequency, right.frequency)
             unresolved.append(interval)
@@ -559,6 +599,7 @@ def _track_modes(
             "seed_modes": tuple(seeds),
             "eigensolves": solves,
             "automatic_tracking": automatic,
+            "group_assignment_policy": "persistent_subgroups_v1",
             "num_tracks": len(root.candidate_indices),
             "fingerprint": fingerprint(initial.result),
             "normalization": "combined_E_H_RMS_1_V_per_m",

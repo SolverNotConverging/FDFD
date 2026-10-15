@@ -34,7 +34,7 @@ physical walls; ``"open"`` means the domain edges are artificial and must be
 shown irrelevant by padding. :class:`~fdfd.TrackingConfig` holds the
 thresholds below. :func:`fdfd.tracking.track_modes` is the lower-level entry
 point: it takes a factory ``make_solver(frequency, VerificationSpec)`` instead
-of a tracker (see ``examples/tracking/1d_parallel_plate_cutoff.py``).
+of a tracker (see ``examples/tracking/1d_tracked_parallel_plate.py``).
 
 The algorithm answers three separate questions:
 
@@ -150,19 +150,49 @@ nonnegative; seeds and new branches make their largest entry real.
 5. Degenerate subspaces
 -----------------------
 
-Clusters are connected components of
-:math:`|\lambda_i-\lambda_j|\le g\max(1,|\lambda_i|,|\lambda_j|)` with
-:math:`g=` ``cluster_gap``. Each cluster is orthonormalized by polar
-decomposition (:math:`V=U\Sigma W^\dagger`, :math:`Q=UW^\dagger`), and old and
-new spans are compared by their principal angles,
-:math:`Q_o^\dagger Q_n=LSR^\dagger`, :math:`O_{\rm sub}=\min_\ell s_\ell^2`.
-Equal-rank clusters are matched with
-:math:`C_{\rm sub}=1-O_{\rm sub}+0.1\min(d_{\rm sub}^2,4)` using centroid
-drift, before scalar assignment. The Procrustes rotation
-:math:`R=RL^\dagger` aligns the new basis; for smooth-basis coefficients
-:math:`c` the raw-mode amplitudes are :math:`a=T_{\rm stored}c` and each term
-keeps its own :math:`\beta`. Individual export refuses cluster members; use
+``cluster_gap`` defines a spectral neighbourhood. Basis rotation requires the
+stricter ``degeneracy_tolerance`` (default 1e-8): every pair in a group must
+satisfy the relative gap bound. This complete-link rule prevents a chain of
+small gaps from merging resolved branches. Known 1D TE/TM sectors are kept
+separate, including seeds and newly discovered branches.
+
+At continuation steps, a group must also remain degenerate under the secant
+prediction. Thus an accidental crossing does not erase established branch
+variations. Persistent pairs may be matched through a larger crossing group
+when projection onto the old span identifies an unambiguous subset of raw
+candidates. ``subspace_margin`` controls that subset separation. A fully
+mixed larger eigenspace without identifiable subsets remains unresolved and
+triggers adaptive sampling.
+
+Seed bases first resolve longitudinal E/H nullspaces, then mirror sectors
+whose reflections preserve the resolved span. Remaining multiplicities retain
+a subspace identity. These smooth-basis labels are stored as ``characters``
+in the cluster records, separately from raw candidate evidence. The field
+viewer applies these transformations before plotting components or magnitudes
+and displays the transported E/H and parity labels. Individual modes use their
+tracked phase; untracked candidates retain their raw profiles.
+
+Each accepted span is orthonormalized by polar decomposition and compared
+using the smallest squared principal overlap. Competing proposals sharing
+any member need a cost margin of at least ``assignment_margin``. Procrustes
+transport stores the raw-mode-to-smooth-basis transformation. Reverse audits
+permit permutations within each accepted subspace, never across unrelated
+groups. Individual export refuses cluster members; use
 :func:`fdfd.tracking.export_subspace` with explicit coefficients.
+
+Candidate evidence includes ``character``: TE (H-type), TM (E-type), TEM,
+hybrid or unresolved, longitudinal E/H fractions, and reflection parity for
+each transverse axis. Reflection treats E as a polar vector and H as an axial
+vector; parity 0 means indefinite. Definite contradictory E/H or parity
+sectors cannot match as individual branches. This preserves distinct symmetry
+sectors through crossings without imposing a label on a mixed degenerate
+basis. Parity is measured field evidence, not a proof of geometric symmetry
+or symmetry protection. Hybrid modes may change character continuously.
+
+Mesh and padding variants use the same strict grouping and sector rules.
+Subspace verification requires every participating variant member to be
+numerically valid and satisfy the drift and edge checks. Character evidence,
+group transformations and the assignment policy are retained in saved sweeps.
 
 6. Continuation and cutoff
 --------------------------
@@ -249,7 +279,7 @@ power, since cross terms do not vanish.
      - 1e-6
      - Near-zero-index reconstruction/export exclusion
    * - ``overlap_min``
-     - 0.8
+     - 0.9
      - Minimum squared matching overlap
    * - ``assignment_margin``
      - 0.02
@@ -260,6 +290,12 @@ power, since cross terms do not vanish.
    * - ``cluster_gap``
      - 1e-5
      - Relative eigenvalue-neighbourhood scale
+   * - ``degeneracy_tolerance``
+     - 1e-8
+     - Maximum pairwise relative gap for basis rotation
+   * - ``subspace_margin``
+     - 0.02
+     - Minimum projection gap selecting a subgroup
    * - ``verification_beta_tolerance``
      - 1e-3
      - Drift normalized by max(abs(beta), k0)
