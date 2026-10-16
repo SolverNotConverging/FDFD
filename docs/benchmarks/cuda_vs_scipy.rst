@@ -6,6 +6,11 @@ current RTX 4070 Laptop / i9 reference for the resident CUDA implementation.
 It supersedes earlier local CPU/GPU laptop performance reports. Historical
 Titan RTX measurements and hybrid-versus-resident controls are separate experiments.
 
+Backend policy update: these recorded measurements explicitly selected the
+resident GPU path. They remain reproducible with ``gpu`` (FDFD also accepts
+``cuda``). Current ``auto`` selects hybrid GPU Arnoldi/CPU Ritz, then warns
+before CPU fallback; the timing snapshots below are unchanged.
+
 Machine and software
 --------------------
 

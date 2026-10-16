@@ -1,7 +1,7 @@
-"""Optional cuDSS direct solves and custom device-resident refined Arnoldi.
+"""Optional cuDSS direct solves and hybrid or resident GPU refined Arnoldi.
 
-Numerical Krylov vectors, Ritz eigensolving/SVD and backward-error checks stay
-on CUDA. CPU work prepares sparse matrices and exports the final results.
+Hybrid uses CPU dense Ritz extraction with GPU sparse and basis operations.
+Explicit gpu/cuda keeps Ritz extraction on CUDA as well.
 """
 
 from types import SimpleNamespace
@@ -83,7 +83,14 @@ def probe_eigen_available():
     probe_resident_available()
 
 
-def _resident_pairs(A, B, *, k, sigma, tol, ncv, v0, max_restarts, random_seed):
+def probe_hybrid_available():
+    from ._gpu_arnoldi import probe_hybrid_available as probe
+
+    probe()
+
+
+def _resident_pairs(A, B, *, k, sigma, tol, ncv, v0, max_restarts, random_seed, device="cuda"):
+    from ._gpu_arnoldi import iterate_hybrid_device
     from ._gpu_resident_arnoldi import iterate_device
     from ._gpu_validation import positive_integer
     from .eigs import _norm_estimate, _perturbed
@@ -98,7 +105,8 @@ def _resident_pairs(A, B, *, k, sigma, tol, ncv, v0, max_restarts, random_seed):
     k = positive_integer(k, "k")
     if k >= A.shape[0]:
         raise ValueError("k must be smaller than the eigenproblem size.")
-    ncv = min(A.shape[0], max(96, 6 * k + 16)) if ncv is None else positive_integer(ncv, "ncv", k + 1)
+    default_ncv = max(80, 4 * k + 8) if device == "hybrid" else max(96, 6 * k + 16)
+    ncv = min(A.shape[0], default_ncv) if ncv is None else positive_integer(ncv, "ncv", k + 1)
     restarts = positive_integer(max_restarts, "max_restarts", 0)
     tolerance = float(tol)
     if not np.isfinite(tolerance) or tolerance < 0:
@@ -119,7 +127,8 @@ def _resident_pairs(A, B, *, k, sigma, tol, ncv, v0, max_restarts, random_seed):
         operator = SimpleNamespace(
             shape=A.shape, matvec=lambda vector: factor.solve(b_gpu @ vector), residual=residual
         )
-        return iterate_device(
+        iteration = iterate_hybrid_device if device == "hybrid" else iterate_device
+        return iteration(
             operator,
             target,
             shift,
@@ -132,14 +141,25 @@ def _resident_pairs(A, B, *, k, sigma, tol, ncv, v0, max_restarts, random_seed):
         )
 
 
-def solve_eigenpairs(A, B=None, *, k, sigma, tol=0.0, ncv=None, v0=None, max_restarts=12, random_seed=0):
-    """Return final host eigenpairs after the complete resident numerical core."""
+def solve_eigenpairs(
+    A, B=None, *, k, sigma, tol=0.0, ncv=None, v0=None, max_restarts=12, random_seed=0, device="cuda"
+):
+    """Return host eigenpairs after the selected hybrid or resident numerical core."""
     import cupy as cp
 
     from .eigs import Eigenpairs
 
     values, vectors, residuals, _ = _resident_pairs(
-        A, B, k=k, sigma=sigma, tol=tol, ncv=ncv, v0=v0, max_restarts=max_restarts, random_seed=random_seed
+        A,
+        B,
+        k=k,
+        sigma=sigma,
+        tol=tol,
+        ncv=ncv,
+        v0=v0,
+        max_restarts=max_restarts,
+        random_seed=random_seed,
+        device=device,
     )
     if not bool(
         cp.all(cp.isfinite(values) & cp.isfinite(residuals) & (residuals <= max(1e-8, 100 * float(tol))))
@@ -154,7 +174,7 @@ def eigenpairs(A, B=None, *, k, sigma, tol=0.0, ncv=None, v0=None):
     return result.values, result.vectors
 
 
-def refined_generalized(A, B, *, sigma, num_modes, tol, ncv, max_restarts, random_seed):
+def refined_generalized(A, B, *, sigma, num_modes, tol, ncv, max_restarts, random_seed, device="cuda"):
     """Preserve the private refined-result contract using CUDA kernels."""
     import cupy as cp
 
@@ -170,6 +190,7 @@ def refined_generalized(A, B, *, sigma, num_modes, tol, ncv, max_restarts, rando
         v0=None,
         max_restarts=max_restarts,
         random_seed=random_seed,
+        device=device,
     )
     converged = bool(cp.all(cp.isfinite(residuals) & (residuals <= max(float(tol), 1e-12))))
     return ArnoldiResult(
@@ -181,5 +202,5 @@ def refined_generalized(A, B, *, sigma, num_modes, tol, ncv, max_restarts, rando
         step_count=work["steps"],
         converged=converged,
         kernels="cuda",
-        device="cuda",
+        device=device,
     )

@@ -21,7 +21,8 @@ DIELECTRIC = Material(name="dielectric", epsilon=2.25)
 
 @pytest.mark.parametrize("method", ["arpack", "refined"])
 @pytest.mark.parametrize("dimension", [1, 2])
-def test_waveguide(dimension, method):
+@pytest.mark.parametrize("device", ["cuda", "gpu", "hybrid", "auto"])
+def test_waveguide(dimension, method, device):
     if dimension == 1:
         solver = fdfd.ModeSolver1D(frequency=C0, x_range=(0.0, 1.0))
         solver.mesh(resolution=32)
@@ -30,14 +31,15 @@ def test_waveguide(dimension, method):
         solver.mesh(resolution=(12, 8))
     options = dict(num_modes=1, guess=0.85, tol=1e-10, method=method)
     cpu = solver.solve(device="cpu", **options)
-    gpu = solver.solve(device="cuda", **options)
+    gpu = solver.solve(device=device, **options)
     np.testing.assert_allclose(gpu.neff, cpu.neff, rtol=1e-7, atol=1e-8)
-    assert gpu.info.device == "cuda" and gpu.info.converged
+    assert gpu.info.device == ("cuda" if device in ("gpu", "cuda") else "hybrid") and gpu.info.converged
 
 
 @pytest.mark.parametrize("method", ["arpack", "refined"])
 @pytest.mark.parametrize("dimension", [2, 3])
-def test_periodic(dimension, method):
+@pytest.mark.parametrize("device", ["cuda", "gpu", "hybrid", "auto"])
+def test_periodic(dimension, method, device):
     settings = dict(frequency=C0, x_range=(0.0, 1.0), z_range=(0.0, 0.25), background_material=DIELECTRIC)
     if dimension == 2:
         solver = fdfd.PeriodicModeSolver2D(**settings)
@@ -49,39 +51,47 @@ def test_periodic(dimension, method):
         options = {}
     options.update(num_modes=1, guess=1.4, method=method, tol=1e-9, ncv=40)
     cpu = solver.solve(device="cpu", **options)
-    gpu = solver.solve(device="cuda", **options)
+    gpu = solver.solve(device=device, **options)
     np.testing.assert_allclose(gpu.neff, cpu.neff, rtol=1e-6, atol=1e-7)
-    assert gpu.info.device == "cuda" and gpu.info.converged
+    assert gpu.info.device == ("cuda" if device in ("gpu", "cuda") else "hybrid") and gpu.info.converged
 
 
-def test_band_structure():
+@pytest.mark.parametrize("device", ["cuda", "gpu", "hybrid", "auto"])
+def test_band_structure(device):
     solver = fdfd.BandStructureSolver2D(x_range=(0.0, 1.0), y_range=(0.0, 1.0))
     solver.add_circle(center=(0.5, 0.5), radius=0.2, material=Material(name="rod", epsilon=4.0))
     solver.mesh(resolution=(8, 8))
     path = fdfd.bloch_path(((0.0, 0.0), (1.0, 0.2)), num_points=2)
     cpu = solver.solve(beta_path=path, num_modes=2, tol=1e-9, progress=False)
-    gpu = solver.solve(beta_path=path, num_modes=2, tol=1e-9, device="cuda", progress=False)
+    gpu = solver.solve(beta_path=path, num_modes=2, tol=1e-9, device=device, progress=False)
     for pol in ("TE", "TM"):
         # atol covers the static Gamma mode, a numerical zero.
         np.testing.assert_allclose(gpu.frequencies[pol], cpu.frequencies[pol], rtol=1e-6, atol=1e3)
 
 
 @pytest.mark.parametrize("polarization", ["TE", "TM"])
-def test_scattering_reuses_its_factorization(polarization):
+@pytest.mark.parametrize("device", ["cuda", "gpu", "hybrid", "auto"])
+def test_scattering_reuses_its_factorization(polarization, device):
     solver = fdfd.ScatteringSolver2D(frequency=C0, x_range=(-1.0, 1.0), y_range=(-1.0, 1.0))
     solver.add_circle(center=(0.0, 0.0), radius=0.2, material=Material(name="cylinder", epsilon=2.0))
     solver.add_pml(thickness=0.3)
     solver.mesh(resolution=(20, 20))
     solver.set_source(angle=0.0, inset=0.4)
     cpu = solver.solve(polarization=polarization)
-    gpu = solver.solve(polarization=polarization, device="cuda")
+    gpu = solver.solve(polarization=polarization, device=device)
     for name in cpu.fields:
         np.testing.assert_allclose(gpu.fields[name], cpu.fields[name], rtol=1e-7, atol=1e-8)
-    assert gpu.info.device == "cuda" and gpu.info.residuals[0] < 1e-9
-    factor = solver._kernel._systems[(polarization, "cuda")][3]
+    assert (
+        gpu.info.device == ("cuda" if device in ("gpu", "cuda") else "hybrid")
+        and gpu.info.residuals[0] < 1e-9
+    )
+    factor = solver._kernel._systems[(polarization, "cuda" if device in ("gpu", "cuda") else "hybrid")][3]
     solver.set_source(angle=30.0, inset=0.4)
-    solver.solve(polarization=polarization, device="cuda")
-    assert solver._kernel._systems[(polarization, "cuda")][3] is factor
+    solver.solve(polarization=polarization, device=device)
+    assert (
+        solver._kernel._systems[(polarization, "cuda" if device in ("gpu", "cuda") else "hybrid")][3]
+        is factor
+    )
     solver._kernel.close()
     assert factor.factor is None
 
@@ -103,7 +113,8 @@ def test_singular_mass_pencil():
 
 
 @pytest.mark.parametrize("dimension", [1, 2])
-def test_mode_tracking(dimension):
+@pytest.mark.parametrize("device", ["cuda", "gpu", "hybrid", "auto"])
+def test_mode_tracking(dimension, device):
     width, height = 22.86e-3, 10.16e-3
     fc = C0 / (2 * width)
     if dimension == 1:
@@ -133,15 +144,18 @@ def test_mode_tracking(dimension):
         tracker.mesh(resolution=(34, 18), subpixels=1)
     config = fdfd.TrackingConfig(verification_beta_tolerance=0.006, verification_overlap=0.995)
     cpu = tracker.solve(num_modes=2, config=config, progress=False)
-    gpu = tracker.solve(num_modes=2, config=config, device="cuda", progress=False)
+    gpu = tracker.solve(num_modes=2, config=config, device=device, progress=False)
     np.testing.assert_allclose(
         [s.candidates.result.neff for s in gpu.samples],
         [s.candidates.result.neff for s in cpu.samples],
         rtol=1e-6,
         atol=1e-7,
     )
-    assert gpu.info.device == "cuda"
-    assert all(s.candidates.result.info.device == "cuda" for s in gpu.samples)
+    assert gpu.info.device == ("cuda" if device in ("gpu", "cuda") else "hybrid")
+    assert all(
+        s.candidates.result.info.device == ("cuda" if device in ("gpu", "cuda") else "hybrid")
+        for s in gpu.samples
+    )
 
 
 def test_auto_device_selects_cuda_when_available():
@@ -150,4 +164,4 @@ def test_auto_device_selects_cuda_when_available():
     assert cuda.available()
     solver = fdfd.ModeSolver1D(frequency=C0, x_range=(0.0, 1.0))
     solver.mesh(resolution=32)
-    assert solver.solve(num_modes=1, guess=0.85, device="auto").info.device == "cuda"
+    assert solver.solve(num_modes=1, guess=0.85, device="auto").info.device == "hybrid"

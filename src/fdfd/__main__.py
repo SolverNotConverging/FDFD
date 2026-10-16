@@ -24,13 +24,22 @@ def main():
             from .core._cudss import find_cudss_library
 
             print(f"cuDSS: {find_cudss_library()}")
-            from .core.cuda import probe_eigen_available, require_available
+            from .core.cuda import probe_eigen_available, probe_hybrid_available, require_available
 
             require_available()
-            probe_eigen_available()
-            print("Resident CUDA Arnoldi / Ritz / SVD: available")
+            print("cuDSS direct GPU solves: available")
         except Exception as exc:
-            print(f"Resident CUDA unavailable: {exc}")
+            print(f"CUDA/cuDSS unavailable: {exc}")
+        else:
+            for label, probe in (
+                ("Hybrid CUDA Arnoldi / CPU Ritz", probe_hybrid_available),
+                ("Resident CUDA Arnoldi / Ritz / SVD", probe_eigen_available),
+            ):
+                try:
+                    probe()
+                    print(f"{label}: available")
+                except Exception as exc:
+                    print(f"{label} unavailable: {exc}")
     return 0
 
 

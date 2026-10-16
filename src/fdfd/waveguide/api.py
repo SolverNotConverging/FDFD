@@ -18,8 +18,8 @@ _SOLVE_DOC = """
             modes first.
         tol : float
             Eigensolver tolerance; 0 means machine precision.
-        device : {{"auto", "cpu", "cuda"}}
-            Where the shifted operator is factorized.
+        device : {{"auto", "cpu", "hybrid", "gpu", "cuda"}}
+            Auto selects hybrid GPU Arnoldi/CPU Ritz; gpu/cuda require resident CUDA Ritz.
         method : {{"arpack", "refined"}}
             Krylov method, see :func:`fdfd.core.eigs.solve`.
 

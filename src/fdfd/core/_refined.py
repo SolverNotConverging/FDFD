@@ -72,8 +72,8 @@ class ArnoldiResult:
             raise ValueError("Arnoldi work counts must be nonnegative.")
         if self.kernels not in {"cython", "python", "cuda"}:
             raise ValueError("kernels must be 'cython', 'python', or 'cuda'.")
-        if self.device not in {"cpu", "cuda"}:
-            raise ValueError("device must be 'cpu' or 'cuda'.")
+        if self.device not in {"cpu", "cuda", "hybrid"}:
+            raise ValueError("device must be 'cpu', 'hybrid', 'gpu' or 'cuda'.")
 
         object.__setattr__(self, "eigenvalues", eigenvalues)
         object.__setattr__(self, "eigenvectors", eigenvectors)
@@ -450,8 +450,11 @@ def solve_generalized(
         raise ValueError("sigma must be a finite scalar.") from exc
     if not (np.isfinite(shift.real) and np.isfinite(shift.imag)):
         raise ValueError("sigma must be a finite scalar.")
-    if device not in ("cpu", "cuda"):
-        raise ValueError("device must be 'cpu' or 'cuda'.")
+    if device not in ("cpu", "cuda", "gpu", "hybrid", "auto"):
+        raise ValueError("device must be 'cpu', 'hybrid', 'gpu' or 'cuda'.")
+    from .eigs import check_eigen_device
+
+    device = check_eigen_device(device)
     kernels = resolve_kernels(kernels)
 
     n = int(A.shape[0])
@@ -462,7 +465,7 @@ def solve_generalized(
     if not (np.all(np.isfinite(A.data)) and np.all(np.isfinite(B.data))):
         raise ValueError("A and B must contain only finite values.")
 
-    if device == "cuda":
+    if device in ("cuda", "hybrid"):
         from .cuda import refined_generalized
 
         return refined_generalized(
@@ -474,6 +477,7 @@ def solve_generalized(
             ncv=ncv,
             max_restarts=max_restarts,
             random_seed=random_seed,
+            device=device,
         )
 
     shifted = (A - shift * B).tocsc()

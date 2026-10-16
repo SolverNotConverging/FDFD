@@ -25,10 +25,11 @@ class SolveInfo:
     Attributes
     ----------
     device : str
-        ``"cpu"`` or ``"cuda"``.
+        ``"cpu"``, ``"hybrid"`` or ``"cuda"`` (the canonical gpu alias).
     method : str
         ``"arpack"`` or ``"refined"`` for CPU eigenproblems,
-        ``"cuda-refined"`` for resident CUDA eigenproblems, and ``"direct"``
+        ``"cuda-refined"`` for resident GPU, ``"cuda-hybrid-refined"`` for
+        hybrid eigenproblems, and ``"direct"``
         for driven (scattering) solves.
     tol : float
         Requested eigensolver tolerance (0 means machine precision).
@@ -52,6 +53,8 @@ class SolveInfo:
     field_residuals: np.ndarray | None = None
 
     def __post_init__(self):
+        if self.device == "hybrid" and self.method in ("arpack", "refined"):
+            object.__setattr__(self, "method", "cuda-hybrid-refined")
         if self.device == "cuda" and self.method in ("arpack", "refined"):
             object.__setattr__(self, "method", "cuda-refined")
 

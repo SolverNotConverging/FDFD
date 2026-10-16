@@ -127,7 +127,7 @@ class BandStructureSolver2D(GridSolver):
             the lowest bands.
         tol : float
             Eigensolver tolerance; 0 means machine precision.
-        device : {"auto", "cpu", "cuda"}
+        device : {"auto", "cpu", "hybrid", "gpu", "cuda"}
         method : {"arpack", "refined"}
         progress : bool
             Show a progress bar over the path.

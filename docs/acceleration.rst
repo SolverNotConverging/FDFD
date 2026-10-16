@@ -1,39 +1,51 @@
 Acceleration
 ============
 
-Both accelerators are optional and give the same results as the default
-CPU path within solver tolerance.
+CUDA installation is completely optional; CPU solving uses SciPy by default.
+Every solver accepts ``device="cpu"``, ``"hybrid"``, ``"gpu"`` or ``"auto"``.
+``"cuda"`` remains a compatibility alias for explicit ``"gpu"``.
 
-Resident CUDA eigensolving (``device="cuda"``)
-----------------------------------------------
+Eigenvalue backends
+-------------------
 
-Every solver accepts ``device="cpu"``, ``"cuda"`` or ``"auto"``. CUDA
-eigenproblems use cuDSS factorization and custom FP64 complex Arnoldi kernels.
-Krylov vectors, sparse products, orthogonalization, Ritz eigenvalues and SVD,
-normalization, restarts and original-pencil backward errors stay on the GPU.
-Both ``method="arpack"`` and ``"refined"`` select this resident algorithm
-on CUDA; ``result.info.method`` reports ``"cuda-refined"``.
+* ``cpu``: SciPy ARPACK/SuperLU (or the requested CPU refined method).
+* ``hybrid``: cuDSS factorization, custom FP64 CUDA Arnoldi kernels and GPU
+  original-pencil residuals, with SciPy dense Ritz eigensolving/SVD on CPU.
+* ``gpu`` / ``cuda``: the resident CUDA Arnoldi, Ritz eigensolving/SVD and
+  backward-error path. Results use the canonical ``info.device="cuda"``.
+* ``auto``: try hybrid, then emit a ``RuntimeWarning`` before CPU fallback.
+  Auto never attempts the resident GPU eigensolver.
 
-CPU work assembles the sparse operators, prepares static metadata, orchestrates
-CUDA calls and reconstructs public fields after the final eigenpair export.
-Each restart downloads only two Boolean control bytes. CUDA libraries may
-use internal host workspaces; this is not a claim of zero library transfers.
+Both existing method selections use refined Arnoldi on accelerated backends.
+``info.method`` reports ``"cuda-hybrid-refined"`` or ``"cuda-refined"``;
+``info.device`` records ``"hybrid"`` or ``"cuda"`` respectively.
+Explicit unavailable hybrid/GPU requests raise ``BackendCapabilityError``.
+Numerical failures after selection propagate without switching algorithms.
+CPU execution does not probe CUDA.
 
-Scattering uses reusable cuDSS factorizations and GPU direct solves, uploading
-each source and downloading its final solution. Factors are reused until the
-geometry or mesh changes.
+Hybrid keeps the large basis and sparse numerical work on GPU, reads norm
+scalars, transfers small Hessenberg matrices/residuals to CPU and refined
+coefficients back to GPU. Only explicit GPU requires CUDA ``geev``/SVD and
+uses two status bytes per resident cycle. CPU work also assembles operators
+and reconstructs public fields. Vendor libraries may use internal host workspaces.
 
-``"auto"`` checks the active device, a real cuDSS solve and, for eigenproblems,
-custom-kernel compilation and CUDA Ritz/SVD execution. It emits a
-``RuntimeWarning`` if it falls back to CPU. Explicit ``"cuda"`` raises
-``BackendCapabilityError`` if the required path is unavailable. CPU execution
-does not import CuPy. Runtime numerical failures propagate without CPU retry.
+Direct scattering
+-----------------
+
+Use ``device="gpu"`` (or ``"cuda"``) to require cuDSS direct scattering.
+``hybrid`` uses the same cuDSS factorization/substitution; there is no Ritz
+matrix in a direct solve. Factors are reused until geometry or mesh changes.
+Each source is uploaded and its final solution downloaded. ``auto`` selects
+the accelerated path when available and warns before CPU fallback.
+
+Installation
+------------
 
 Install ``pip install 'fdfd[cuda12]'`` or ``'fdfd[cuda13]'`` for CuPy and
-NVIDIA cuDSS. Resident Ritz extraction also requires CUDA ``geev`` support in
-the installed CuPy/cuSOLVER; availability is checked at execution time.
-CUDA 13 requires a Turing or newer GPU. If automatic library discovery fails,
-set ``CUDSS_LIBRARY`` to ``cudss64_0.dll`` or ``libcudss.so``.
+NVIDIA cuDSS. Hybrid readiness checks a real cuDSS solve and compiled custom
+kernels with CPU Ritz extraction. CUDA ``geev``/SVD availability is checked
+only for explicit gpu/cuda eigenproblems. CUDA 13 needs a Turing or newer GPU.
+Set ``CUDSS_LIBRARY`` if automatic discovery cannot find your cuDSS installation.
 
 The default wheel remains ``py3-none-any``. It ships CUDA source compiled
 on first use and requires no CUDA toolchain for a CPU-only installation.

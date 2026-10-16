@@ -113,7 +113,7 @@ class _ModeTracker(GridSolver):
             index (fundamental modes first).
         tol : float
             Eigensolver tolerance; 0 means machine precision.
-        device : {{"auto", "cpu", "cuda"}}
+        device : {{"auto", "cpu", "hybrid", "gpu", "cuda"}}
         reference_frequency : float, optional
             Requested frequency at which tracking starts (default: the lowest).
         config : TrackingConfig, optional

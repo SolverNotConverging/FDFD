@@ -31,8 +31,8 @@ def test_missing_resident_core_never_selects_hybrid_cuda(monkeypatch):
     monkeypatch.setattr(cuda, "available", lambda: True)
     monkeypatch.setattr(cuda, "require_available", lambda: None)
     monkeypatch.setattr(cuda, "probe_eigen_available", unavailable)
-    with pytest.warns(RuntimeWarning, match="resident CUDA eigensolver"):
-        assert eigs.check_eigen_device("auto") == "cpu"
+    monkeypatch.setattr(cuda, "probe_hybrid_available", lambda: None)
+    assert eigs.check_eigen_device("auto") == "hybrid"
     with pytest.raises(BackendCapabilityError, match="resident CUDA eigensolver"):
         eigs.check_eigen_device("cuda")
     assert eigs.check_device("cuda") == "cuda"  # Direct solves do not need Ritz extraction.

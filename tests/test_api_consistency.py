@@ -238,7 +238,7 @@ def test_unknown_device_is_rejected(case):
     solver = case.build()
     solver.mesh(resolution=RESOLUTIONS[len(solver._physical_axes)])
     with pytest.raises(fdfd.ConfigurationError, match="device"):
-        solve_on(case, solver, "gpu")
+        solve_on(case, solver, "not-a-backend")
 
 
 def test_auto_device_falls_back_to_cpu_without_cuda(case, monkeypatch):

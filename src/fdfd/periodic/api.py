@@ -19,8 +19,8 @@ _SOLVE_DOC = """
         tol : float
             Eigensolver tolerance; 0 means machine precision (the refined
             method uses at least 1e-12).
-        device : {{"auto", "cpu", "cuda"}}
-            Where the shifted pencil is factorized.
+        device : {{"auto", "cpu", "hybrid", "gpu", "cuda"}}
+            Auto selects hybrid GPU Arnoldi/CPU Ritz; gpu/cuda require resident CUDA Ritz.
         method : {{"arpack", "refined"}}
             Krylov method; "refined" is more robust for difficult 3D cells.
         ncv : int, optional

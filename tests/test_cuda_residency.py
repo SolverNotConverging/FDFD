@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.parametrize("device", ["cuda", "auto"])
+@pytest.mark.parametrize("device", ["cuda", "gpu"])
 @pytest.mark.parametrize("method", ["arpack", "refined"])
 def test_no_cpu_iteration_or_numerical_array_downloads(monkeypatch, device, method):
     import cupy as cp

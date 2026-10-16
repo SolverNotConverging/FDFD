@@ -43,15 +43,26 @@ python -m pip install "fdfd[cuda13]"  # optional CUDA 13 support
 ```
 
 Choose the extra matching your NVIDIA CUDA environment. Both extras install
-CuPy and NVIDIA cuDSS for custom GPU-resident eigenvalue solving and accelerated
+CuPy and NVIDIA cuDSS for custom GPU-accelerated eigenvalue solving and accelerated
 direct solves. The universal `py3-none-any` wheel includes the custom CUDA kernel
 source; CuPy compiles it on first GPU use. A CPU installation needs no CUDA
 dependencies or compiler. CUDA execution requires a compatible NVIDIA GPU and
 driver; see [Acceleration](docs/acceleration.rst) for requirements.
 
-Select `device="cuda"` to require GPU execution, or `device="auto"` to use it
-when available. Automatic CPU fallback emits a warning; an unavailable explicit
-CUDA request raises an error.
+Select `device="hybrid"` for GPU factorization/Arnoldi with CPU Ritz extraction,
+`device="gpu"` for resident CUDA Ritz extraction, or `device="cpu"` for SciPy.
+`device="auto"` tries hybrid and warns before CPU fallback; resident GPU execution
+is selected only explicitly. Unavailable explicit hybrid/GPU requests raise an
+error. `device="cuda"` remains a compatibility alias for `gpu`; results retain
+`info.device="cuda"` for that path. For scattering direct solves, `gpu` and
+`hybrid` both use cuDSS; there is no Ritz extraction in the direct stage.
+
+In our own [hybrid versus resident GPU benchmark](https://github.com/SolverNotConverging/Electromagnetics-FEM/blob/main/benchmarks/resident_comparison/results/2026-10-16/REPORT.rst), the two paths achieved
+very similar eigenvalue-stage times for the tested small Ritz systems (`ncv=80`).
+The dense Ritz matrix is quick to solve on CPU, so moving that step to GPU gives
+little benefit; hybrid was often faster. This is why `auto` prefers hybrid.
+The comparison used FEM periodic cells on Titan RTX; results depend on the
+problem, subspace size and hardware.
 
 For a source checkout, use `python -m pip install -e .` or
 `python -m pip install -e ".[cuda12]"` (alternatively `cuda13`). `uv sync` also

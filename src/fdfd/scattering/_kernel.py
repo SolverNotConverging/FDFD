@@ -147,7 +147,7 @@ class ScatteringKernel(CellMaterials):
         if key not in self._systems:
             matrix, free = self._system(polarization)
             reduced = matrix[free][:, free].tocsc()
-            if device == "cuda":
+            if device in ("cuda", "hybrid"):
                 from ..core.cuda import CudaFactor
 
                 factor = CudaFactor(reduced)

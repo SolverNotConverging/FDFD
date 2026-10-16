@@ -14,7 +14,9 @@ devices
     ``"cuda"``    cuDSS factorization and custom resident refined Arnoldi,
                   including CUDA Ritz eigensolving/SVD and backward errors.
                   Both method selections use this resident CUDA algorithm.
-    ``"auto"``    ``"cuda"`` when it is available, else ``"cpu"``.
+    ``"hybrid"`` GPU Arnoldi with CPU Ritz extraction.
+    ``"gpu"``    Explicit resident CUDA, also spelled ``"cuda"``.
+    ``"auto"``   Try ``"hybrid"``, then warn before ``"cpu"`` fallback.
 """
 
 import warnings
@@ -28,7 +30,7 @@ from scipy.sparse.linalg import LinearOperator, eigs, splu
 from .errors import BackendCapabilityError, ConfigurationError, SolverError
 
 METHODS = ("arpack", "refined")
-DEVICES = ("auto", "cpu", "cuda")
+DEVICES = ("auto", "cpu", "hybrid", "gpu", "cuda")
 
 
 def _cpu_fallback(reason):
@@ -50,29 +52,33 @@ def check_device(device):
     from .cuda import available, require_available
 
     if device == "auto":
-        return "cuda" if available() else _cpu_fallback("the CUDA/cuDSS runtime is unavailable")
+        return "hybrid" if available() else _cpu_fallback("the CUDA/cuDSS runtime is unavailable")
     try:
         require_available()
     except Exception as exc:
-        raise BackendCapabilityError(f"device='cuda' requested but CUDA/cuDSS is unavailable: {exc}") from exc
-    return "cuda"
+        raise BackendCapabilityError(
+            f"device='{device}' requested but CUDA/cuDSS is unavailable: {exc}"
+        ) from exc
+    return "cuda" if device == "gpu" else device
 
 
 def check_eigen_device(device):
-    """Require the custom resident CUDA core; never select CPU Ritz extraction."""
+    """Auto selects hybrid; only explicit gpu/cuda requires resident CUDA Ritz."""
     selected = check_device(device)
     if selected == "cpu":
         return selected
-    from .cuda import probe_eigen_available
+    from .cuda import probe_eigen_available, probe_hybrid_available
 
     try:
-        probe_eigen_available()
+        (probe_eigen_available if selected == "cuda" else probe_hybrid_available)()
     except Exception as exc:
-        reason = f"the resident CUDA eigensolver is unavailable: {exc}"
+        reason = (
+            f"the {'resident CUDA' if selected == 'cuda' else 'hybrid'} eigensolver is unavailable: {exc}"
+        )
         if device == "auto":
             return _cpu_fallback(reason)
-        raise BackendCapabilityError(f"device='cuda' requested but {reason}") from exc
-    return "cuda"
+        raise BackendCapabilityError(f"device='{device}' requested but {reason}") from exc
+    return selected
 
 
 def check_method(method):
@@ -175,9 +181,9 @@ def solve(
         Shift; the eigenvalues closest to it are returned.
     method : {"arpack", "refined"}
         Krylov method (see module documentation).
-    device : {"auto", "cpu", "cuda"}
-        Numerical backend. CUDA uses resident refined Arnoldi for both methods;
-        auto warns on CPU fallback and explicit cuda raises if unavailable.
+    device : {"auto", "cpu", "hybrid", "gpu", "cuda"}
+        Numerical backend. Auto tries hybrid GPU Arnoldi/CPU Ritz, then warns on CPU fallback.
+        Explicit gpu/cuda requires resident CUDA Ritz; unavailable explicit selections raise.
     tol : float
         Convergence tolerance; 0 requests machine precision for ARPACK.
         The refined method uses ``max(tol, 1e-12)``.
@@ -199,7 +205,7 @@ def solve(
     B = None if B is None else sparse.csc_matrix(B, dtype=np.complex128)
     if k >= A.shape[0]:
         raise ConfigurationError(f"Not enough unconstrained degrees of freedom ({A.shape[0]}) for {k} modes.")
-    if device == "cuda":
+    if device in ("cuda", "hybrid"):
         from .cuda import solve_eigenpairs
 
         return solve_eigenpairs(
@@ -212,6 +218,7 @@ def solve(
             v0=v0,
             max_restarts=max_restarts,
             random_seed=random_seed,
+            device=device,
         )
     if method == "refined":
         from ._refined import solve_generalized

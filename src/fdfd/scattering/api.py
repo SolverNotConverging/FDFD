@@ -104,7 +104,7 @@ class ScatteringSolver2D(GridSolver):
         ----------
         polarization : {"TE", "TM"}
             TE has (Ez, Hx, Hy), TM has (Hz, Ex, Ey).
-        device : {"auto", "cpu", "cuda"}
+        device : {"auto", "cpu", "hybrid", "gpu", "cuda"}
             Where the sparse system is factorized. Factorizations are
             reused between solves until the geometry or mesh changes.
 

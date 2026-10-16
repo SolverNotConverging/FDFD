@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add explicit CPU, hybrid GPU Arnoldi/CPU Ritz, and resident GPU eigenvalue backends.
+- Auto now tries hybrid and warns before CPU fallback; resident GPU requires explicit selection.
+- Keep cuDSS direct scattering for both accelerated choices and preserve strict explicit-backend errors.
+
+
 ## 2.1.1 — 2026-10-16
 
 Use custom GPU-resident refined Arnoldi across waveguide, periodic, band-structure, and tracking eigenproblems, with CUDA Ritz eigenvalue/SVD extraction and original-pencil backward-error checks. Both existing method selections use the resident algorithm on CUDA; results report cuda-refined.
