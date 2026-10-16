@@ -11,11 +11,13 @@ methods
                   defective spectra such as 3D periodic leaky modes.
 devices
     ``"cpu"``     SciPy SuperLU factorization.
-    ``"cuda"``    cuDSS factorization on the GPU (needs CuPy and cuDSS);
-                  the Krylov iteration itself stays on the CPU.
+    ``"cuda"``    cuDSS factorization and custom resident refined Arnoldi,
+                  including CUDA Ritz eigensolving/SVD and backward errors.
+                  Both method selections use this resident CUDA algorithm.
     ``"auto"``    ``"cuda"`` when it is available, else ``"cpu"``.
 """
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -23,26 +25,54 @@ import scipy.sparse.linalg  # noqa: F401  (sparse.linalg.norm)
 from scipy import sparse
 from scipy.sparse.linalg import LinearOperator, eigs, splu
 
-from .errors import ConfigurationError, SolverError
+from .errors import BackendCapabilityError, ConfigurationError, SolverError
 
 METHODS = ("arpack", "refined")
 DEVICES = ("auto", "cpu", "cuda")
 
 
-def check_device(device):
-    """Validate ``device`` and resolve ``"auto"`` to ``"cuda"`` or ``"cpu"``.
+def _cpu_fallback(reason):
+    warnings.warn(
+        f"device='auto' is falling back to CPU: {reason}. "
+        "Select device='cpu' to request CPU execution explicitly.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return "cpu"
 
-    ``"auto"`` selects CUDA when :func:`fdfd.core.cuda.available` is true
-    (CuPy, a CUDA GPU and the cuDSS library are all usable) and the SciPy CPU
-    path otherwise. ``"cuda"`` requires the GPU and fails if it is missing.
-    """
+
+def check_device(device):
+    """Resolve a direct CUDA runtime, warning on auto fallback and rejecting unavailable cuda."""
     if device not in DEVICES:
         raise ConfigurationError(f"device must be one of {DEVICES}; received {device!r}.")
-    if device == "auto":
-        from .cuda import available
+    if device == "cpu":
+        return device
+    from .cuda import available, require_available
 
-        return "cuda" if available() else "cpu"
-    return device
+    if device == "auto":
+        return "cuda" if available() else _cpu_fallback("the CUDA/cuDSS runtime is unavailable")
+    try:
+        require_available()
+    except Exception as exc:
+        raise BackendCapabilityError(f"device='cuda' requested but CUDA/cuDSS is unavailable: {exc}") from exc
+    return "cuda"
+
+
+def check_eigen_device(device):
+    """Require the custom resident CUDA core; never select CPU Ritz extraction."""
+    selected = check_device(device)
+    if selected == "cpu":
+        return selected
+    from .cuda import probe_eigen_available
+
+    try:
+        probe_eigen_available()
+    except Exception as exc:
+        reason = f"the resident CUDA eigensolver is unavailable: {exc}"
+        if device == "auto":
+            return _cpu_fallback(reason)
+        raise BackendCapabilityError(f"device='cuda' requested but {reason}") from exc
+    return "cuda"
 
 
 def check_method(method):
@@ -146,7 +176,8 @@ def solve(
     method : {"arpack", "refined"}
         Krylov method (see module documentation).
     device : {"auto", "cpu", "cuda"}
-        Where the shifted operator is factorized.
+        Numerical backend. CUDA uses resident refined Arnoldi for both methods;
+        auto warns on CPU fallback and explicit cuda raises if unavailable.
     tol : float
         Convergence tolerance; 0 requests machine precision for ARPACK.
         The refined method uses ``max(tol, 1e-12)``.
@@ -163,11 +194,25 @@ def solve(
         Unsorted eigenpairs with their backward errors.
     """
     check_method(method)
-    device = check_device(device)
+    device = check_eigen_device(device)
     A = sparse.csc_matrix(A, dtype=np.complex128)
     B = None if B is None else sparse.csc_matrix(B, dtype=np.complex128)
     if k >= A.shape[0]:
         raise ConfigurationError(f"Not enough unconstrained degrees of freedom ({A.shape[0]}) for {k} modes.")
+    if device == "cuda":
+        from .cuda import solve_eigenpairs
+
+        return solve_eigenpairs(
+            A,
+            B,
+            k=k,
+            sigma=sigma,
+            tol=tol,
+            ncv=ncv,
+            v0=v0,
+            max_restarts=max_restarts,
+            random_seed=random_seed,
+        )
     if method == "refined":
         from ._refined import solve_generalized
 
@@ -184,10 +229,6 @@ def solve(
             device=device,
         )
         values, vectors = np.asarray(result.eigenvalues), np.asarray(result.eigenvectors)
-    elif device == "cuda":
-        from .cuda import eigenpairs
-
-        values, vectors = eigenpairs(A, B, k=k, sigma=sigma, tol=tol, ncv=ncv, v0=v0)
     else:
         values, vectors = _arpack(A, B, k=k, sigma=sigma, tol=tol, ncv=ncv, v0=v0)
     return Eigenpairs(values, vectors, backward_errors(A, B, values, vectors))

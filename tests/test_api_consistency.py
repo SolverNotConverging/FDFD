@@ -247,7 +247,8 @@ def test_auto_device_falls_back_to_cpu_without_cuda(case, monkeypatch):
     monkeypatch.setattr(cuda, "available", lambda: False)
     solver = case.build()
     solver.mesh(resolution=RESOLUTIONS[len(solver._physical_axes)])
-    assert solve_on(case, solver, "auto").info.device == "cpu"
+    with pytest.warns(RuntimeWarning, match="falling back to CPU"):
+        assert solve_on(case, solver, "auto").info.device == "cpu"
 
 
 def test_ranges_must_be_pairs():

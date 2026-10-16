@@ -27,15 +27,28 @@ result.show()
 
 ## Install
 
-Python 3.10 or later. From a checkout:
+Python 3.10 or later:
 
 ```sh
-pip install -e .
+python -m pip install fdfd            # CPU installation
+python -m pip install "fdfd[cuda12]"  # optional CUDA 12 support
+python -m pip install "fdfd[cuda13]"  # optional CUDA 13 support
 ```
 
-or `uv sync`, which also installs the test and lint tools. Optional extras:
-`pip install -e .[cuda12]` (or `cuda13`) for GPU factorization with NVIDIA
-cuDSS; see `docs/acceleration.rst`.
+Choose one CUDA extra matching your NVIDIA CUDA environment. Both extras install
+CuPy and NVIDIA cuDSS for custom GPU-resident eigenvalue solving and accelerated
+direct solves. The universal `py3-none-any` wheel includes the custom CUDA kernel
+source; CuPy compiles it on first GPU use. A CPU installation needs no CUDA
+dependencies or compiler. CUDA execution requires a compatible NVIDIA GPU and
+driver; see [Acceleration](docs/acceleration.rst) for requirements.
+
+Select `device="cuda"` to require GPU execution, or `device="auto"` to use it
+when available. Automatic CPU fallback emits a warning; an unavailable explicit
+CUDA request raises an error.
+
+For a source checkout, use `python -m pip install -e .` or
+`python -m pip install -e ".[cuda12]"` (alternatively `cuda13`). `uv sync` also
+installs the test and lint tools.
 
 ## Use
 

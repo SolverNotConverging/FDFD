@@ -66,7 +66,7 @@ class _WaveguideSolver(GridSolver):
         num_modes = check_num_modes(num_modes)
         guess = check_guess(guess)
         tol = check_tol(tol)
-        device = eigs.check_device(device)
+        device = eigs.check_eigen_device(device)
         eigs.check_method(method)
         self._ensure_mesh()
         self._result = None

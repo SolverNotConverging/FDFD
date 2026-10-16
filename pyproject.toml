@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdfd"
-version = "2.1.0"
+version = "2.1.1"
 description = "Finite-difference frequency-domain electromagnetic solvers"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,8 +22,8 @@ dependencies = [
 Repository = "https://github.com/SolverNotConverging/FDFD"
 
 [project.optional-dependencies]
-cuda12 = ["cupy-cuda12x>=13.6,<15"]
-cuda13 = ["cupy-cuda13x>=14,<15"]
+cuda12 = ["cupy-cuda12x>=13.6,<15", "nvidia-cudss-cu12>=0.8,<0.9"]
+cuda13 = ["cupy-cuda13x>=14,<15", "nvidia-cudss-cu13>=0.8,<0.9"]
 
 [project.scripts]
 fdfd = "fdfd.__main__:main"
@@ -41,9 +41,10 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-"fdfd.core" = ["*.pyx"]
+"fdfd.core" = ["*.pyx", "*.cu"]
 
 [tool.uv]
+conflicts = [[{ extra = "cuda12" }, { extra = "cuda13" }]]
 default-groups = ["dev"]
 cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { env = "FDFD_BUILD_CYTHON" }]
 

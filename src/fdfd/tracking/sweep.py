@@ -42,7 +42,7 @@ def track_modes(
     progress=False hides the frequency progress bar. Adaptive frequencies grow
     its total; verification stages are shown without double-counting a frequency.
     """
-    device = eigs.check_device(device)
+    device = eigs.check_eigen_device(device)
     with tqdm(desc="Mode tracking", unit="freq", disable=not progress, dynamic_ncols=True) as progress_bar:
         return _track_modes(
             make_solver,

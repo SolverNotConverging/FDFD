@@ -75,7 +75,7 @@ class _ModeTracker(GridSolver):
         num_modes = check_num_modes(num_modes)
         guess = check_guess(guess)
         tol = check_tol(tol)
-        device = eigs.check_device(device)
+        device = eigs.check_eigen_device(device)
         if config is not None and not isinstance(config, TrackingConfig):
             raise ConfigurationError("config must be a TrackingConfig.")
         self._ensure_mesh()

@@ -75,8 +75,10 @@ def configure_dll_search():
     if cuda_path:
         directories.append(str(Path(cuda_path) / "bin"))
         directories.append(str(Path(cuda_path) / "bin" / "x64"))
+        directories.append(str(Path(cuda_path) / "bin" / "x86_64"))
     if cudss_path:
         directories.append(str(Path(cudss_path).resolve().parent))
+        directories.append(str(Path(cudss_path).resolve().parent / "x86_64"))
     for directory in directories:
         if Path(directory).is_dir() and directory not in _dll_directories:
             _dll_directories[directory] = os.add_dll_directory(directory)

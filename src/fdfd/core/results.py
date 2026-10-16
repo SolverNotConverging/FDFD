@@ -27,8 +27,9 @@ class SolveInfo:
     device : str
         ``"cpu"`` or ``"cuda"``.
     method : str
-        ``"arpack"`` or ``"refined"`` for eigenproblems, ``"direct"`` for
-        driven (scattering) solves.
+        ``"arpack"`` or ``"refined"`` for CPU eigenproblems,
+        ``"cuda-refined"`` for resident CUDA eigenproblems, and ``"direct"``
+        for driven (scattering) solves.
     tol : float
         Requested eigensolver tolerance (0 means machine precision).
     guess : complex or None
@@ -49,6 +50,10 @@ class SolveInfo:
     guess: complex | None
     residuals: np.ndarray
     field_residuals: np.ndarray | None = None
+
+    def __post_init__(self):
+        if self.device == "cuda" and self.method in ("arpack", "refined"):
+            object.__setattr__(self, "method", "cuda-refined")
 
     @property
     def converged(self):

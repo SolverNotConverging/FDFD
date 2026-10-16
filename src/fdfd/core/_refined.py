@@ -70,8 +70,8 @@ class ArnoldiResult:
             raise ValueError("Residual counts must match the eigenvalue count.")
         if int(self.restart_count) < 0 or int(self.step_count) < 0:
             raise ValueError("Arnoldi work counts must be nonnegative.")
-        if self.kernels not in {"cython", "python"}:
-            raise ValueError("kernels must be 'cython' or 'python'.")
+        if self.kernels not in {"cython", "python", "cuda"}:
+            raise ValueError("kernels must be 'cython', 'python', or 'cuda'.")
         if self.device not in {"cpu", "cuda"}:
             raise ValueError("device must be 'cpu' or 'cuda'.")
 
@@ -462,84 +462,88 @@ def solve_generalized(
     if not (np.all(np.isfinite(A.data)) and np.all(np.isfinite(B.data))):
         raise ValueError("A and B must contain only finite values.")
 
+    if device == "cuda":
+        from .cuda import refined_generalized
+
+        return refined_generalized(
+            A,
+            B,
+            sigma=shift,
+            num_modes=num_modes,
+            tol=tolerance,
+            ncv=ncv,
+            max_restarts=max_restarts,
+            random_seed=random_seed,
+        )
+
     shifted = (A - shift * B).tocsc()
     try:
-        if device == "cuda":
-            from .cuda import CudaFactor
-
-            lu = CudaFactor(shifted)
-        else:
-            lu = splu(shifted)
+        lu = splu(shifted)
     except (RuntimeError, ValueError) as exc:
         raise ValueError(
             f"The shifted pencil A - sigma*B could not be factorized at "
             f"sigma={shift!r}; choose a shift away from an eigenvalue."
         ) from exc
 
-    try:
+    def apply_shift_invert(vector):
+        return lu.solve(np.asarray(B @ vector, dtype=np.complex128))
 
-        def apply_shift_invert(vector):
-            return lu.solve(np.asarray(B @ vector, dtype=np.complex128))
+    rng = np.random.default_rng(random_seed)
+    v0 = np.ones(n, dtype=np.complex128)
+    v0 += 1e-3 * (rng.standard_normal(n) + 1j * rng.standard_normal(n))
 
-        rng = np.random.default_rng(random_seed)
-        v0 = np.ones(n, dtype=np.complex128)
-        v0 += 1e-3 * (rng.standard_normal(n) + 1j * rng.standard_normal(n))
-
-        best = None
-        total_steps = 0
-        for restart_count in range(max_restarts + 1):
-            basis, hessenberg = _arnoldi_factorization(
-                apply_shift_invert,
-                n,
-                ncv,
-                v0,
-                kernels=kernels,
-                continue_after_breakdown=num_modes > 1,
-                augmentation_rng=rng,
-            )
-            completed_steps = int(hessenberg.shape[1])
-            total_steps += completed_steps
-            if completed_steps < num_modes:
-                raise RuntimeError(
-                    f"Arnoldi breakdown occurred after {completed_steps} step(s), "
-                    f"before {num_modes} requested modes could be extracted."
-                )
-
-            candidate = _refined_candidate_data(A, B, basis, hessenberg, shift, num_modes, kernels=kernels)
-            physical_residuals = candidate[2]
-            if not np.all(np.isfinite(physical_residuals)):
-                raise RuntimeError("Refined extraction produced nonfinite residuals.")
-
-            if best is None or _candidate_score(candidate) < _candidate_score(best):
-                best = candidate
-            if np.all(physical_residuals <= tolerance):
-                return _result_from_candidate(
-                    candidate,
-                    restart_count=restart_count,
-                    step_count=total_steps,
-                    converged=True,
-                    kernels=kernels,
-                    device=device,
-                )
-
-            if restart_count < max_restarts:
-                unconverged = best[2] > tolerance
-                restart_vectors = best[1][:, unconverged]
-                if restart_vectors.shape[1] == 0:
-                    restart_vectors = best[1]
-                v0 = _restart_vector(restart_vectors, rng, n)
-
-        return _result_from_candidate(
-            best,
-            restart_count=max_restarts,
-            step_count=total_steps,
-            converged=False,
+    best = None
+    total_steps = 0
+    for restart_count in range(max_restarts + 1):
+        basis, hessenberg = _arnoldi_factorization(
+            apply_shift_invert,
+            n,
+            ncv,
+            v0,
             kernels=kernels,
-            device=device,
+            continue_after_breakdown=num_modes > 1,
+            augmentation_rng=rng,
         )
-    finally:
-        if device == "cuda":
-            lu.close()
+        completed_steps = int(hessenberg.shape[1])
+        total_steps += completed_steps
+        if completed_steps < num_modes:
+            raise RuntimeError(
+                f"Arnoldi breakdown occurred after {completed_steps} step(s), "
+                f"before {num_modes} requested modes could be extracted."
+            )
+
+        candidate = _refined_candidate_data(A, B, basis, hessenberg, shift, num_modes, kernels=kernels)
+        physical_residuals = candidate[2]
+        if not np.all(np.isfinite(physical_residuals)):
+            raise RuntimeError("Refined extraction produced nonfinite residuals.")
+
+        if best is None or _candidate_score(candidate) < _candidate_score(best):
+            best = candidate
+        if np.all(physical_residuals <= tolerance):
+            return _result_from_candidate(
+                candidate,
+                restart_count=restart_count,
+                step_count=total_steps,
+                converged=True,
+                kernels=kernels,
+                device=device,
+            )
+
+        if restart_count < max_restarts:
+            unconverged = best[2] > tolerance
+            restart_vectors = best[1][:, unconverged]
+            if restart_vectors.shape[1] == 0:
+                restart_vectors = best[1]
+            v0 = _restart_vector(restart_vectors, rng, n)
+
+    return _result_from_candidate(
+        best,
+        restart_count=max_restarts,
+        step_count=total_steps,
+        converged=False,
+        kernels=kernels,
+        device=device,
+    )
 
 
 __all__ = ["ArnoldiResult", "native_kernels_available", "resolve_kernels", "solve_generalized"]

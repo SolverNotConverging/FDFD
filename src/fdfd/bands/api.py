@@ -141,7 +141,7 @@ class BandStructureSolver2D(GridSolver):
         polarization = check_polarization(polarization, ("TE", "TM", "both"))
         guess = check_guess(guess)
         tol = check_tol(tol)
-        device = eigs.check_device(device)
+        device = eigs.check_eigen_device(device)
         eigs.check_method(method)
         path = np.asarray(beta_path, dtype=float)
         if path.ndim != 2 or path.shape[0] != 2 or not path.shape[1] or not np.isfinite(path).all():

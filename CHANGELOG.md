@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.1 — 2026-10-16
+
+Use custom GPU-resident refined Arnoldi across waveguide, periodic, band-structure, and tracking eigenproblems, with CUDA Ritz eigenvalue/SVD extraction and original-pencil backward-error checks. Both existing method selections use the resident algorithm on CUDA; results report cuda-refined.
+
+Warn when device="auto" falls back to CPU and reject unavailable explicit CUDA requests. Preserve reusable cuDSS direct-scattering factors. Include compatible cuDSS dependencies in the optional CUDA extras and ship kernel source in the pure py3-none-any wheel.
+
+Add real-device residency, repeated-mode, singular-pencil, and backend-selection regressions. Historical numerical references and joint analytical checks pass; the final analytical audit excludes FDFD periodic 3D as requested.
+
+
 ## 2.1.0
 
 - Separate persistent degenerate mode groups from resolved branches and accidental

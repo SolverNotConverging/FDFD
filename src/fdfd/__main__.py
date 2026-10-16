@@ -12,7 +12,7 @@ def main():
     parser.add_argument("command", choices=("info",))
     parser.parse_args()
     print(f"fdfd {__version__}")
-    print(f"Compiled Arnoldi kernels: {native_kernels_available()}")
+    print(f"Compiled CPU Arnoldi kernels: {native_kernels_available()}")
     try:
         import cupy
 
@@ -24,8 +24,13 @@ def main():
             from .core._cudss import find_cudss_library
 
             print(f"cuDSS: {find_cudss_library()}")
-        except ImportError as exc:
-            print(f"cuDSS: {exc}")
+            from .core.cuda import probe_eigen_available, require_available
+
+            require_available()
+            probe_eigen_available()
+            print("Resident CUDA Arnoldi / Ritz / SVD: available")
+        except Exception as exc:
+            print(f"Resident CUDA unavailable: {exc}")
     return 0
 
 

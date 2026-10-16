@@ -4,33 +4,44 @@ Acceleration
 Both accelerators are optional and give the same results as the default
 CPU path within solver tolerance.
 
-GPU factorization (``device="cuda"``)
--------------------------------------
+Resident CUDA eigensolving (``device="cuda"``)
+----------------------------------------------
 
-Every solver accepts ``device="cpu"``, ``"cuda"`` or ``"auto"``. With
-``"cuda"`` the shifted sparse operator is factorized with NVIDIA cuDSS and
-the shift-and-invert solves run on the GPU; the Krylov iteration (ARPACK or
-refined Arnoldi) stays on the CPU and exchanges one vector per step.
-Scattering factorizations are cached on the GPU and reused for further
-sources until the geometry or mesh changes.
+Every solver accepts ``device="cpu"``, ``"cuda"`` or ``"auto"``. CUDA
+eigenproblems use cuDSS factorization and custom FP64 complex Arnoldi kernels.
+Krylov vectors, sparse products, orthogonalization, Ritz eigenvalues and SVD,
+normalization, restarts and original-pencil backward errors stay on the GPU.
+Both ``method="arpack"`` and ``"refined"`` select this resident algorithm
+on CUDA; ``result.info.method`` reports ``"cuda-refined"``.
 
-``"auto"`` uses CUDA when CuPy imports, a CUDA device is present and the
-cuDSS library loads, and otherwise falls back to the CPU. The choice is made
-once per process and recorded in ``result.info.device``. ``"cuda"`` fails
-with an error instead of falling back.
+CPU work assembles the sparse operators, prepares static metadata, orchestrates
+CUDA calls and reconstructs public fields after the final eigenpair export.
+Each restart downloads only two Boolean control bytes. CUDA libraries may
+use internal host workspaces; this is not a claim of zero library transfers.
 
-Requirements:
+Scattering uses reusable cuDSS factorizations and GPU direct solves, uploading
+each source and downloading its final solution. Factors are reused until the
+geometry or mesh changes.
 
-* CuPy for your CUDA version: ``pip install -e .[cuda12]`` or ``.[cuda13]``.
-* cuDSS 0.8 or later. It is not bundled; install NVIDIA's ``nvidia-cudss``
-  wheel, put the library on the system loader path, or set
-  ``CUDSS_LIBRARY`` to the full path of ``cudss64_0.dll`` / ``libcudss.so``.
+``"auto"`` checks the active device, a real cuDSS solve and, for eigenproblems,
+custom-kernel compilation and CUDA Ritz/SVD execution. It emits a
+``RuntimeWarning`` if it falls back to CPU. Explicit ``"cuda"`` raises
+``BackendCapabilityError`` if the required path is unavailable. CPU execution
+does not import CuPy. Runtime numerical failures propagate without CPU retry.
 
-``python -m fdfd info`` shows what was found. The opt-in GPU tests run with:
+Install ``pip install 'fdfd[cuda12]'`` or ``'fdfd[cuda13]'`` for CuPy and
+NVIDIA cuDSS. Resident Ritz extraction also requires CUDA ``geev`` support in
+the installed CuPy/cuSOLVER; availability is checked at execution time.
+CUDA 13 requires a Turing or newer GPU. If automatic library discovery fails,
+set ``CUDSS_LIBRARY`` to ``cudss64_0.dll`` or ``libcudss.so``.
+
+The default wheel remains ``py3-none-any``. It ships CUDA source compiled
+on first use and requires no CUDA toolchain for a CPU-only installation.
+Opt-in hardware checks run with:
 
 .. code-block:: console
 
-   FDFD_TEST_CUDA=1 pytest tests/test_cuda.py
+   FDFD_TEST_CUDA=1 pytest tests/test_cuda.py tests/test_cuda_residency.py
 
 Compiled Arnoldi kernels
 ------------------------
