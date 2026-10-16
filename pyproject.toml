@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdfd"
-version = "2.1.1"
+version = "2.1.2"
 description = "Finite-difference frequency-domain electromagnetic solvers"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.1.2 — 2026-10-16
 
 - Add explicit CPU, hybrid GPU Arnoldi/CPU Ritz, and resident GPU eigenvalue backends.
 - Auto now tries hybrid and warns before CPU fallback; resident GPU requires explicit selection.
 - Keep cuDSS direct scattering for both accelerated choices and preserve strict explicit-backend errors.
+- Document the Titan RTX hybrid/resident benchmark and keep CUDA installation completely optional.
 
 
 ## 2.1.1 — 2026-10-16
