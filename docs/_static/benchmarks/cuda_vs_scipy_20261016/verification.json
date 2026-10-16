@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "project": "FDFD",
+  "configurations": 13,
+  "warm_samples": 78,
+  "first_samples": 26,
+  "maximum_relative_neff_difference": 4.133141680918327e-12,
+  "maximum_residual": 1.8078246496934837e-14,
+  "all_threadpools_single_thread": true
+}

@@ -66,6 +66,8 @@ installs the test and lint tools.
   `exp(-iβz)`, Yee staggering).
 - `CHANGELOG.md` lists the 2.0 changes and a migration table from 1.x.
 
+- [CUDA versus SciPy benchmarks: RTX 4070 Laptop / i9](docs/benchmarks/cuda_vs_scipy.rst)
+
 ## Develop
 
 ```sh

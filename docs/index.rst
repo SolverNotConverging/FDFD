@@ -40,6 +40,7 @@ grids, with one workflow for every problem type:
    conventions
    capabilities
    acceleration
+   benchmarks/cuda_vs_scipy
 
 .. toctree::
    :maxdepth: 2

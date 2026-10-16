@@ -69,3 +69,10 @@ leaky modes). Repeated roots share an invariant subspace. Restarts continue
 from the best unconverged vectors; ``max_restarts`` bounds the work and
 ``random_seed`` fixes the start vector. Convergence is always checked against
 the original pencil, with tolerance ``max(tol, 1e-12)``.
+
+Measured CUDA versus SciPy performance
+--------------------------------------
+
+See the `RTX 4070 Laptop / i9 benchmark <benchmarks/cuda_vs_scipy.rst>`_ for
+current eigenvalue-stage and complete-solve timings, numerical checks and the
+recorded measurement data.

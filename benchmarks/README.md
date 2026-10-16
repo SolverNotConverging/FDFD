@@ -3,6 +3,14 @@
 Accuracy and performance checks that are too slow for the test suite. Each
 script writes its report to an ignored `outputs/` folder next to it.
 
+## CUDA versus SciPy modal solvers
+
+The current [RTX 4070 Laptop / i9 CUDA versus SciPy benchmark](../docs/benchmarks/cuda_vs_scipy.rst)
+contains project-specific results, plots, timing boundaries and downloadable data.
+
+The joint harness and reproduction commands are documented on that page.
+The library itself has no FEM runtime dependency.
+
 ## Accuracy
 
 Rectangular PEC waveguide, TE10 against the analytical propagation constant:

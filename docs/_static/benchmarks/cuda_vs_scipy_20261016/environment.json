@@ -1,0 +1,53 @@
+{
+  "python": "3.12.14",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "cupy": "14.2.0",
+  "fem": "2.0.1",
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_vram": 8585216000,
+  "fdfd": "2.1.1",
+  "source_commits": {
+    "FEM": "29609315da77f6753135098920684232187b08ac",
+    "FDFD": "ca2d5f4428477870ac5a2e0c9947e80cb2f9e5f0"
+  },
+  "cpu": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+  "cuda_runtime": 13020,
+  "methodology": "Paired public-solver CUDA versus SciPy ARPACK benchmark of FEM and sibling FDFD.\n\nRun using FEM's CUDA-enabled Python. GPU jobs must run sequentially. Results are\ncheckpointed after each sample. CPU/GPU use identical meshes and tolerances;\nproduction Krylov defaults are retained except ncv=96 for FDFD periodic 2D\nand FEM periodic 3D, which expose that control through their public APIs.\n",
+  "repeats": 3,
+  "modes": 1,
+  "tolerance": 1e-09,
+  "fdfd_periodic_3d": "Excluded per user instruction",
+  "timings": "public: premeshed solver.solve; eigen: factorization + iteration + eigenpair export, with original-pencil residuals in FDFD and resident FEM 3D; first CUDA per mesh includes resident geometry setup, later medians reuse static geometry only; fresh factorization for every solve. Compilation/runtime probe warmed once globally.",
+  "runtime_probe_seconds": 0.2681702999998379,
+  "threadpools": [
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 1,
+      "prefix": "libscipy_openblas",
+      "version": "0.3.34.106.0",
+      "threading_layer": "pthreads",
+      "architecture": "Haswell",
+      "library": "libscipy_openblas64_-ed4f167a5330424524f45258e7ca2c8d.dll"
+    },
+    {
+      "user_api": "blas",
+      "internal_api": "openblas",
+      "num_threads": 1,
+      "prefix": "libscipy_openblas",
+      "version": "0.3.31.dev",
+      "threading_layer": "pthreads",
+      "architecture": "Haswell",
+      "library": "libscipy_openblas-197ee2fc9b4d071f7e048078cac74115.dll"
+    }
+  ],
+  "cpu_model": "13th Gen Intel(R) Core(TM) i9-13900H",
+  "system_ram_bytes": 68314955776,
+  "power_scheme": "Performance",
+  "cudss": "0.8.0.10",
+  "benchmark_source_sha256": {
+    "cuda_vs_scipy.py": "1e7aaa2e8dcadb3303840517b8605b71339fbf6704c7270276115ba2a17f2fec",
+    "report_cuda_vs_scipy.py": "3751e6b819528037a5a6fa56eb077f377899a66c01e90562485c53dddc1c995c"
+  }
+}
