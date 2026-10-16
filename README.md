@@ -27,15 +27,22 @@ result.show()
 
 ## Install
 
-Python 3.10 or later:
+Python 3.10 or later. **CUDA is completely optional.** The standard installation
+supports all solvers on the CPU and requires no NVIDIA GPU, CUDA toolkit, CuPy or
+cuDSS:
 
 ```sh
-python -m pip install fdfd            # CPU installation
+python -m pip install fdfd
+```
+
+Only if you want NVIDIA GPU acceleration, install **one** optional CUDA extra:
+
+```sh
 python -m pip install "fdfd[cuda12]"  # optional CUDA 12 support
 python -m pip install "fdfd[cuda13]"  # optional CUDA 13 support
 ```
 
-Choose one CUDA extra matching your NVIDIA CUDA environment. Both extras install
+Choose the extra matching your NVIDIA CUDA environment. Both extras install
 CuPy and NVIDIA cuDSS for custom GPU-resident eigenvalue solving and accelerated
 direct solves. The universal `py3-none-any` wheel includes the custom CUDA kernel
 source; CuPy compiles it on first GPU use. A CPU installation needs no CUDA
